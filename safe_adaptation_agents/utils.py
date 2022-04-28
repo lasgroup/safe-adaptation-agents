@@ -1,0 +1,63 @@
+from typing import Callable, Tuple, Union, Any, Dict
+
+import haiku as hk
+import jax.numpy as jnp
+import jmp
+import optax
+
+PRNGKey = jnp.ndarray
+LearningState = Tuple[hk.Params, optax.OptState]
+
+
+class Learner:
+
+  def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed],
+               seed: PRNGKey, optimizer_config: Dict, precision: jmp.Policy,
+               *input_example: Any):
+    # TODO (yarden): check if flatten of optax increases performance.
+    self.optimizer = optax.flatten(
+        optax.chain(
+            optax.clip_by_global_norm(optimizer_config['clip']),
+            optax.scale_by_adam(eps=optimizer_config['eps']),
+            optax.scale(-optimizer_config['lr'])))
+    self.model = model
+    self.params = self.model.init(seed, *input_example)
+    self.opt_state = self.optimizer.init(self.params)
+    self.precision = precision
+
+  @property
+  def apply(self) -> Union[Callable, Tuple[Callable]]:
+    return self.model.apply
+
+  @property
+  def learning_state(self):
+    return self.params, self.opt_state
+
+  @learning_state.setter
+  def learning_state(self, state):
+    self.params = state[0]
+    self.opt_state = state[1]
+
+  def grad_step(self, grads, state: LearningState):
+    params, opt_state = state
+    grads = self.precision.cast_to_param(grads)
+    updates, new_opt_state = self.optimizer.update(grads, opt_state)
+    new_params = optax.apply_updates(params, updates)
+    grads_finite = jmp.all_finite(grads)
+    new_params, new_opt_state = jmp.select_tree(grads_finite,
+                                                (new_params, new_opt_state),
+                                                (params, opt_state))
+    return new_params, new_opt_state
+
+
+def get_mixed_precision_policy(precision):
+  policy = ('params=float32,compute=float' + str(precision) + ',output=float' +
+            str(precision))
+  return jmp.get_policy(policy)
+
+
+def initializer(name: str) -> hk.initializers.Initializer:
+  return {
+      'glorot': hk.initializers.VarianceScaling(1.0, 'fan_avg', 'uniform'),
+      'he': hk.initializers.VarianceScaling(2.0, 'fan_in', 'uniform')
+  }[name]
