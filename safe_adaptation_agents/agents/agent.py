@@ -32,7 +32,7 @@ class Agent(abc.ABC):
     """
 
   @abc.abstractmethod
-  def observe_task_id(self, task_id: Optional[int] = None):
+  def observe_task_id(self, task_id: Optional[str] = None):
     """
     Lets the agent know that a new task was sampled, possibly giving it the
     task's id.

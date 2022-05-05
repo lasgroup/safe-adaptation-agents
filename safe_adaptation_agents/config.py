@@ -7,6 +7,16 @@ import safe_adaptation_agents
 BASE_PATH = os.path.join(os.path.dirname(safe_adaptation_agents.__file__))
 
 
+def validate_config(config):
+  assert config.time_limit % config.action_repeat == 0, ('Action repeat '
+                                                         'should '
+                                                         ''
+                                                         'be a factor of time '
+                                                         ''
+                                                         'limit')
+  return config
+
+
 # Acknowledgement: https://github.com/danijar
 def load_config(args: Optional[List[AnyStr]] = None):
   import argparse
@@ -56,4 +66,4 @@ def load_config(args: Optional[List[AnyStr]] = None):
   for key, value in sorted(defaults.items(), key=lambda x: x[0]):
     arg_type = args_type(value)
     parser.add_argument(f'--{key}', type=arg_type, default=arg_type(value))
-  return parser.parse_args(remaining)
+  return validate_config(parser.parse_args(remaining))
