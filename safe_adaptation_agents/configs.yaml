@@ -1,0 +1,10 @@
+defaults:
+  log_dir: results
+  seed: 0
+  time_limit: 1000
+  train_driver: {adaptation_steps: 5000, query_steps: 2000, iters: 10}
+  test_driver: {adaptation_steps: 5000, query_steps: 2000, iters: 5}
+  action_repeat: 2
+  render_episodes: 0
+  initialization: glorot
+  jit: True

@@ -1,9 +1,16 @@
-import argparse
-import ruamel.yaml as yaml
+import os
+
+from typing import Optional, List, AnyStr
+
+import safe_adaptation_agents
+
+BASE_PATH = os.path.join(os.path.dirname(safe_adaptation_agents.__file__))
 
 
 # Acknowledgement: https://github.com/danijar
-def load_config(config_path):
+def load_config(args: Optional[List[AnyStr]] = None):
+  import argparse
+  import ruamel.yaml as yaml
 
   def args_type(default):
 
@@ -26,16 +33,9 @@ def load_config(config_path):
     return lambda x: parse_string(x) if isinstance(x, str) else parse_object(x)
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('--configs', nargs='+', required=True)
-  parser.add_argument('--steps_per_train_task', default=5000, type=int)
-  parser.add_argument('--train_steps_per_epoch', default=25000, type=int)
-  parser.add_argument(
-      '--adaptation_steps', default=5000, type=int)
-  parser.add_argument(
-      '--evaluation_steps', default=10000, type=int)
-  parser.add_argument('--test_n_tasks', default=5, type=int)
-  args, remaining = parser.parse_known_args()
-  with open(config_path) as file:
+  parser.add_argument('--configs', nargs='+', default=['defaults'])
+  args, remaining = parser.parse_known_args(args)
+  with open(os.path.join(BASE_PATH, 'configs.yaml')) as file:
     configs = yaml.safe_load(file)
   defaults = {}
   for name in args.configs:

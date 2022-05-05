@@ -3,10 +3,11 @@
 from setuptools import setup, find_packages
 
 required = [
-    'safe_adaptation_gym', 'jax',
-    'pip install git+https://github.com/deepmind/dm-haiku',
-    'optax', 'jmp', 'numpy', 'ruamel.yaml', 'tensorboardX'
+    'safe_adaptation_gym', 'jax', 'dm-haiku', 'optax', 'jmp', 'numpy',
+    'ruamel.yaml', 'tensorboardX'
 ]
+
+extras = {'dev': ['pytest>=4.4.0', 'Pillow', 'matplotlib']}
 
 setup(
     name='safe_adaptation_agents',
@@ -14,4 +15,5 @@ setup(
     packages=find_packages(),
     python_requires='>3.8',
     include_package_data=True,
-    install_requires=required)
+    install_requires=required,
+    extras_require=extras)
