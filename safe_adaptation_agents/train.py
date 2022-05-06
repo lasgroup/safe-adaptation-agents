@@ -31,8 +31,9 @@ def interact(
       episodes[-1]['frames'].append(frame)
     action = agent(observation, train, adapt)
     next_observation, reward, done, info = environment.step(action)
+    cost = info.get('cost', 0)
     terminal = done and not info.get('TimeLimit.truncated', False)
-    transition = Transition(observation, next_observation, action, reward,
+    transition = Transition(observation, next_observation, action, reward, cost,
                             terminal, info)
     episodes[-1] = _append(transition, episodes[-1])
     if train:
@@ -50,6 +51,7 @@ def interact(
 def _append(transition: Transition, episode: DefaultDict) -> DefaultDict:
   episode['observation'].append(transition.observation)
   episode['reward'].append(transition.reward)
+  episode['cost'].append(transition.cost)
   episode['terminal'].append(transition.terminal)
   episode['info'].append(transition.info)
   return episode
@@ -57,26 +59,24 @@ def _append(transition: Transition, episode: DefaultDict) -> DefaultDict:
 
 class Driver:
 
-  def __init__(
-      self,
-      adaptation_steps: int,
-      query_steps: int,
-      expose_task_id: bool = False,
-      on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
-      on_iter_end: Optional[Callable[[IterationSummary, IterationSummary],
-                                     None]] = None,
-      render_episodes: int = 0,
-      render_options: Optional[Dict] = None):
+  def __init__(self,
+               adaptation_steps: int,
+               query_steps: int,
+               expose_task_id: bool = False,
+               on_episode_end: Optional[Callable[[EpisodeSummary],
+                                                 None]] = None,
+               render_episodes: int = 0,
+               render_options: Optional[Dict] = None):
     self.adaptation_steps = adaptation_steps
     self.query_steps = query_steps
     self.episode_callback = on_episode_end
-    self.iter_callback = on_iter_end
     self.render_episodes = render_episodes
     self.render_options = render_options
     self.expose_task_id = expose_task_id
 
-  def run(self, agent: Agent, tasks: Iterable[Env], train: bool) -> Agent:
-    iter_adaptation_episodes, iter_test_episodes = {}, {}
+  def run(self, agent: Agent, tasks: Iterable[Env],
+          train: bool) -> [Agent, IterationSummary, IterationSummary]:
+    iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
     for task_name, task in adaptation_tasks:
       agent.observe_task_id(task_name if self.expose_task_id else None)
@@ -92,7 +92,7 @@ class Driver:
       iter_adaptation_episodes[task_name] = adaptation_episodes
     for task_name, task in query_tasks:
       agent.observe_task_id(task_name if self.expose_task_id else None)
-      agent, test_episodes = interact(
+      agent, query_episodes = interact(
           agent,
           task,
           self.query_steps,
@@ -101,7 +101,5 @@ class Driver:
           on_episode_end=self.episode_callback,
           render_episodes=self.render_episodes,
           render_options=self.render_options)
-      iter_test_episodes[task_name] = test_episodes
-    if self.iter_callback:
-      self.iter_callback(iter_adaptation_episodes, iter_test_episodes)
-    return agent
+      iter_query_episodes[task_name] = query_episodes
+    return agent, iter_adaptation_episodes, iter_query_episodes

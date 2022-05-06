@@ -10,3 +10,4 @@ defaults:
   render_options: {}
   initialization: glorot
   jit: True
+  precision: 32

@@ -1,7 +1,6 @@
 import abc
 
 from typing import Dict, NamedTuple, Optional
-from types import SimpleNamespace
 
 import numpy as np
 
@@ -11,15 +10,20 @@ class Transition(NamedTuple):
   next_observation: np.ndarray
   action: np.ndarray
   reward: float
+  cost: float
   terminal: bool
   info: Dict
+
+  @property
+  def last(self):
+    return self.terminal or self.info.get('TimeLimit.truncated', False)
 
 
 class Agent(abc.ABC):
 
   @abc.abstractmethod
-  def __call__(self, observation: np.ndarray, traininig: bool,
-               exploration: bool, *args, **kwargs) -> np.ndarray:
+  def __call__(self, observation: np.ndarray, train: bool,
+               adapt: bool, *args, **kwargs) -> np.ndarray:
     """
     Compute the next action based on the observation, update internal state
     as needed.

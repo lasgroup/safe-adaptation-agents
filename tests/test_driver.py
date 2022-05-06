@@ -17,8 +17,8 @@ class DummyAgent(agents.Agent):
   def __init__(self):
     self.rs = np.random.RandomState(0)
 
-  def __call__(self, observation: np.ndarray, traininig: bool,
-               exploration: bool, *args, **kwargs) -> np.ndarray:
+  def __call__(self, observation: np.ndarray, train: bool,
+               adapt: bool, *args, **kwargs) -> np.ndarray:
     return self.rs.uniform(-1., 1., (2,))
 
   def observe(self, transition: Transition):
@@ -31,29 +31,10 @@ class DummyAgent(agents.Agent):
 @pytest.fixture
 def driver():
 
-  def on_epoch(adaptation_episodes, test_episodes):
-    # Check number of tasks
-    assert len(adaptation_episodes) == len(test_episodes) == len(
-        benchmark.TASKS)
-    # Check the amount of episodes
-    assert all(
-        len(adaptation_episodes[key]) == 4
-        for key in adaptation_episodes.keys())
-    # Check the length of each episode
-    assert all(
-        len(adaptation_episodes[key][0]['reward']) == 25
-        for key in adaptation_episodes.keys())
-    assert all(
-      len(test_episodes[key]) == 2
-      for key in test_episodes.keys())
-    assert all(
-      len(test_episodes[key][0]['reward']) == 25
-      for key in test_episodes.keys())
-
   def on_episode(episode_summary):
     pass
 
-  return train.Driver(100, 50, on_episode_end=on_episode, on_iter_end=on_epoch)
+  return train.Driver(100, 50, on_episode_end=on_episode)
 
 
 @pytest.fixture(params=['no_adaptation'])
@@ -66,4 +47,25 @@ def tasks(request):
 
 
 def test_number_episodes(driver, tasks):
-  driver.run(DummyAgent(), tasks.train_tasks, False)
+
+  def on_iter(adaptation_episodes, test_episodes):
+    # Check number of tasks
+    assert len(adaptation_episodes) == len(test_episodes) == len(
+        benchmark.TASKS)
+    # Check the amount of episodes
+    assert all(
+        len(adaptation_episodes[key]) == 4
+        for key in adaptation_episodes.keys())
+    # Check the length of each episode
+    assert all(
+        len(adaptation_episodes[key][0]['reward']) == 25
+        for key in adaptation_episodes.keys())
+    assert all(len(test_episodes[key]) == 2 for key in test_episodes.keys())
+    assert all(
+        len(test_episodes[key][0]['reward']) == 25
+        for key in test_episodes.keys())
+
+  agent, adaptation_summary, query_summary = driver.run(DummyAgent(),
+                                                        tasks.train_tasks,
+                                                        False)
+  on_iter(adaptation_summary, query_summary)
