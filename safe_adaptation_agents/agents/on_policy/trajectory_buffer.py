@@ -50,6 +50,8 @@ class TrajectoryBuffer:
     Sets the current task id.
     """
     self.task_id = task_id
+    self.episode_id = 0
+    self.length = 0
 
   def add(self, transition: Transition):
     """
