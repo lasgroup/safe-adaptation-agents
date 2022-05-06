@@ -24,26 +24,26 @@ def interact(
     render_episodes: int = 0,
     render_options: Optional[Dict] = None) -> [Agent, List[EpisodeSummary]]:
   observation = environment.reset()
-  episodes = []
-  episode = defaultdict(list, {'observation': [observation]})
+  episodes = [defaultdict(list, {'observation': [observation]})]
   for _ in tqdm(range(steps)):
     if render_episodes:
       frame = environment.render(**render_options)
-      episode['frames'].append(frame)
+      episodes[-1]['frames'].append(frame)
     action = agent(observation, train, adapt)
     next_observation, reward, done, info = environment.step(action)
     terminal = done and not info.get('TimeLimit.truncated', False)
     transition = Transition(observation, next_observation, action, reward,
                             terminal, info)
-    episode = _append(transition, episode)
+    episodes[-1] = _append(transition, episodes[-1])
     if train:
       agent.observe(transition)
     if done:
       if on_episode_end:
-        on_episode_end(episode)
-      episodes.append(episode.copy())
+        on_episode_end(episodes[-1])
       observation = environment.reset()
-      episode = defaultdict(list, {'observation': [observation]})
+      episodes.append(defaultdict(list, {'observation': [observation]}))
+  if 'reward' not in episodes[-1].keys():
+    episodes.pop()
   return agent, episodes
 
 
