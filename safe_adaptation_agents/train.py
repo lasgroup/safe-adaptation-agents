@@ -1,3 +1,5 @@
+from itertools import tee
+
 from collections import defaultdict
 
 from typing import Callable, Optional, Dict, List, DefaultDict, Iterable
@@ -75,7 +77,8 @@ class Driver:
 
   def run(self, agent: Agent, tasks: Iterable[Env], train: bool) -> Agent:
     iter_adaptation_episodes, iter_test_episodes = {}, {}
-    for task_name, task in tasks:
+    adaptation_tasks, query_tasks = tee(tasks)
+    for task_name, task in adaptation_tasks:
       agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, adaptation_episodes = interact(
           agent,
@@ -87,6 +90,8 @@ class Driver:
           render_episodes=self.render_episodes,
           render_options=self.render_options)
       iter_adaptation_episodes[task_name] = adaptation_episodes
+    for task_name, task in query_tasks:
+      agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, test_episodes = interact(
           agent,
           task,

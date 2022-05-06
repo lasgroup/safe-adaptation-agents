@@ -14,7 +14,6 @@ class Learner:
   def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed],
                seed: PRNGKey, optimizer_config: Dict, precision: jmp.Policy,
                *input_example: Any):
-    # TODO (yarden): check if flatten of optax increases performance.
     self.optimizer = optax.flatten(
         optax.chain(
             optax.clip_by_global_norm(optimizer_config['clip']),
@@ -54,10 +53,3 @@ def get_mixed_precision_policy(precision):
   policy = ('params=float32,compute=float' + str(precision) + ',output=float' +
             str(precision))
   return jmp.get_policy(policy)
-
-
-def initializer(name: str) -> hk.initializers.Initializer:
-  return {
-      'glorot': hk.initializers.VarianceScaling(1.0, 'fan_avg', 'uniform'),
-      'he': hk.initializers.VarianceScaling(2.0, 'fan_in', 'uniform')
-  }[name]
