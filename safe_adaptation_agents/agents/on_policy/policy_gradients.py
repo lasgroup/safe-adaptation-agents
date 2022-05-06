@@ -47,13 +47,13 @@ class PolicyGrandiens(Agent):
                **kwargs) -> np.ndarray:
     self.adapting = self.toggle_mode(adapt)
     if self.time_to_update and train:
-      pass
+      self.train(self.buffer.dump())
     action = self.policy(observation, self.actor.params,
                          next(self.rng_seq), train)
     return np.clip(action, -1.0, 1.0)
 
   def observe(self, transition: Transition):
-    pass
+    self.buffer.add(transition)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     self.current_task_id += 1
