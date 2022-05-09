@@ -27,7 +27,7 @@ class VanillaPolicyGrandients(Agent):
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.config = config
     self.logger = logger
-    self.training_steps = 0
+    self.training_step = 0
     self.buffer = TrajectoryBuffer(self.config.num_trajectories,
                                    self.config.time_limit,
                                    observation_space.shape, action_space.shape)
@@ -45,13 +45,14 @@ class VanillaPolicyGrandients(Agent):
                **kwargs) -> np.ndarray:
     if self.time_to_update and train:
       self.train(*self.buffer.dump())
+      self.logger.log_metrics(self.training_step)
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
     return np.clip(action, -1.0, 1.0)
 
   def observe(self, transition: Transition):
     self.buffer.add(transition)
-    self.training_steps += self.config.action_repeat
+    self.training_step += self.config.action_repeat
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass
@@ -72,21 +73,28 @@ class VanillaPolicyGrandients(Agent):
     advantage = self._advantage(self.critic.params, observation, reward,
                                 terminal)
     for _ in range(self.config.update_steps):
-      self.actor.learning_state, self.critic.learning_state = self._update_step(
-          self.actor.learning_state, self.critic.learning_state, observation,
-          action, advantage, return_)
+      (self.actor.learning_state, self.critic.learning_state,
+       report) = self._update_step(self.actor.learning_state,
+                                   self.critic.learning_state, observation,
+                                   action, advantage, return_)
+      for k, v in report.items():
+        self.logger[k] = v
 
   @functools.partial(jax.jit, static_argnums=0)
   def _update_step(
       self, actor_state: LearningState, critic_state: LearningState,
       observation: jnp.ndarray, actions: jnp.ndarray, advantage: jnp.ndarray,
-      return_: jnp.ndarray) -> [utils.LearningState, LearningState]:
-    policy_grads = jax.grad(self.policy_loss)(actor_state.params, observation,
-                                              actions, advantage)
+      return_: jnp.ndarray) -> [utils.LearningState, LearningState, dict]:
+    policy_loss, policy_grads = jax.value_and_grad(self.policy_loss)(
+        actor_state.params, observation, actions, advantage)
     new_actor_state = self.actor.grad_step(policy_grads, actor_state)
-    value_grads = jax.grad(self.critic_loss)(observation, return_)
+    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(observation,
+                                                                   return_)
     new_critic_state = self.critic.grad_step(value_grads, critic_state)
-    return new_actor_state, new_critic_state
+    return new_actor_state, new_critic_state, {
+        'agent/actor/loss': policy_loss,
+        'agent/critic/loss': value_loss
+    }
 
   def policy_loss(self, actor_params: hk.Params, observation: jnp.ndarray,
                   actions: jnp.ndarray, advantage: jnp.ndarray):
@@ -110,4 +118,4 @@ class VanillaPolicyGrandients(Agent):
 
   @property
   def time_to_update(self):
-    return self.training_steps % self.config.update_every == 0
+    return self.training_step % self.config.update_every == 0

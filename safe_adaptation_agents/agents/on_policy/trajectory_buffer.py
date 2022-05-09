@@ -77,4 +77,13 @@ class TrajectoryBuffer:
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
     """
+    self.length = 0
+    self.episode_id = 0
+    self.task_id = 0
+    if self.observation.shape[0] == 1:
+      self.observation.squeeze(0)
+      self.action.squeeze(0)
+      self.reward.squeeze(0)
+      self.cost.squeeze(0)
+      self.terminal.squeeze(0)
     return self.observation, self.action, self.reward, self.cost, self.terminal

@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 required = [
     'safe_adaptation_gym', 'jax', 'dm-haiku', 'optax', 'jmp', 'numpy',
-    'ruamel.yaml', 'tensorboardX'
+    'ruamel.yaml', 'tensorboardX', 'tensorflow', 'tensorflow-probability'
 ]
 
 extras = {'dev': ['pytest>=4.4.0', 'Pillow', 'matplotlib']}

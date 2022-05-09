@@ -13,7 +13,7 @@ def mlp(
     x,
     activation=jnn.relu,
     initializer=initializer('glorot'),
-    output_sizes=(128, 128, 1),
+    output_sizes=(128, 128, 1)
 ):
   x = hk.nets.MLP(output_sizes, activation=activation, w_init=initializer)(x)
   return x
