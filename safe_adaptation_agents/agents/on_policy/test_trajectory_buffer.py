@@ -35,11 +35,11 @@ class DummyAgent(Agent):
 
 
 @pytest.fixture
-def buffer_and_env(tasks):
+def buffer_and_env():
   env = TimeLimit(
       safe_adaptation_gym.make('go_to_goal', 'point'), EPISODE_LENGTH)
   return TrajectoryBuffer(
-      N_TASKS,
+      2,
       EPISODE_LENGTH,
       env.observation_space.shape,
       env.action_space.shape,
@@ -53,3 +53,7 @@ def test_fill(buffer_and_env):
     agent.observe_task_id(i)
     train.interact(agent, env, EPISODE_LENGTH * 2, True, True)
   observation, action, reward, cost, terminal = agent.buffer.dump()
+  assert observation.shape == (N_TASKS, 2,
+                               EPISODE_LENGTH + 1) + env.observation_space.shape
+  # Make sure that all needed episodes were filled.
+  assert all((reward[:, i] != 0).all() for i in range(2))
