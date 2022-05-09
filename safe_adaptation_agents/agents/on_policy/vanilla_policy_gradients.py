@@ -1,6 +1,6 @@
 import functools
 from types import SimpleNamespace
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from gym.spaces import Space
@@ -16,7 +16,7 @@ from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
 from safe_adaptation_agents import utils
 
 
-class PolicyGrandients(Agent):
+class VanillaPolicyGrandients(Agent):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
@@ -37,15 +37,11 @@ class PolicyGrandients(Agent):
         critic, next(self.rng_seq), config.critic_opt,
         utils.get_mixed_precision_policy(config.precision),
         observation_space.sample())
-    self.safety_critic = utils.Learner(
-        critic, next(self.rng_seq), config.safety_critic_opt,
-        utils.get_mixed_precision_policy(config.precision),
-        observation_space.sample())
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
     if self.time_to_update and train:
-      self.train(self.buffer.dump())
+      self.train(*self.buffer.dump())
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
     return np.clip(action, -1.0, 1.0)
@@ -66,6 +62,19 @@ class PolicyGrandients(Agent):
     policy = self.actor.apply(params, observation)
     action = policy.sample(seed=key) if training else policy.mode(seed=key)
     return action
+
+  def train(self, observation: np.ndarray, actions: np.ndarray,
+            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
+    pass
+
+  def policy_loss(self, observation: np.ndarray, actions: np.ndarray,
+            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
+    pass
+
+  def _compute_advantage(self, observation: np.ndarray, actions: np.ndarray,
+            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
+    pass
+
 
   @property
   def time_to_update(self):
