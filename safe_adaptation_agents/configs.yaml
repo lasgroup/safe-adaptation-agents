@@ -11,3 +11,11 @@ defaults:
   initialization: glorot
   jit: True
   precision: 32
+  discount: 0.99
+  safety_discount: 0.95
+  lambda_: 0.95
+
+
+vanilla_policy_gradients:
+  entropy_regularization: 0.
+  update_steps: 80

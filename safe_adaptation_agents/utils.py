@@ -1,14 +1,16 @@
-from typing import Callable, Tuple, Union, Any, Dict
+from typing import Callable, Tuple, Union, Any, Dict, NamedTuple
 
 import haiku as hk
 import jax.numpy as jnp
-import jax.scipy.signal
 import jmp
-import numpy as np
 import optax
 
 PRNGKey = jnp.ndarray
-LearningState = Tuple[hk.Params, optax.OptState]
+
+
+class LearningState(NamedTuple):
+  params: hk.Params
+  opt_state: optax.OptState
 
 
 class Learner:
@@ -32,12 +34,12 @@ class Learner:
 
   @property
   def learning_state(self):
-    return self.params, self.opt_state
+    return LearningState(self.params, self.opt_state)
 
   @learning_state.setter
-  def learning_state(self, state):
-    self.params = state[0]
-    self.opt_state = state[1]
+  def learning_state(self, state: LearningState):
+    self.params = state.params
+    self.opt_state = state.opt_state
 
   def grad_step(self, grads, state: LearningState):
     params, opt_state = state

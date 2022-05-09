@@ -14,6 +14,9 @@ from safe_adaptation_agents.logger import TrainingLogger
 from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
     TrajectoryBuffer)
 from safe_adaptation_agents import utils
+from safe_adaptation_agents.utils import LearningState
+
+discounted_cumsum = jax.vmap(utils.discounted_cumsum, in_axes=[0, None])
 
 
 class VanillaPolicyGrandients(Agent):
@@ -63,18 +66,47 @@ class VanillaPolicyGrandients(Agent):
     action = policy.sample(seed=key) if training else policy.mode(seed=key)
     return action
 
-  def train(self, observation: np.ndarray, actions: np.ndarray,
+  def train(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
-    pass
+    return_ = discounted_cumsum(reward, self.config.discount)
+    advantage = self._advantage(self.critic.params, observation, reward,
+                                terminal)
+    for _ in range(self.config.update_steps):
+      self.actor.learning_state, self.critic.learning_state = self._update_step(
+          self.actor.learning_state, self.critic.learning_state, observation,
+          action, advantage, return_)
 
-  def policy_loss(self, observation: np.ndarray, actions: np.ndarray,
-            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
-    pass
+  @functools.partial(jax.jit, static_argnums=0)
+  def _update_step(
+      self, actor_state: LearningState, critic_state: LearningState,
+      observation: jnp.ndarray, actions: jnp.ndarray, advantage: jnp.ndarray,
+      return_: jnp.ndarray) -> [utils.LearningState, LearningState]:
+    policy_grads = jax.grad(self.policy_loss)(actor_state.params, observation,
+                                              actions, advantage)
+    new_actor_state = self.actor.grad_step(policy_grads, actor_state)
+    value_grads = jax.grad(self.critic_loss)(observation, return_)
+    new_critic_state = self.critic.grad_step(value_grads, critic_state)
+    return new_actor_state, new_critic_state
 
-  def _compute_advantage(self, observation: np.ndarray, actions: np.ndarray,
-            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
-    pass
+  def policy_loss(self, actor_params: hk.Params, observation: jnp.ndarray,
+                  actions: jnp.ndarray, advantage: jnp.ndarray):
+    pi = self.actor.apply(actor_params, observation)
+    objective = (
+        pi.log_prob(actions) * advantage +
+        self.config.entropy_regularization * pi.entropy())
+    return -objective.mean()
 
+  def critic_loss(self, critic_params: hk.Params, observation: jnp.ndarray,
+                  return_: jnp.ndarray):
+    return -self.critic.apply(critic_params,
+                              observation).log_prob(return_).mean()
+
+  @functools.partial(jax.jit, static_argnums=0)
+  def _advantage(self, critic_params: hk.Params, observation: jnp.ndarray,
+                 reward: jnp.ndarray, _: jnp.ndarray, terminal: jnp.ndarray):
+    bootstrap = self.critic.apply(critic_params, observation) * (1. - terminal)
+    diff = reward[:-1] + self.config.discount * bootstrap[1:] - bootstrap[:-1]
+    return discounted_cumsum(diff, self.config.lambda_ * self.config.discount)
 
   @property
   def time_to_update(self):
