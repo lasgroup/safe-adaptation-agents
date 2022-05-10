@@ -8,7 +8,7 @@ from gym import Env
 
 import haiku as hk
 
-from safe_adaptation_agents.logger import TrainingLogger
+from safe_adaptation_agents.training_logger import TrainingLogger
 from safe_adaptation_agents.agents.on_policy import vanilla_policy_gradients
 
 from safe_adaptation_agents import models

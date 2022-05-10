@@ -18,7 +18,8 @@ defaults:
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 5000, query_steps: 0}
-  test_driver: {adaptation_steps: 5000, query_steps: 0}
+  test_driver: {adaptation_steps: 1000, query_steps: 0}
+  eval_trials: 10
 
 
 vanilla_policy_gradients:

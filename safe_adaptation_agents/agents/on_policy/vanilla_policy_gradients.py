@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import haiku as hk
 
 from safe_adaptation_agents.agents import Agent, Transition
-from safe_adaptation_agents.logger import TrainingLogger
+from safe_adaptation_agents.training_logger import TrainingLogger
 from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
     TrajectoryBuffer)
 from safe_adaptation_agents import utils

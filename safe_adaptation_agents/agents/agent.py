@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from safe_adaptation_agents.logger import TrainingLogger
+from safe_adaptation_agents.training_logger import TrainingLogger
 
 
 class Transition(NamedTuple):
@@ -52,18 +52,3 @@ class Agent(abc.ABC):
     Lets the agent know that a new task was sampled, possibly giving it the
     task's id.
     """
-
-  def __getstate__(self):
-    """
-    Define how the agent should be pickled.
-    """
-    state = self.__dict__.copy()
-    del state['logger']
-    return state
-
-  def __setstate__(self, state):
-    """
-    Define how the agent should be loaded.
-    """
-    self.__dict__.update(state)
-    self.logger = TrainingLogger(self.config.log_dir)

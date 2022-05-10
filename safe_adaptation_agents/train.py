@@ -26,7 +26,7 @@ def interact(
   observation = environment.reset()
   episodes = [defaultdict(list, {'observation': [observation]})]
   step = 0
-  pbar = tqdm(total=steps)
+  pbar = tqdm(total=steps, leave=True, position=0)
   while step < steps:
     if render_episodes:
       frame = environment.render(**render_options)
