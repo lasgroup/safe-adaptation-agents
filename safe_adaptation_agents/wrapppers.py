@@ -32,10 +32,12 @@ class ActionRepeat(Wrapper):
     done = False
     total_reward = 0.0
     current_step = 0
+    info = {'steps': 0}
     while current_step < self.repeat and not done:
       obs, reward, done, info = self.env.step(action)
       total_reward += reward
       current_step += 1
+    info['steps'] = current_step
     return obs, total_reward, done, info  # noqa
 
 

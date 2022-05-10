@@ -21,6 +21,10 @@ class Transition(NamedTuple):
   def last(self):
     return self.terminal or self.info.get('TimeLimit.truncated', False)
 
+  @property
+  def steps(self):
+    return self.info.get('steps', 1)
+
 
 class Agent(abc.ABC):
 

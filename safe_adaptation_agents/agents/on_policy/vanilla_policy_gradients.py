@@ -51,14 +51,14 @@ class VanillaPolicyGrandients(Agent):
 
   def observe(self, transition: Transition):
     self.buffer.add(transition)
-    self.training_step += self.config.action_repeat
+    self.training_step += transition.steps
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass
 
-  @functools.partial(jax.jit, static_argnums=0)
+  @functools.partial(jax.jit, static_argnums=(0, 4))
   def policy(self,
-             observation: np.ndarray,
+             observation: jnp.ndarray,
              params: hk.Params,
              key: jnp.ndarray,
              training=True) -> jnp.ndarray:
@@ -117,4 +117,5 @@ class VanillaPolicyGrandients(Agent):
 
   @property
   def time_to_update(self):
-    return self.training_step % self.config.update_every == 0
+    return (self.training_step and
+            self.training_step % self.config.update_every == 0)

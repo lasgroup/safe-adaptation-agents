@@ -2,7 +2,7 @@ from itertools import tee
 
 from collections import defaultdict
 
-from typing import Callable, Optional, Dict, List, DefaultDict, Iterable
+from typing import Callable, Optional, Dict, List, DefaultDict, Iterable, Tuple
 
 from tqdm import tqdm
 
@@ -25,7 +25,9 @@ def interact(
     render_options: Optional[Dict] = None) -> [Agent, List[EpisodeSummary]]:
   observation = environment.reset()
   episodes = [defaultdict(list, {'observation': [observation]})]
-  for _ in tqdm(range(steps)):
+  step = 0
+  pbar = tqdm(total=steps)
+  while step < steps:
     if render_episodes:
       frame = environment.render(**render_options)
       episodes[-1]['frames'].append(frame)
@@ -43,6 +45,9 @@ def interact(
         on_episode_end(episodes[-1])
       observation = environment.reset()
       episodes.append(defaultdict(list, {'observation': [observation]}))
+    transition_steps = transition.steps
+    step += transition_steps
+    pbar.update(transition_steps)
   if 'reward' not in episodes[-1].keys():
     episodes.pop()
   return agent, episodes
@@ -74,7 +79,7 @@ class Driver:
     self.render_options = render_options
     self.expose_task_id = expose_task_id
 
-  def run(self, agent: Agent, tasks: Iterable[Env],
+  def run(self, agent: Agent, tasks: Iterable[Tuple[str, Env]],
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)

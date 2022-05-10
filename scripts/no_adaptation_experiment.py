@@ -1,4 +1,6 @@
+import os
 import concurrent.futures
+from itertools import repeat
 
 import cloudpickle
 
@@ -13,23 +15,31 @@ from safe_adaptation_agents import agents, logger, train
 from safe_adaptation_agents import config as options
 
 
-def evaluate(agent: agents.Agent, env: Env, test_driver: train.Driver,
-             trials: int, seed_sequence: np.random.SeedSequence):
+def run_one(agent_bytes: bytes, env: Env, task_name: str, seed: np.ndarray,
+            driver: train.Driver):
+  # Haiku functions are not pickleable, so first encode to bytes with
+  # cloudpickle and then decode back to an agent instance.
+  agent = cloudpickle.loads(agent_bytes)
+  env.seed(seed)
+  episodes, _ = driver.run(agent, [(task_name, env)], False)
+  return episodes
+
+
+def evaluate(agent: agents.Agent, env: Env, task_name: str,
+             test_driver: train.Driver, trials: int,
+             seed_sequence: np.random.SeedSequence):
+
   # Running evaluation in parallel as the agent should not be stateful during
   # evaluation. Even if there's a bug the agent is not returned from the
   # different processes running it, so anything that could have been saved
   # during evaluation is left out.
-  envs = (env.seed(seed) for seed in seed_sequence.generate_state(trials))
-
-  # Haiku functions are not pickleable, so first encode to bytes with
-  # cloudpickle and then decode back to an agent instance.
-  def run_one(agent_bytes: bytes, env: Env):
-    agent = cloudpickle.loads(agent_bytes)
-    test_driver.run(agent, [env], False)
-
   agent_bytes = cloudpickle.dumps(agent)
   with concurrent.futures.ProcessPoolExecutor() as executor:
-    results = executor.map(lambda env: run_one(agent_bytes, env), envs)
+    results = [
+        result for result in executor.map(
+            run_one, repeat(agent_bytes), repeat(env), repeat(task_name),
+            list(seed_sequence.generate_state(trials)), repeat(test_driver))
+    ]
   return results
 
 
@@ -44,10 +54,12 @@ def main():
   train_driver = train.Driver(**config.train_driver)
   test_driver = train.Driver(**config.test_driver)
   for epoch in range(config.epochs):
-    iter_adaptation_episodes, iter_query_episodes = train_driver.run(
-        agent, [env], True)
+    episodes, _ = train_driver.run(agent, [(config.task, env)], True)
     if epoch % config.eval_every == 0:
-      evaluate(agent, env, test_driver, config.eval_trials, seed_sequence)
+      evaluate(agent, env, config.task, test_driver, config.eval_trials,
+               seed_sequence)
+    with open(os.path.join(config.log_dir, 'state.pkl'), 'wb') as f:
+      cloudpickle.dump({'env': env, 'agent': agent}, f)
 
 
 if __name__ == '__main__':
