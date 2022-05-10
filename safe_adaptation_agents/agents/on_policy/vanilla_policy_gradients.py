@@ -24,9 +24,8 @@ class VanillaPolicyGrandients(Agent):
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed):
+    super().__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
-    self.config = config
-    self.logger = logger
     self.training_step = 0
     self.buffer = TrajectoryBuffer(self.config.num_trajectories,
                                    self.config.time_limit,

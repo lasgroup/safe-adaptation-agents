@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Callable
+from typing import Sequence, Optional, Callable, Union
 
 import numpy as np
 
@@ -19,12 +19,12 @@ class Actor(hk.Module):
 
   def __init__(
       self,
-      output_size: Tuple[int, ...],
-      layers: Tuple[int, ...],
+      output_size: Sequence[int],
+      layers: Sequence[int],
       min_stddev: float,
       max_stddev: float,
       initialization: str = 'glorot',
-      activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
+      activation: Union[str, Callable[[jnp.ndarray], jnp.ndarray]] = jnn.relu,
   ):
     super().__init__()
     self.output_size = output_size
@@ -32,12 +32,12 @@ class Actor(hk.Module):
     self._min_stddev = min_stddev
     self._max_stddev = max_stddev
     self._initialization = initialization
-    self._activation = activation
+    self._activation = activation if callable(activation) else eval(activation)
 
   def __call__(self, observation: jnp.ndarray):
     x = nets.mlp(
         observation,
-        output_sizes=self.layers + self.output_size,
+        output_sizes=tuple(self.layers) + tuple(self.output_size),
         initializer=nets.initializer(self._initialization),
         activation=self._activation)
     mu, stddev = jnp.split(x, 2, -1)
@@ -55,23 +55,24 @@ class Actor(hk.Module):
 class DenseDecoder(hk.Module):
 
   def __init__(self,
-               output_size: Tuple[int, ...],
-               layers: Tuple[int, ...],
+               output_size: Sequence[int],
+               layers: Sequence[int],
                dist: str,
                initialization: str = 'glorot',
-               activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
+               activation: Union[str, Callable[[jnp.ndarray],
+                                               jnp.ndarray]] = jnn.relu,
                name: Optional[str] = None):
     super(DenseDecoder, self).__init__(name)
     self.output_size = output_size
     self.layers = layers
     self._dist = dist
     self._initialization = initialization
-    self._activation = activation
+    self._activation = activation if callable(activation) else eval(activation)
 
   def __call__(self, x: jnp.ndarray):
     x = nets.mlp(
         x,
-        output_sizes=self.layers + self.output_size,
+        output_sizes=tuple(self.layers) + tuple(self.output_size),
         initializer=nets.initializer(self._initialization),
         activation=self._activation)
     x = jnp.squeeze(x, axis=-1)

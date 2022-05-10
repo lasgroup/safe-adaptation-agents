@@ -1,6 +1,6 @@
 from safe_adaptation_agents.agents.on_policy.vanilla_policy_gradients import (
-  VanilaPolicyGrandients)
+  VanillaPolicyGrandients)
 
 
-class LagrangianPPO(VanilaPolicyGrandients):
+class LagrangianPPO(VanillaPolicyGrandients):
   pass
