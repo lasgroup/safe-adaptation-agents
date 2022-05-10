@@ -1,6 +1,6 @@
 import functools
 from types import SimpleNamespace
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 from gym.spaces import Space

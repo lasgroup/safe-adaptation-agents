@@ -1,4 +1,7 @@
+from typing import Callable, Tuple
+
 import haiku as hk
+import jax.numpy as jnp
 import jax.nn as jnn
 
 
@@ -9,23 +12,22 @@ def initializer(name: str) -> hk.initializers.Initializer:
   }[name]
 
 
-def mlp(
-    x,
-    activation=jnn.relu,
-    initializer=initializer('glorot'),
-    output_sizes=(128, 128, 1)
-):
+def mlp(x: jnp.ndarray,
+        activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
+        initializer: hk.initializers.Initializer = initializer('glorot'),
+        output_sizes: Tuple = (128, 128, 1)):
   x = hk.nets.MLP(output_sizes, activation=activation, w_init=initializer)(x)
   return x
 
 
-def cnn(x,
-        depth,
-        kernels,
-        activation=jnn.relu,
-        initializer=initializer('glorot'),
-        stride=2):
-  kwargs = {'stride': stride, 'padding': 'VALID', 'w_init': initializer}
+def cnn(x: jnp.ndarray,
+        depth: int,
+        kernels: Tuple,
+        activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
+        initializer: hk.initializers.Initializer = initializer('glorot'),
+        stride: int = 2,
+        **kwargs):
+  kwargs.update({'stride': stride, 'padding': 'VALID', 'w_init': initializer})
   for i, kernel in enumerate(kernels):
     layer_depth = 2**i * depth
     x = activation(hk.Conv2D(layer_depth, kernel, **kwargs)(x))

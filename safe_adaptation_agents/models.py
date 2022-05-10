@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, Callable
+from typing import Tuple, Optional, Callable
 
 import numpy as np
 
@@ -19,14 +19,16 @@ class Actor(hk.Module):
 
   def __init__(
       self,
-      output_sizes: Iterable[int],
+      output_size: Tuple[int, ...],
+      layers: Tuple[int, ...],
       min_stddev: float,
       max_stddev: float,
-      initialization: str,
+      initialization: str = 'glorot',
       activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
   ):
     super().__init__()
-    self.output_size = output_sizes
+    self.output_size = output_size
+    self.layers = layers
     self._min_stddev = min_stddev
     self._max_stddev = max_stddev
     self._initialization = initialization
@@ -35,8 +37,8 @@ class Actor(hk.Module):
   def __call__(self, observation: jnp.ndarray):
     x = nets.mlp(
         observation,
-        output_sizes=self.output_size,
-        initializer=self._initialization,
+        output_sizes=self.layers + self.output_size,
+        initializer=nets.initializer(self._initialization),
         activation=self._activation)
     mu, stddev = jnp.split(x, 2, -1)
     init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
@@ -53,13 +55,15 @@ class Actor(hk.Module):
 class DenseDecoder(hk.Module):
 
   def __init__(self,
-               output_sizes: Iterable[int],
+               output_size: Tuple[int, ...],
+               layers: Tuple[int, ...],
                dist: str,
-               initialization: str,
+               initialization: str = 'glorot',
                activation: Callable[[jnp.ndarray], jnp.ndarray] = jnn.relu,
                name: Optional[str] = None):
     super(DenseDecoder, self).__init__(name)
-    self.output_size = output_sizes
+    self.output_size = output_size
+    self.layers = layers
     self._dist = dist
     self._initialization = initialization
     self._activation = activation
@@ -67,7 +71,7 @@ class DenseDecoder(hk.Module):
   def __call__(self, x: jnp.ndarray):
     x = nets.mlp(
         x,
-        output_sizes=self.output_size,
+        output_sizes=self.layers + self.output_size,
         initializer=nets.initializer(self._initialization),
         activation=self._activation)
     x = jnp.squeeze(x, axis=-1)

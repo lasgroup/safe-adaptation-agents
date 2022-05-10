@@ -75,7 +75,7 @@ class Driver:
     self.expose_task_id = expose_task_id
 
   def run(self, agent: Agent, tasks: Iterable[Env],
-          train: bool) -> [Agent, IterationSummary, IterationSummary]:
+          train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
     for task_name, task in adaptation_tasks:
@@ -102,4 +102,4 @@ class Driver:
           render_episodes=self.render_episodes,
           render_options=self.render_options)
       iter_query_episodes[task_name] = query_episodes
-    return agent, iter_adaptation_episodes, iter_query_episodes
+    return iter_adaptation_episodes, iter_query_episodes

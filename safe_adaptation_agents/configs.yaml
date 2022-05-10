@@ -1,21 +1,31 @@
 defaults:
+  agent: vanilla_policy_gradients
+  robot: point
   log_dir: results
   seed: 0
   time_limit: 1000
   epochs: 200
-  train_driver: {adaptation_steps: 5000, query_steps: 2000, iters: 10}
-  test_driver: {adaptation_steps: 5000, query_steps: 2000, iters: 5}
+  eval_every: 10
+  eval_trials: 5
+  train_driver: {adaptation_steps: 5000, query_steps: 2000}
+  test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 2
   render_episodes: 0
   render_options: {}
-  initialization: glorot
   jit: True
   precision: 32
-  discount: 0.99
-  safety_discount: 0.95
-  lambda_: 0.95
+
+no_adaptation:
+  task: go_to_goal
+  train_driver: {adaptation_steps: 5000, query_steps: 0}
+  test_driver: {adaptation_steps: 5000, query_steps: 0}
 
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
   update_steps: 80
+  actor: {output_sizes: [32, 32], min_stddev: 1e-3, max_stddev: 10., activation: jnn.relu, initialization: glorot}
+  critic: {output_sizes: [32, 32], dist: normal, activation: jnn.relu, name: 'critic', initialization: glorot}
+  discount: 0.99
+  safety_discount: 0.95
+  lambda_: 0.95

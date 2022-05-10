@@ -67,6 +67,7 @@ class TrajectoryBuffer:
     if transition.last:
       self.observation[self.task_id, self.episode_id,
                        self.length + 1] = transition.next_observation
+      self.terminal[self.task_id, self.episode_id, self.length + 1:] = True
       self.episode_id += 1
       self.length = -1
     self.length += 1
