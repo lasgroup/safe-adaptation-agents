@@ -92,8 +92,8 @@ def main():
       **config.test_driver,
       on_episode_end=partial(on_episode_end, train=False, logger=logger))
   for epoch in range(config.epochs):
-    # episodes, _ = train_driver.run(agent, [(config.task, env)], True)
-    if epoch % config.eval_every == 0:
+    episodes, _ = train_driver.run(agent, [(config.task, env)], True)
+    if epoch % config.eval_every == 0 and config.eval_trials:
       results = evaluate(agent, env, config.task, test_driver,
                          config.eval_trials, seed_sequence)
       logger.log_summary(evaluation_summary(results))

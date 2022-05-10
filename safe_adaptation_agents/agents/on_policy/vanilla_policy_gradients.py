@@ -26,7 +26,7 @@ class VanillaPolicyGrandients(Agent):
                actor: hk.Transformed, critic: hk.Transformed):
     super().__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
-    self.training_step = 0
+    self.training_step = 1
     self.buffer = TrajectoryBuffer(self.config.num_trajectories,
                                    self.config.time_limit,
                                    observation_space.shape, action_space.shape)
@@ -74,8 +74,9 @@ class VanillaPolicyGrandients(Agent):
     for _ in range(self.config.update_steps):
       (self.actor.learning_state, self.critic.learning_state,
        report) = self._update_step(self.actor.learning_state,
-                                   self.critic.learning_state, observation,
-                                   action, advantage, return_)
+                                   self.critic.learning_state,
+                                   observation, action, advantage, return_,
+                                   next(self.rng_seq))
       for k, v in report.items():
         self.logger[k] = v
 
@@ -83,12 +84,13 @@ class VanillaPolicyGrandients(Agent):
   def _update_step(
       self, actor_state: LearningState, critic_state: LearningState,
       observation: jnp.ndarray, actions: jnp.ndarray, advantage: jnp.ndarray,
-      return_: jnp.ndarray) -> [utils.LearningState, LearningState, dict]:
+      return_: jnp.ndarray,
+      seed: jnp.ndarray) -> [utils.LearningState, LearningState, dict]:
     policy_loss, policy_grads = jax.value_and_grad(self.policy_loss)(
-        actor_state.params, observation, actions, advantage)
+        actor_state.params, observation, actions, advantage, seed)
     new_actor_state = self.actor.grad_step(policy_grads, actor_state)
-    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(observation,
-                                                                   return_)
+    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
+        critic_state.params, observation, return_)
     new_critic_state = self.critic.grad_step(value_grads, critic_state)
     return new_actor_state, new_critic_state, {
         'agent/actor/loss': policy_loss,
@@ -96,23 +98,27 @@ class VanillaPolicyGrandients(Agent):
     }
 
   def policy_loss(self, actor_params: hk.Params, observation: jnp.ndarray,
-                  actions: jnp.ndarray, advantage: jnp.ndarray):
-    pi = self.actor.apply(actor_params, observation)
+                  actions: jnp.ndarray, advantage: jnp.ndarray,
+                  seed: jnp.ndarray):
+    pi = self.actor.apply(actor_params, observation[:, :-1])
     objective = (
         pi.log_prob(actions) * advantage +
-        self.config.entropy_regularization * pi.entropy())
+        self.config.entropy_regularization * pi.entropy(seed=seed))
     return -objective.mean()
 
   def critic_loss(self, critic_params: hk.Params, observation: jnp.ndarray,
                   return_: jnp.ndarray):
     return -self.critic.apply(critic_params,
-                              observation).log_prob(return_).mean()
+                              observation[:, :-1]).log_prob(return_).mean()
 
+  # TODO (yarden): normalize advantage.
   @functools.partial(jax.jit, static_argnums=0)
   def _advantage(self, critic_params: hk.Params, observation: jnp.ndarray,
-                 reward: jnp.ndarray, _: jnp.ndarray, terminal: jnp.ndarray):
-    bootstrap = self.critic.apply(critic_params, observation) * (1. - terminal)
-    diff = reward[:-1] + self.config.discount * bootstrap[1:] - bootstrap[:-1]
+                 reward: jnp.ndarray, terminal: jnp.ndarray):
+    bootstrap = self.critic.apply(critic_params, observation).mode()
+    bootstrap = bootstrap.at[:, 1:].multiply((1. - terminal))
+    diff = reward + (
+        self.config.discount * bootstrap[..., 1:] - bootstrap[..., :-1])
     return discounted_cumsum(diff, self.config.lambda_ * self.config.discount)
 
   @property

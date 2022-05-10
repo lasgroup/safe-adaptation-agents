@@ -82,9 +82,15 @@ class TrajectoryBuffer:
     self.episode_id = 0
     self.task_id = 0
     if self.observation.shape[0] == 1:
-      self.observation.squeeze(0)
-      self.action.squeeze(0)
-      self.reward.squeeze(0)
-      self.cost.squeeze(0)
-      self.terminal.squeeze(0)
-    return self.observation, self.action, self.reward, self.cost, self.terminal
+      o = self.observation.squeeze(0)
+      a = self.action.squeeze(0)
+      r = self.reward.squeeze(0)
+      c = self.cost.squeeze(0)
+      t = self.terminal.squeeze(0)
+    else:
+      o = self.observation
+      a = self.action
+      r = self.reward
+      c = self.cost
+      t = self.terminal
+    return o, a, r, c, t

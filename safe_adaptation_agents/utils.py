@@ -50,7 +50,7 @@ class Learner:
     new_params, new_opt_state = jmp.select_tree(grads_finite,
                                                 (new_params, new_opt_state),
                                                 (params, opt_state))
-    return new_params, new_opt_state
+    return LearningState(new_params, new_opt_state)
 
 
 def get_mixed_precision_policy(precision):

@@ -27,7 +27,7 @@ class Actor(hk.Module):
       activation: Union[str, Callable[[jnp.ndarray], jnp.ndarray]] = jnn.relu,
   ):
     super().__init__()
-    self.output_size = output_size
+    self.output_size = tuple(map(lambda x: 2 * x, output_size))
     self.layers = layers
     self._min_stddev = min_stddev
     self._max_stddev = max_stddev
