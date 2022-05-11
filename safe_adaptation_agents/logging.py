@@ -27,9 +27,10 @@ class TrainingLogger:
   def __setitem__(self, key: str, value: float):
     self._metrics[key].update_state(value)
 
-  def log_summary(self, summary: dict):
+  def log_summary(self, summary: dict, step: Optional[int] = None):
+    step = step or self.step
     for k, v in summary.items():
-      self._writer.add_scalar(k, float(v), self.step)
+      self._writer.add_scalar(k, float(v), step)
     self._writer.flush()
 
   def log_metrics(self, step: Optional[int] = None):
@@ -70,7 +71,7 @@ class StateWriter:
     self.log_dir = log_dir
     self.queue = Queue(maxsize=5)
     self.finished = False
-    Thread(name="state_writer", target=self._worker).start()
+    self._thread = Thread(name="state_writer", target=self._worker).start()
 
   def write(self, data: dict):
     self.queue.put(data)
@@ -89,4 +90,6 @@ class StateWriter:
   def close(self):
     self.queue.join()
     self.finished = True
-    self._file_handle.close()
+    self._thread.join()
+    if self._file_handle is not None:
+      self._file_handle.close()

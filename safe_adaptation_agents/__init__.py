@@ -6,3 +6,4 @@ if 'LOG' not in os.environ:
   logging.getLogger().setLevel('ERROR')
   warnings.filterwarnings('ignore', '.*box bound precision lowered.*')
   warnings.filterwarnings("ignore", category=DeprecationWarning)
+  warnings.filterwarnings("ignore", category=FutureWarning)

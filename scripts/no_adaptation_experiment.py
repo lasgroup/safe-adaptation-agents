@@ -4,6 +4,8 @@ import concurrent.futures
 from itertools import repeat
 from typing import List, Dict
 
+import multiprocessing as mp
+
 import cloudpickle
 
 import numpy as np
@@ -36,7 +38,8 @@ def evaluate(agent: agents.Agent, env: Env, task_name: str,
   # different processes running it, so anything that could have been saved
   # during evaluation is left out.
   agent_bytes = cloudpickle.dumps(agent)
-  with concurrent.futures.ProcessPoolExecutor() as executor:
+  with concurrent.futures.ProcessPoolExecutor(
+      mp_context=mp.get_context('forkserver')) as executor:
     results = [
         result for result in executor.map(
             run_one, repeat(agent_bytes), repeat(env), repeat(task_name),
@@ -72,8 +75,8 @@ def on_episode_end(episode: train.EpisodeSummary,
   summary['training/episode_cost_return'] = sum_costs
   print("\nReward return: {} -- Cost return: {}".format(episode_return,
                                                         sum_costs))
-  logger.log_summary(summary)
   if train:
+    logger.log_summary(summary)
     logger.step += len(episode['reward'])
 
 
@@ -102,11 +105,13 @@ def main():
       **config.test_driver,
       on_episode_end=partial(on_episode_end, train=False, logger=logger))
   for epoch in range(config.epochs):
+    print('Training epoch #{}'.format(epoch))
     episodes, _ = train_driver.run(agent, [(config.task, env)], True)
     if epoch % config.eval_every == 0 and config.eval_trials:
+      print('Evaluating...')
       results = evaluate(agent, env, config.task, test_driver,
                          config.eval_trials, seed_sequence)
-      logger.log_summary(evaluation_summary(results))
+      logger.log_summary(evaluation_summary(results), epoch)
     state_writer.write({'env': env, 'agent': agent})
 
 
