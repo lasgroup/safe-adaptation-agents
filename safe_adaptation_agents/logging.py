@@ -53,6 +53,7 @@ class TrainingLogger:
 
   def __getstate__(self):
     self._writer.close()
+    self._metrics.clear()
     state = self.__dict__.copy()
     del state['_writer']
     return state
@@ -65,7 +66,8 @@ class TrainingLogger:
 class StateWriter:
 
   def __init__(self, log_dir: str):
-    self._file_handle = open(os.path.join(log_dir, 'state.pkl'))
+    self._file_handle = None
+    self.log_dir = log_dir
     self.queue = Queue(maxsize=5)
     self.finished = False
     Thread(name="state_writer", target=self._worker).start()
@@ -79,6 +81,8 @@ class StateWriter:
         data = self.queue.get(True, 1)
       except Empty:
         continue
+      if self._file_handle is None:
+        self._file_handle = open(os.path.join(self.log_dir, 'state.pkl'), 'wb')
       cloudpickle.dump(data, self._file_handle)
       self.queue.task_done()
 

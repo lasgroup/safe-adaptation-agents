@@ -79,15 +79,15 @@ def on_episode_end(episode: train.EpisodeSummary,
 
 def resume_experiment(log_dir):
   with open(os.path.join(log_dir, 'state.pkl'), 'rb') as f:
-    env, agent = cloudpickle.load(f)
-  return env, agent, agent.logger
+    env, agent = cloudpickle.load(f).values()
+  return env, agent, agent.logger, agent.config
 
 
 def main():
   config = options.load_config()
   seed_sequence = np.random.SeedSequence(config.seed)
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
-    env, agent, logger = resume_experiment(config.log_dir)
+    env, agent, logger, config = resume_experiment(config.log_dir)
   else:
     env = safe_adaptation_gym.make(config.task, config.robot)
     env = TimeLimit(env, config.time_limit)
