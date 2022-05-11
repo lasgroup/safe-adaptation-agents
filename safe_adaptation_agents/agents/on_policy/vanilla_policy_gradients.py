@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import haiku as hk
 
 from safe_adaptation_agents.agents import Agent, Transition
-from safe_adaptation_agents.training_logger import TrainingLogger
+from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
     TrajectoryBuffer)
 from safe_adaptation_agents import utils
@@ -111,7 +111,6 @@ class VanillaPolicyGrandients(Agent):
     return -self.critic.apply(critic_params,
                               observation[:, :-1]).log_prob(return_).mean()
 
-  # TODO (yarden): normalize advantage.
   @functools.partial(jax.jit, static_argnums=0)
   def _advantage(self, critic_params: hk.Params, observation: jnp.ndarray,
                  reward: jnp.ndarray, terminal: jnp.ndarray):
@@ -119,7 +118,11 @@ class VanillaPolicyGrandients(Agent):
     bootstrap = bootstrap.at[:, 1:].multiply((1. - terminal))
     diff = reward + (
         self.config.discount * bootstrap[..., 1:] - bootstrap[..., :-1])
-    return discounted_cumsum(diff, self.config.lambda_ * self.config.discount)
+    advantage = discounted_cumsum(diff,
+                                  self.config.lambda_ * self.config.discount)
+    mean, stddev = advantage.mean(), advantage.std()
+    eps = jnp.finfo(self.critic.precision.output_dtype).eps
+    return (advantage - mean) / (stddev + eps)
 
   @property
   def time_to_update(self):

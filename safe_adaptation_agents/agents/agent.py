@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from safe_adaptation_agents.training_logger import TrainingLogger
+from safe_adaptation_agents.logging import TrainingLogger
 
 
 class Transition(NamedTuple):

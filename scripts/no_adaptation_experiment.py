@@ -13,7 +13,7 @@ from gym.wrappers import TimeLimit
 
 import safe_adaptation_gym
 
-from safe_adaptation_agents import agents, training_logger, train
+from safe_adaptation_agents import agents, logging, train
 from safe_adaptation_agents import config as options
 
 
@@ -83,7 +83,8 @@ def main():
   env = safe_adaptation_gym.make(config.task, config.robot)
   env = TimeLimit(env, config.time_limit)
   env.seed(config.seed)
-  logger = training_logger.TrainingLogger(config.log_dir)
+  logger = logging.TrainingLogger(config.log_dir)
+  state_writer = logging.StateWriter(config.log_dir)
   agent = agents.make(config, env, logger)
   train_driver = train.Driver(
       **config.train_driver,
@@ -97,8 +98,7 @@ def main():
       results = evaluate(agent, env, config.task, test_driver,
                          config.eval_trials, seed_sequence)
       logger.log_summary(evaluation_summary(results))
-    with open(os.path.join(config.log_dir, 'state.pkl'), 'wb') as f:
-      cloudpickle.dump({'env': env, 'agent': agent}, f)
+    state_writer.write({'env': env, 'agent': agent})
 
 
 if __name__ == '__main__':

@@ -1,6 +1,12 @@
+import os
+from queue import Queue, Empty
+from threading import Thread
+
 from typing import Optional
 
 from collections import defaultdict
+
+import cloudpickle
 
 from tensorboardX import SummaryWriter
 
@@ -59,3 +65,29 @@ class TrainingLogger:
     """
     self.__dict__.update(state)
     self._writer = SummaryWriter(self.log_dir)
+
+
+class StateWriter:
+
+  def __init__(self, log_dir: str):
+    self._file_handle = open(os.path.join(log_dir, 'state.pkl'))
+    self.queue = Queue(maxsize=5)
+    self.finished = False
+    Thread(name="state_writer", target=self._worker).start()
+
+  def write(self, data: dict):
+    self.queue.put(data)
+
+  def _worker(self):
+    while not self.finished:
+      try:
+        data = self.queue.get(True, 1)
+      except Empty:
+        continue
+      cloudpickle.dump(data, self._file_handle)
+      self.queue.task_done()
+
+  def close(self):
+    self.queue.join()
+    self.finished = True
+    self._file_handle.close()
