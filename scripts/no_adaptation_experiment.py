@@ -65,7 +65,7 @@ def evaluation_summary(runs: List[train.IterationSummary]) -> Dict:
 
 
 def on_episode_end(episode: train.EpisodeSummary,
-                   logger: training_logger.TrainingLogger, train: bool):
+                   logger: logging.TrainingLogger, train: bool):
   episode_return = sum(episode['reward'])
   summary = {'training/episode_return': episode_return}
   sum_costs = sum(list(map(lambda info: info['cost'], episode['info'])))
@@ -77,15 +77,24 @@ def on_episode_end(episode: train.EpisodeSummary,
     logger.step += len(episode['reward'])
 
 
+def resume_experiment(log_dir):
+  with open(os.path.join(log_dir, 'state.pkl'), 'rb') as f:
+    env, agent = cloudpickle.load(f)
+  return env, agent, agent.logger
+
+
 def main():
   config = options.load_config()
   seed_sequence = np.random.SeedSequence(config.seed)
-  env = safe_adaptation_gym.make(config.task, config.robot)
-  env = TimeLimit(env, config.time_limit)
-  env.seed(config.seed)
-  logger = logging.TrainingLogger(config.log_dir)
+  if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
+    env, agent, logger = resume_experiment(config.log_dir)
+  else:
+    env = safe_adaptation_gym.make(config.task, config.robot)
+    env = TimeLimit(env, config.time_limit)
+    env.seed(config.seed)
+    logger = logging.TrainingLogger(config.log_dir)
+    agent = agents.make(config, env, logger)
   state_writer = logging.StateWriter(config.log_dir)
-  agent = agents.make(config, env, logger)
   train_driver = train.Driver(
       **config.train_driver,
       on_episode_end=partial(on_episode_end, train=True, logger=logger))

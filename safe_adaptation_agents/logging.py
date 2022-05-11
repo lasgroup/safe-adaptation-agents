@@ -52,17 +52,12 @@ class TrainingLogger:
     self._writer.flush()
 
   def __getstate__(self):
-    """
-    Define how the agent should be pickled.
-    """
+    self._writer.close()
     state = self.__dict__.copy()
     del state['_writer']
     return state
 
   def __setstate__(self, state):
-    """
-    Define how the agent should be loaded.
-    """
     self.__dict__.update(state)
     self._writer = SummaryWriter(self.log_dir)
 
