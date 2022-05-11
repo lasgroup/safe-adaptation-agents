@@ -1,5 +1,6 @@
 import os
-from queue import Queue, Empty
+
+from queue import Queue
 from threading import Thread
 
 from typing import Optional
@@ -70,18 +71,18 @@ class StateWriter:
     self._file_handle = None
     self.log_dir = log_dir
     self.queue = Queue(maxsize=5)
-    self.finished = False
-    self._thread = Thread(name="state_writer", target=self._worker).start()
+    self._thread = Thread(name="state_writer", target=self._worker)
+    self._thread.start()
 
   def write(self, data: dict):
     self.queue.put(data)
+    if not self._thread.is_alive():
+      self._thread = Thread(name="state_writer", target=self._worker)
+      self._thread.start()
 
   def _worker(self):
-    while not self.finished:
-      try:
-        data = self.queue.get(True, 1)
-      except Empty:
-        continue
+    while not self.queue.empty():
+      data = self.queue.get()
       if self._file_handle is None:
         self._file_handle = open(os.path.join(self.log_dir, 'state.pkl'), 'wb')
       cloudpickle.dump(data, self._file_handle)
@@ -89,7 +90,6 @@ class StateWriter:
 
   def close(self):
     self.queue.join()
-    self.finished = True
     self._thread.join()
     if self._file_handle is not None:
       self._file_handle.close()
