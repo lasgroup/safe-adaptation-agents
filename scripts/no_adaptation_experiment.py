@@ -123,7 +123,7 @@ def main():
       summary, videos = evaluation_summary(results)
       logger.log_summary(summary, epoch)
       for task_name, video in videos.items():
-        logger.log_video(video, task_name + '_video', step=epoch)
+        logger.log_video(video, task_name + '_video', step=epoch, fps=60)
     state_writer.write({'env': env, 'agent': agent, 'epoch': epoch})
 
 
