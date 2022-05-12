@@ -1,5 +1,7 @@
 import os
 
+from copy import deepcopy
+
 from queue import Queue
 from threading import Thread
 
@@ -75,14 +77,16 @@ class StateWriter:
     self._thread.start()
 
   def write(self, data: dict):
-    self.queue.put(data)
+    self.queue.put(deepcopy(data))
+    # Lazily open up a thread and let it drain the work queue. Thread exits
+    # when there's no more work to do.
     if not self._thread.is_alive():
       self._thread = Thread(name="state_writer", target=self._worker)
       self._thread.start()
 
   def _worker(self):
     while not self.queue.empty():
-      data = self.queue.get()
+      data = self.queue.get(timeout=1)
       if self._file_handle is None:
         self._file_handle = open(os.path.join(self.log_dir, 'state.pkl'), 'wb')
       cloudpickle.dump(data, self._file_handle)
