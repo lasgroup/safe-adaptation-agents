@@ -60,7 +60,7 @@ def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
           for episode in task
       ]).mean()
       if i == 0:
-        task_vids['task_name'] = [episode.get('frames', []) for episode in task]
+        task_vids[task_name] = [episode.get('frames', []) for episode in task]
       all_tasks.append((return_, cost_return_))
     all_runs.append(all_tasks)
   total_return, total_cost = np.split(np.asarray(all_runs), 2, axis=-1)
