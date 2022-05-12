@@ -15,12 +15,12 @@ from safe_adaptation_agents.agents import Transition
 class DummyAgent(agents.Agent):
 
   def __init__(self):
-    super(DummyAgent, self).__init__(None, None) # noqa
+    super(DummyAgent, self).__init__(None, None)  # noqa
     self.rs = np.random.RandomState(0)
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
-    return self.rs.uniform(-1., 1., (2,))
+    return self.rs.uniform(-1., 1., (2, 2))
 
   def observe(self, transition: Transition):
     pass
@@ -41,10 +41,12 @@ def driver():
 @pytest.fixture(params=['no_adaptation'])
 def tasks(request):
 
-  def wrappers(gym):
-    return TimeLimit(gym, 25)
+  def wrappers(env):
+    env = TimeLimit(env, 25)
+    return env
 
-  return benchmark.make(request.param, 'point', wrappers=wrappers)
+  return benchmark.make(
+      request.param, 'point', wrappers=wrappers, vector_size=2)
 
 
 def test_number_episodes(driver, tasks):
@@ -55,18 +57,17 @@ def test_number_episodes(driver, tasks):
         benchmark.TASKS)
     # Check the amount of episodes
     assert all(
-        len(adaptation_episodes[key]) == 4
+        len(adaptation_episodes[key]) == 2
         for key in adaptation_episodes.keys())
     # Check the length of each episode
     assert all(
         len(adaptation_episodes[key][0]['reward']) == 25
         for key in adaptation_episodes.keys())
-    assert all(len(test_episodes[key]) == 2 for key in test_episodes.keys())
+    assert all(len(test_episodes[key]) == 1 for key in test_episodes.keys())
     assert all(
         len(test_episodes[key][0]['reward']) == 25
         for key in test_episodes.keys())
 
-  agent, adaptation_summary, query_summary = driver.run(DummyAgent(),
-                                                        tasks.train_tasks,
-                                                        False)
+  adaptation_summary, query_summary = driver.run(DummyAgent(),
+                                                 tasks.train_tasks, False)
   on_iter(adaptation_summary, query_summary)

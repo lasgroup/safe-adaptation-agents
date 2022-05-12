@@ -3,13 +3,11 @@ from itertools import tee
 from collections import defaultdict
 
 from typing import (Callable, Optional, Dict, List, DefaultDict, Iterable,
-                    Tuple, Union)
+                    Tuple)
 
-import gym.vector
+from gym.vector import VectorEnv
 import numpy as np
 from tqdm import tqdm
-
-from gym import Env
 
 from safe_adaptation_agents.agents import Agent, Transition
 
@@ -19,7 +17,7 @@ IterationSummary = Dict[str, List[EpisodeSummary]]
 
 def interact(
     agent: Agent,
-    environment: gym.vector.VectorEnv,
+    environment: VectorEnv,
     steps: int,
     train: bool,
     adapt: bool,
@@ -45,20 +43,20 @@ def interact(
     if train:
       agent.observe(transition)
     if any(dones):
-      assert all(dones), (
-          'SafeAdaptationGym is episodic, so all tasks end after the '
-          'same amount of steps. This makes life so much easier and happier...')
       if on_episode_end:
         on_episode_end(episodes[-1])
       episodes.append(defaultdict(list))
     transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)
-  return agent
+  if not episodes[-1]:
+    episodes.pop()
+  return agent, episodes
 
 
 def _append(transition: Transition, episode: DefaultDict) -> DefaultDict:
   episode['observation'].append(transition.observation)
+  episode['action'].append(transition.action)
   episode['reward'].append(transition.reward)
   episode['cost'].append(transition.cost)
   episode['last'].append(transition.last)
@@ -83,7 +81,7 @@ class Driver:
     self.render_options = render_options
     self.expose_task_id = expose_task_id
 
-  def run(self, agent: Agent, tasks: Iterable[Tuple[str, Env]],
+  def run(self, agent: Agent, tasks: Iterable[Tuple[str, VectorEnv]],
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
