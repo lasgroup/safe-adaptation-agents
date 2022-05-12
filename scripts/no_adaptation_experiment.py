@@ -107,12 +107,12 @@ def main():
   state_writer = logging.StateWriter(config.log_dir)
   train_driver = train.Driver(
       **config.train_driver,
-      on_episode_end=partial(on_episode_end, train=True, logger=logger),
-      render_options=config.render_options)
+      on_episode_end=partial(on_episode_end, train=True, logger=logger))
   test_driver = train.Driver(
       **config.test_driver,
       on_episode_end=partial(on_episode_end, train=False, logger=logger),
-      render_options=config.render_options)
+      render_options=config.render_options,
+      render_episodes=config.render_episodes)
   for epoch in range(epoch, config.epochs):
     print('Training epoch #{}'.format(epoch))
     episodes, _ = train_driver.run(agent, [(config.task, env)], True)
