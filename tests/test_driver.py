@@ -15,10 +15,11 @@ from safe_adaptation_agents.agents import Transition
 class DummyAgent(agents.Agent):
 
   def __init__(self):
+    super(DummyAgent, self).__init__(None, None) # noqa
     self.rs = np.random.RandomState(0)
 
-  def __call__(self, observation: np.ndarray, train: bool,
-               adapt: bool, *args, **kwargs) -> np.ndarray:
+  def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
+               **kwargs) -> np.ndarray:
     return self.rs.uniform(-1., 1., (2,))
 
   def observe(self, transition: Transition):

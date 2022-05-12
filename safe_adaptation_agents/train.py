@@ -2,21 +2,24 @@ from itertools import tee
 
 from collections import defaultdict
 
-from typing import Callable, Optional, Dict, List, DefaultDict, Iterable, Tuple
+from typing import (Callable, Optional, Dict, List, DefaultDict, Iterable,
+                    Tuple, Union)
 
+import gym.vector
+import numpy as np
 from tqdm import tqdm
 
 from gym import Env
 
 from safe_adaptation_agents.agents import Agent, Transition
 
-EpisodeSummary = DefaultDict[str, List]
+EpisodeSummary = Dict[str, List]
 IterationSummary = Dict[str, List[EpisodeSummary]]
 
 
 def interact(
     agent: Agent,
-    environment: Env,
+    environment: gym.vector.VectorEnv,
     steps: int,
     train: bool,
     adapt: bool,
@@ -25,41 +28,40 @@ def interact(
     render_options: Optional[Dict] = None) -> [Agent, List[EpisodeSummary]]:
   if render_options is None:
     render_options = {}
-  observation = environment.reset()
-  episodes = [defaultdict(list, {'observation': [observation]})]
+  observations = environment.reset()
   step = 0
   pbar = tqdm(total=steps, leave=True, position=0)
+  episodes = [defaultdict(list, {'observation': [observations]})]
   while step < steps:
     if render_episodes:
-      frame = environment.render(**render_options)
-      episodes[-1]['frames'].append(frame)
-    action = agent(observation, train, adapt)
-    next_observation, reward, done, info = environment.step(action)
-    cost = info.get('cost', 0)
-    terminal = done and not info.get('TimeLimit.truncated', False)
-    transition = Transition(observation, next_observation, action, reward, cost,
-                            terminal, info)
+      frames = environment.render(**render_options)
+      episodes[-1]['frames'].append(frames)
+    actions = agent(observations, train, adapt)
+    next_observations, rewards, dones, infos = environment.step(actions)
+    costs = np.array([info.get('cost', 0) for info in infos])
+    transition = Transition(observations, next_observations, actions, rewards,
+                            costs, dones, infos)
     episodes[-1] = _append(transition, episodes[-1])
     if train:
       agent.observe(transition)
-    if done:
+    if any(dones):
+      assert all(dones), (
+          'SafeAdaptationGym is episodic, so all tasks end after the '
+          'same amount of steps. This makes life so much easier and happier...')
       if on_episode_end:
         on_episode_end(episodes[-1])
-      observation = environment.reset()
-      episodes.append(defaultdict(list, {'observation': [observation]}))
-    transition_steps = transition.steps
+      episodes.append(defaultdict(list))
+    transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)
-  if 'reward' not in episodes[-1].keys():
-    episodes.pop()
-  return agent, episodes
+  return agent
 
 
 def _append(transition: Transition, episode: DefaultDict) -> DefaultDict:
   episode['observation'].append(transition.observation)
   episode['reward'].append(transition.reward)
   episode['cost'].append(transition.cost)
-  episode['terminal'].append(transition.terminal)
+  episode['last'].append(transition.last)
   episode['info'].append(transition.info)
   return episode
 
