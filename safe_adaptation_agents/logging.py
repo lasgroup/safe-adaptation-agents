@@ -33,13 +33,13 @@ class TrainingLogger:
     self._metrics[key].update_state(value)
 
   def log_summary(self, summary: dict, step: Optional[int] = None):
-    step = step or self.step
+    step = step if step is not None else self.step
     for k, v in summary.items():
       self._writer.add_scalar(k, float(v), step)
     self._writer.flush()
 
   def log_metrics(self, step: Optional[int] = None):
-    step = step or self.step
+    step = step if step is not None else self.step
     print("\n----Training step {} summary----".format(step))
     for k, v in self._metrics.items():
       val = float(v.result())
@@ -53,7 +53,7 @@ class TrainingLogger:
                 name='policy',
                 fps=30,
                 step: Optional[int] = None):
-    step = step or self.step
+    step = step if step is not None else self.step
     # (N, T, C, H, W)
     self._writer.add_video(
         name,
