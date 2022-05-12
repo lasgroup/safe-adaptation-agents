@@ -11,6 +11,8 @@ from collections import defaultdict
 
 import cloudpickle
 
+import numpy as np
+
 from tensorboardX import SummaryWriter
 
 from tensorflow import metrics
@@ -46,9 +48,18 @@ class TrainingLogger:
       v.reset_states()
     self._writer.flush()
 
-  # (N, T, C, H, W)
-  def log_video(self, images, name='policy', fps=30):
-    self._writer.add_video(name, images, self.step, fps=fps)
+  def log_video(self,
+                images,
+                name='policy',
+                fps=30,
+                step: Optional[int] = None):
+    step = step or self.step
+    # (N, T, C, H, W)
+    self._writer.add_video(
+        name,
+        np.array(images, copy=False).transpose([0, 1, 4, 2, 3]),
+        step,
+        fps=fps)
     self._writer.flush()
 
   def log_figure(self, figure, name='policy'):

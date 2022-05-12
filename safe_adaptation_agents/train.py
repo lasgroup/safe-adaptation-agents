@@ -23,6 +23,8 @@ def interact(
     on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
     render_episodes: int = 0,
     render_options: Optional[Dict] = None) -> [Agent, List[EpisodeSummary]]:
+  if render_options is None:
+    render_options = {}
   observation = environment.reset()
   episodes = [defaultdict(list, {'observation': [observation]})]
   step = 0
