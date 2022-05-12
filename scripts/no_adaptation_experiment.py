@@ -1,10 +1,6 @@
 import os
 from functools import partial
-import concurrent.futures
-from itertools import repeat
 from typing import List, Dict
-
-import multiprocessing as mp
 
 import cloudpickle
 
@@ -19,32 +15,12 @@ from safe_adaptation_agents import agents, logging, train
 from safe_adaptation_agents import config as options
 
 
-def run_one(agent_bytes: bytes, env: Env, task_name: str, seed: np.ndarray,
-            driver: train.Driver):
-  # Haiku functions are not pickleable, so first encode to bytes with
-  # cloudpickle and then decode back to an agent instance.
-  agent = cloudpickle.loads(agent_bytes)
-  env.seed(seed)
-  episodes, _ = driver.run(agent, [(task_name, env)], False)
-  return episodes
-
-
 def evaluate(agent: agents.Agent, env: Env, task_name: str,
-             test_driver: train.Driver, trials: int,
-             seed_sequence: np.random.SeedSequence):
-
-  # Running evaluation in parallel as the agent should not be stateful during
-  # evaluation. Even if there's a bug the agent is not returned from the
-  # different processes running it, so anything that could have been saved
-  # during evaluation is left out.
-  agent_bytes = cloudpickle.dumps(agent)
-  with concurrent.futures.ProcessPoolExecutor(
-      mp_context=mp.get_context('forkserver')) as executor:
-    results = [
-        result for result in executor.map(
-            run_one, repeat(agent_bytes), repeat(env), repeat(task_name),
-            list(seed_sequence.generate_state(trials)), repeat(test_driver))
-    ]
+             test_driver: train.Driver, trials: int):
+  results = [
+      test_driver.run(agent, [(task_name, env)], False)[0]
+      for _ in range(trials)
+  ]
   return results
 
 
@@ -94,7 +70,6 @@ def main():
   if not config.jit:
     from jax.config import config as jax_config
     jax_config.update('jax_disable_jit', True)
-  seed_sequence = np.random.SeedSequence(config.seed)
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
     env, agent, logger, config, epoch = resume_experiment(config.log_dir)
   else:
@@ -119,7 +94,7 @@ def main():
     if epoch % config.eval_every == 0 and config.eval_trials:
       print('Evaluating...')
       results = evaluate(agent, env, config.task, test_driver,
-                         config.eval_trials, seed_sequence)
+                         config.eval_trials)
       summary, videos = evaluation_summary(results)
       logger.log_summary(summary, epoch)
       for task_name, video in videos.items():
