@@ -17,7 +17,7 @@ defaults:
 
 no_adaptation:
   task: go_to_goal
-  train_driver: {adaptation_steps: 5000, query_steps: 0}
+  train_driver: {adaptation_steps: 30000, query_steps: 0}
   test_driver: {adaptation_steps: 1000, query_steps: 0}
   eval_trials: 10
 
@@ -25,12 +25,12 @@ no_adaptation:
 vanilla_policy_gradients:
   entropy_regularization: 0.
   update_steps: 80
-  actor: {layers: [32, 32], min_stddev: 1e-3, max_stddev: 10., activation: jnn.relu, initialization: glorot}
-  critic: {layers: [32, 32], dist: normal, activation: jnn.relu, name: 'critic', initialization: glorot}
+  actor: {layers: [256, 256], min_stddev: 1e-5, max_stddev: 10., activation: jnn.relu, initialization: glorot}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.relu, name: 'critic', initialization: glorot}
   discount: 0.99
   safety_discount: 0.95
-  lambda_: 0.95
+  lambda_: 0.97
   update_every: 5000
   num_trajectories: 5
-  actor_opt: {lr: 1e-3, eps: 1e-7, clip: 100}
-  critic_opt: {lr: 1e-3, eps: 1e-7, clip: 100}
+  actor_opt: {lr: 3e-4, eps: 1e-7, clip: 10}
+  critic_opt: {lr: 1e-3, eps: 1e-7, clip: 10}
