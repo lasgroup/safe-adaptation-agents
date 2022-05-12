@@ -16,6 +16,7 @@ class TrajectoryBuffer:
     self.length = 0
     self.episode_id = 0
     self.task_id = 0
+    self._full = False
     self.observation = np.zeros(
         (
             n_tasks,
@@ -68,6 +69,9 @@ class TrajectoryBuffer:
       self.observation[self.task_id, self.episode_id,
                        self.length + 1] = transition.next_observation
       self.terminal[self.task_id, self.episode_id, self.length + 1:] = True
+      if self.episode_id + 1 == self.observation.shape[
+          1] and self.task_id + 1 == self.observation.shape[0]:
+        self._full = True
       self.episode_id += 1
       self.length = -1
     self.length += 1
@@ -81,6 +85,7 @@ class TrajectoryBuffer:
     self.length = 0
     self.episode_id = 0
     self.task_id = 0
+    self._full = False
     if self.observation.shape[0] == 1:
       o = self.observation.squeeze(0)
       a = self.action.squeeze(0)
@@ -94,3 +99,7 @@ class TrajectoryBuffer:
       c = self.cost
       t = self.terminal
     return o, a, r, c, t
+
+  @property
+  def full(self):
+    return self._full

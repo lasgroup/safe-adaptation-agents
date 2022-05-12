@@ -26,7 +26,7 @@ class VanillaPolicyGrandients(Agent):
                actor: hk.Transformed, critic: hk.Transformed):
     super().__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
-    self.training_step = 1
+    self.training_step = 0
     self.buffer = TrajectoryBuffer(self.config.num_trajectories,
                                    self.config.time_limit,
                                    observation_space.shape, action_space.shape)
@@ -69,6 +69,7 @@ class VanillaPolicyGrandients(Agent):
   def train(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
     return_ = discounted_cumsum(reward, self.config.discount)
+    return_ = return_.at[:, 1:].multiply((1. - terminal)[:, 1:])
     advantage = self._advantage(self.critic.params, observation, reward,
                                 terminal)
     for _ in range(self.config.update_steps):
@@ -126,5 +127,4 @@ class VanillaPolicyGrandients(Agent):
 
   @property
   def time_to_update(self):
-    return (self.training_step and
-            self.training_step % self.config.update_every == 0)
+    return self.buffer.full
