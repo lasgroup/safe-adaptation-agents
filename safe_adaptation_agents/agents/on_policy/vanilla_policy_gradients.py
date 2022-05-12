@@ -67,11 +67,9 @@ class VanillaPolicyGrandients(Agent):
     return action
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, _: np.ndarray, terminal: np.ndarray):
+            reward: np.ndarray, _: np.ndarray):
     return_ = discounted_cumsum(reward, self.config.discount)
-    return_ = return_.at[:, 1:].multiply((1. - terminal)[:, 1:])
-    advantage = self._advantage(self.critic.params, observation, reward,
-                                terminal)
+    advantage = self._advantage(self.critic.params, observation, reward)
     for _ in range(self.config.update_steps):
       (self.actor.learning_state, self.critic.learning_state,
        report) = self._update_step(self.actor.learning_state,
@@ -114,9 +112,8 @@ class VanillaPolicyGrandients(Agent):
 
   @functools.partial(jax.jit, static_argnums=0)
   def _advantage(self, critic_params: hk.Params, observation: jnp.ndarray,
-                 reward: jnp.ndarray, terminal: jnp.ndarray):
+                 reward: jnp.ndarray):
     bootstrap = self.critic.apply(critic_params, observation).mode()
-    bootstrap = bootstrap.at[:, 1:].multiply((1. - terminal))
     diff = reward + (
         self.config.discount * bootstrap[..., 1:] - bootstrap[..., :-1])
     advantage = discounted_cumsum(diff,

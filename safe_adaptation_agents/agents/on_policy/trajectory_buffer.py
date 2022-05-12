@@ -40,11 +40,6 @@ class TrajectoryBuffer:
         batch_size,
         max_length,
     ), dtype=np.float32)
-    self.terminal = np.zeros((
-        n_tasks,
-        batch_size,
-        max_length,
-    ), dtype=bool)
 
   def set_task(self, task_id: int):
     """
@@ -58,21 +53,21 @@ class TrajectoryBuffer:
     """
     Adds transitions to the current running trajectory.
     """
-    self.observation[self.task_id, self.episode_id,
+    transition_batch_size = transition.observation.shape[0]
+    episode_slice = slice(self.episode_id,
+                          self.episode_id + transition_batch_size)
+    self.observation[self.task_id, episode_slice,
                      self.length] = transition.observation
-    self.action[self.task_id, self.episode_id, self.length] = transition.action
-    self.reward[self.task_id, self.episode_id, self.length] = transition.reward
-    self.cost[self.task_id, self.episode_id, self.length] = transition.cost
-    self.terminal[self.task_id, self.episode_id,
-                  self.length] = transition.terminal
+    self.action[self.task_id, episode_slice, self.length] = transition.action
+    self.reward[self.task_id, episode_slice, self.length] = transition.reward
+    self.cost[self.task_id, episode_slice, self.length] = transition.cost
     if transition.last:
-      self.observation[self.task_id, self.episode_id,
+      self.observation[self.task_id, episode_slice,
                        self.length + 1] = transition.next_observation
-      self.terminal[self.task_id, self.episode_id, self.length + 1:] = True
-      if self.episode_id + 1 == self.observation.shape[
+      if self.episode_id + transition_batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
-      self.episode_id += 1
+      self.episode_id += transition_batch_size
       self.length = -1
     self.length += 1
 
@@ -91,14 +86,12 @@ class TrajectoryBuffer:
       a = self.action.squeeze(0)
       r = self.reward.squeeze(0)
       c = self.cost.squeeze(0)
-      t = self.terminal.squeeze(0)
     else:
       o = self.observation
       a = self.action
       r = self.reward
       c = self.cost
-      t = self.terminal
-    return o, a, r, c, t
+    return o, a, r, c
 
   @property
   def full(self):
