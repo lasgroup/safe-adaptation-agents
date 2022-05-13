@@ -92,7 +92,7 @@ def main():
   else:
     env.seed(config.seed)
     logger = logging.TrainingLogger(config.log_dir)
-    agent = agents.make(config, env, logger)
+    agent = agents.make(config, env.observation_space, env.action_space, logger)
     epoch = 0
   state_writer = logging.StateWriter(config.log_dir)
   train_driver = train.Driver(
