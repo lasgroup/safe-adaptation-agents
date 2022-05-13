@@ -59,13 +59,13 @@ class TrajectoryBuffer:
                           self.episode_id + transition_batch_size)
     self.observation[
         self.task_id, episode_slice,
-        self.length] = transition.observation[:transition_batch_size]
+        self.length] = transition.observation[:transition_batch_size].copy()
     self.action[self.task_id, episode_slice,
-                self.length] = transition.action[:transition_batch_size]
+                self.length] = transition.action[:transition_batch_size].copy()
     self.reward[self.task_id, episode_slice,
-                self.length] = transition.reward[:transition_batch_size]
+                self.length] = transition.reward[:transition_batch_size].copy()
     self.cost[self.task_id, episode_slice,
-              self.length] = transition.cost[:transition_batch_size]
+              self.length] = transition.cost[:transition_batch_size].copy()
     if transition.last:
       self.observation[
           self.task_id, episode_slice, self.length +
@@ -78,7 +78,8 @@ class TrajectoryBuffer:
     self.length += 1
 
   def dump(
-      self) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+      self,
+  ) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
@@ -87,16 +88,12 @@ class TrajectoryBuffer:
     self.episode_id = 0
     self.task_id = 0
     self._full = False
+    o = self.observation
+    a = self.action
+    r = self.reward
+    c = self.cost
     if self.observation.shape[0] == 1:
-      o = self.observation.squeeze(0)
-      a = self.action.squeeze(0)
-      r = self.reward.squeeze(0)
-      c = self.cost.squeeze(0)
-    else:
-      o = self.observation
-      a = self.action
-      r = self.reward
-      c = self.cost
+      o, a, r, c = tuple(map(lambda x: x.squeeze(0), (o, a, r, c)))
     return o, a, r, c
 
   @property
