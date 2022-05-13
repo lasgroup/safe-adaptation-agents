@@ -97,7 +97,8 @@ class StateWriter:
     self._thread.start()
 
   def write(self, data: dict):
-    self.queue.put(deepcopy(data))
+    state_bytes = cloudpickle.dumps(data)
+    self.queue.put(state_bytes)
     # Lazily open up a thread and let it drain the work queue. Thread exits
     # when there's no more work to do.
     if not self._thread.is_alive():
@@ -106,10 +107,10 @@ class StateWriter:
 
   def _worker(self):
     while not self.queue.empty():
-      data = self.queue.get(timeout=1)
+      state_bytes = self.queue.get(timeout=1)
       with open(os.path.join(self.log_dir, 'state.pkl'), 'wb') as f:
-        cloudpickle.dump(data, f)
-      self.queue.task_done()
+        f.write(state_bytes)
+        self.queue.task_done()
 
   def close(self):
     self.queue.join()
