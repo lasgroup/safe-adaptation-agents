@@ -74,7 +74,8 @@ def make_env(config):
   # Importing safe-adaptation-gym inside the function to allow the process to
   # load it internally.
   import safe_adaptation_gym
-  env = safe_adaptation_gym.make(config.task, config.robot)
+  env = safe_adaptation_gym.make(config.task, config.robot,
+                                 render_options=config.render_options)
   env = TimeLimit(env, config.time_limit)
   return env
 
@@ -112,7 +113,7 @@ def main():
       summary, videos = evaluation_summary(results)
       logger.log_summary(summary, epoch)
       for task_name, video in videos.items():
-        logger.log_video(video, task_name + '_video', step=epoch, fps=60)
+        logger.log_video(np.asarray(video).transpose([1, 0, 2, 3, 4]), task_name + '_video', step=epoch)
     state_writer.write({
         'env_rs': [rs.get_state()[1] for rs in env.get_attr('rs')],
         'agent': agent,

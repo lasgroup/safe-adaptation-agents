@@ -42,8 +42,7 @@ class Actor(hk.Module):
         activation=self._activation)
     mu, stddev = jnp.split(x, 2, -1)
     init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
-    stddev = jnp.clip(
-        jnn.softplus(stddev + init_std), self._min_stddev, self._max_stddev)
+    stddev = jnn.softplus(stddev + init_std)
     multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
     # Squash actions to [-1, 1]
     squashed = tfd.TransformedDistribution(multivariate_normal_diag,

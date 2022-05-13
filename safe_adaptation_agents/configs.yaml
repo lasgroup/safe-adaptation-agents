@@ -11,7 +11,7 @@ defaults:
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 1
   render_episodes: 1
-  render_options: {height: 320, width: 320, camera_id: 'fixedfar'}
+  render_options: {height: 240, width: 320, camera_id: 'fixedfar'}
   jit: True
   precision: 32
   parallel_envs: 5
@@ -19,15 +19,15 @@ defaults:
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 30000, query_steps: 0}
-  test_driver: {adaptation_steps: 1000, query_steps: 0}
-  eval_trials: 10
+  test_driver: {adaptation_steps: 10000, query_steps: 0}
+  eval_trials: 1
 
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
-  update_steps: 80
-  actor: {layers: [256, 256], min_stddev: 1e-5, max_stddev: 10., activation: jnn.relu, initialization: glorot}
-  critic: {layers: [256, 256], dist: normal, activation: jnn.relu, name: 'critic', initialization: glorot}
+  value_update_steps: 80
+  actor: {layers: [256, 256], min_stddev: 1e-5, max_stddev: 10., activation: jnn.tanh, initialization: glorot}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
   safety_discount: 0.95
   lambda_: 0.97
