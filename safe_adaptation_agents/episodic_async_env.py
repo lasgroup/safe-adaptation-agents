@@ -110,7 +110,8 @@ class EpisodicAsync(VectorEnv):
       assert all(dones), (
           'We treat only the episodic case, so done means that time limit was '
           'reached')
-      infos['terminal_observation'] = observations
+      for info in infos:
+        info['last_observation'] = observations
       observations = self.call('reset')
     return np.asarray(observations), np.asarray(rewards), np.asarray(
         dones, dtype=bool), infos

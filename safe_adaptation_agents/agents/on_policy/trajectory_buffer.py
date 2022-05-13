@@ -29,8 +29,7 @@ class TrajectoryBuffer:
             n_tasks,
             batch_size,
             max_length,
-        ) + action_shape,
-        dtype=np.float32)
+        ) + action_shape, dtype=np.float32)
     self.reward = np.zeros((
         n_tasks,
         batch_size,
@@ -68,8 +67,9 @@ class TrajectoryBuffer:
     self.cost[self.task_id, episode_slice,
               self.length] = transition.cost[:transition_batch_size]
     if transition.last:
-      self.observation[self.task_id, episode_slice,
-                       self.length + 1] = transition.next_observation
+      self.observation[
+          self.task_id, episode_slice, self.length +
+          1] = transition.info[0]['last_observation'][:transition_batch_size]
       if self.episode_id + transition_batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True

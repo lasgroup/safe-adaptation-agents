@@ -22,7 +22,7 @@ def test_config(config):
       'query_steps': 2000,
       'iters': 5
   }
-  assert config.action_repeat == 2
+  assert config.action_repeat == 1
   assert config.render_episodes == 0
   assert config.initialization == 'glorot'
   assert config.jit

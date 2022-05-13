@@ -25,14 +25,16 @@ def evaluate(agent: agents.Agent, env: VectorEnv, task_name: str,
 def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
   all_runs = []
   task_vids = {}
+
+  def return_(arr):
+    return np.asarray(arr).sum(0).mean()
+
   for i, run in enumerate(runs):
     all_tasks = []
     for task_name, task in run.items():
-      return_ = np.asarray([sum(episode['reward']) for episode in task]).mean()
-      cost_return_ = np.asarray([
-          sum(list(map(lambda info: info['cost'], episode['info'])))
-          for episode in task
-      ]).mean()
+
+      episode_return_ = return_([(episode['reward']) for episode in task])
+      cost_return_ = return_([episode['cost'] for episode in task])
       if i == 0:
         task_vids[task_name] = [episode.get('frames', []) for episode in task]
       all_tasks.append((return_, cost_return_))
@@ -46,15 +48,19 @@ def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
 
 def on_episode_end(episode: train.EpisodeSummary,
                    logger: logging.TrainingLogger, train: bool):
-  episode_return = sum(episode['reward'])
-  summary = {'training/episode_return': episode_return}
-  sum_costs = sum(list(map(lambda info: info['cost'], episode['info'])))
-  summary['training/episode_cost_return'] = sum_costs
+
+  def return_(arr):
+    return np.asarray(arr).sum(0).mean()
+
+  episode_return = return_(episode['reward'])
+  cost_return = return_(episode['cost'])
   print("\nReward return: {} -- Cost return: {}".format(episode_return,
-                                                        sum_costs))
+                                                        cost_return))
   if train:
+    summary = {'training/episode_return': episode_return}
+    summary['training/episode_cost_return'] = cost_return
     logger.log_summary(summary)
-    logger.step += len(episode['reward'])
+    logger.step += np.asarray(episode['reward']).size
 
 
 def resume_experiment(log_dir):

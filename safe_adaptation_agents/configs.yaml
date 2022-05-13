@@ -9,7 +9,7 @@ defaults:
   eval_trials: 5
   train_driver: {adaptation_steps: 5000, query_steps: 2000}
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
-  action_repeat: 2
+  action_repeat: 1
   render_episodes: 1
   render_options: {height: 320, width: 320, camera_id: 'fixedfar'}
   jit: True
