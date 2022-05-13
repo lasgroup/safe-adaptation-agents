@@ -36,7 +36,7 @@ def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
       episode_return_ = return_([episode['reward'] for episode in task])
       cost_return_ = return_([episode['cost'] for episode in task])
       if i == 0:
-        task_vids[task_name] = [episode.get('frames', []) for episode in task]
+        task_vids[task_name] = task[0].get('frames', [])
       all_tasks.append((episode_return_, cost_return_))
     all_runs.append(all_tasks)
   total_return, total_cost = np.split(np.asarray(all_runs), 2, axis=-1)
@@ -65,8 +65,9 @@ def on_episode_end(episode: train.EpisodeSummary,
 
 def resume_experiment(log_dir):
   with open(os.path.join(log_dir, 'state.pkl'), 'rb') as f:
-    env, agent, epoch = cloudpickle.load(f).values()
-  return env, agent, agent.logger, agent.config, epoch
+    env_rs, agent, epoch = cloudpickle.load(f).values()
+
+  return env_rs, agent, agent.logger, agent.config, epoch
 
 
 def make_env(config):
@@ -83,11 +84,12 @@ def main():
   if not config.jit:
     from jax.config import config as jax_config
     jax_config.update('jax_disable_jit', True)
+  env = episodic_async_env.EpisodicAsync(lambda: make_env(config),
+                                         config.parallel_envs)
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
-    env, agent, logger, config, epoch = resume_experiment(config.log_dir)
+    env_rs, agent, logger, config, epoch = resume_experiment(config.log_dir)
+    env.set_attr('rs', env_rs)
   else:
-    env = episodic_async_env.EpisodicAsync(lambda: make_env(config),
-                                           config.parallel_envs)
     env.seed(config.seed)
     logger = logging.TrainingLogger(config.log_dir)
     agent = agents.make(config, env, logger)
@@ -111,7 +113,11 @@ def main():
       logger.log_summary(summary, epoch)
       for task_name, video in videos.items():
         logger.log_video(video, task_name + '_video', step=epoch, fps=60)
-    state_writer.write({'env': env, 'agent': agent, 'epoch': epoch})
+    state_writer.write({
+        'env_rs': env.get_attr('rs'),
+        'agent': agent,
+        'epoch': epoch
+    })
 
 
 if __name__ == '__main__':

@@ -19,10 +19,11 @@ from gym import Env
 
 class Protocol(Enum):
   ACCESS = 0
-  CALL = 1
-  RESULT = 2
-  EXCEPTION = 3
-  CLOSE = 4
+  SET = 1
+  CALL = 2
+  RESULT = 3
+  EXCEPTION = 4
+  CLOSE = 5
 
 
 # Based on https://github.com/danijar/dreamerv2/blob
@@ -62,6 +63,15 @@ class EpisodicAsync(VectorEnv):
       return getattr(self._env, name)
     for parent in self.parents:
       parent.send((Protocol.ACCESS, name))
+    return self._receive()
+
+  def set_attr(self, name, values):
+    if self._env is not None:
+      setattr(self._env, name, values)
+    else:
+      for parent, value in zip(self.parents, values):
+        payload = name, value
+        parent.send((Protocol.SET, payload))
     return self._receive()
 
   def close(self):
@@ -126,9 +136,6 @@ class EpisodicAsync(VectorEnv):
   def call_wait(self, **kwargs):
     return self._receive()
 
-  def set_attr(self, name, values):
-    pass
-
   def render(self, mode="human"):
     self.call_async('render', mode)
     return np.asarray(self.call_wait())
@@ -164,6 +171,11 @@ def _worker(ctor, conn):
         result = getattr(env, name)
         conn.send((Protocol.RESULT, result))
         continue
+      if message == Protocol.SET:
+        name, value = payload
+        setattr(env, name, value)
+        result = True
+        conn.send((Protocol.RESULT, result))
       if message == Protocol.CALL:
         name, args, kwargs = payload
         result = getattr(env, name)(*args, **kwargs)
