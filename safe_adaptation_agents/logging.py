@@ -32,13 +32,20 @@ class TrainingLogger:
   def __setitem__(self, key: str, value: float):
     self._metrics[key].update_state(value)
 
-  def log_summary(self, summary: dict, step: Optional[int] = None):
+  def flush(self):
+    self._writer.flush()
+
+  def log_summary(self,
+                  summary: dict,
+                  step: Optional[int] = None,
+                  flush: bool = False):
     step = step if step is not None else self.step
     for k, v in summary.items():
       self._writer.add_scalar(k, float(v), step)
-    self._writer.flush()
+    if flush:
+      self._writer.flush()
 
-  def log_metrics(self, step: Optional[int] = None):
+  def log_metrics(self, step: Optional[int] = None, flush: bool = False):
     step = step if step is not None else self.step
     print("\n----Training step {} summary----".format(step))
     for k, v in self._metrics.items():
@@ -46,13 +53,15 @@ class TrainingLogger:
       print("{:<40} {:<.2f}".format(k, val))
       self._writer.add_scalar(k, val, step)
       v.reset_states()
-    self._writer.flush()
+    if flush:
+      self._writer.flush()
 
   def log_video(self,
                 images,
                 name='policy',
                 fps=30,
-                step: Optional[int] = None):
+                step: Optional[int] = None,
+                flush: bool = False):
     step = step if step is not None else self.step
     # (N, T, C, H, W)
     self._writer.add_video(
@@ -60,7 +69,8 @@ class TrainingLogger:
         np.array(images, copy=False).transpose([0, 1, 4, 2, 3]),
         step,
         fps=fps)
-    self._writer.flush()
+    if flush:
+      self._writer.flush()
 
   def log_figure(self, figure, name='policy'):
     self._writer.add_figure(name, figure, self.step)
@@ -81,7 +91,6 @@ class TrainingLogger:
 class StateWriter:
 
   def __init__(self, log_dir: str):
-    self._file_handle = None
     self.log_dir = log_dir
     self.queue = Queue(maxsize=5)
     self._thread = Thread(name="state_writer", target=self._worker)
@@ -98,9 +107,8 @@ class StateWriter:
   def _worker(self):
     while not self.queue.empty():
       data = self.queue.get(timeout=1)
-      if self._file_handle is None:
-        self._file_handle = open(os.path.join(self.log_dir, 'state.pkl'), 'wb')
-      cloudpickle.dump(data, self._file_handle)
+      with open(os.path.join(self.log_dir, 'state.pkl'), 'wb') as f:
+        cloudpickle.dump(data, f)
       self.queue.task_done()
 
   def close(self):
