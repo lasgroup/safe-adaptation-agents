@@ -25,9 +25,9 @@ no_adaptation:
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
-  update_steps: 80
-  actor: {layers: [256, 256], min_stddev: 1e-5, max_stddev: 10., activation: jnn.relu, initialization: glorot}
-  critic: {layers: [256, 256], dist: normal, activation: jnn.relu, name: 'critic', initialization: glorot}
+  value_update_steps: 80
+  actor: {layers: [256, 256], min_stddev: 1e-5, max_stddev: 10., activation: jnn.tanh, initialization: glorot}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
   safety_discount: 0.95
   lambda_: 0.97
