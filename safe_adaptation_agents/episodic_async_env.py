@@ -37,21 +37,19 @@ class EpisodicAsync(VectorEnv):
   def __init__(self, ctor: Callable[[], Env], vector_size: int = 1):
     self.env_fn = cloudpickle.dumps(ctor)
 
-    if vector_size < 1 and False:
+    if vector_size < 1:
       self._env = ctor()
-      observation_space = self._env.observation_space
-      action_space = self._env.action_space
+      self.observation_space = self._env.observation_space
+      self.action_space = self._env.action_space
     else:
       self._env = None
       self.parents, self.processes = zip(
-        *[self._make_worker() for _ in range(vector_size)])
+          *[self._make_worker() for _ in range(vector_size)])
       atexit.register(self.close)
       for process in self.processes:
         process.start()
-      observation_space = self.__getattr__('observation_space')[0]
-      action_space = self.__getattr__('action_space')[0]
-    super(EpisodicAsync, self).__init__(vector_size, observation_space,
-                                        action_space)
+      self.observation_space = self.get_attr('observation_space')[0]
+      self.action_space = self.get_attr('action_space')[0]
 
   def _make_worker(self):
     parent, child = mp.Pipe()
@@ -59,7 +57,7 @@ class EpisodicAsync(VectorEnv):
     return parent, process
 
   @functools.lru_cache
-  def __getattr__(self, name):
+  def get_attr(self, name):
     if self._env is not None:
       return getattr(self._env, name)
     for parent in self.parents:
@@ -110,11 +108,12 @@ class EpisodicAsync(VectorEnv):
     observations, rewards, dones, infos = zip(*self._receive())
     if any(dones):
       assert all(dones), (
-        'We treat only the episodic case, so done means that time limit was '
-        'reached')
+          'We treat only the episodic case, so done means that time limit was '
+          'reached')
       infos['terminal_observation'] = observations
       observations = self.call('reset')
-    return observations, np.array(rewards), np.array(dones, dtype=bool), infos
+    return np.asarray(observations), np.asarray(rewards), np.asarray(
+        dones, dtype=bool), infos
 
   def call_async(self, name, *args, **kwargs):
     if self._env is not None:
@@ -131,15 +130,21 @@ class EpisodicAsync(VectorEnv):
 
   def render(self, mode="human"):
     self.call_async('render', mode)
-    return self.call_wait()
+    return np.asarray(self.call_wait())
+
+  def reset(self,
+            seed: Optional[Union[int, List[int]]] = None,
+            return_info: bool = False,
+            options: Optional[dict] = None):
+    return self.reset_wait(seed, return_info, options)
 
   def reset_wait(self,
                  seed: Optional[Union[int, List[int]]] = None,
                  return_info: bool = False,
                  options: Optional[dict] = None):
     self.call_async(
-      'reset', seed=seed, return_info=return_info, options=options)
-    return self.call_wait()
+        'reset', seed=seed, return_info=return_info, options=options)
+    return np.asarray(self.call_wait())
 
 
 def _worker(ctor, conn):

@@ -51,7 +51,7 @@ class VanillaPolicyGrandients(Agent):
 
   def observe(self, transition: Transition):
     self.buffer.add(transition)
-    self.training_step += transition.steps
+    self.training_step += sum(transition.steps)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass

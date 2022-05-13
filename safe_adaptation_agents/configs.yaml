@@ -14,6 +14,7 @@ defaults:
   render_options: {height: 320, width: 320, camera_id: 'fixedfar'}
   jit: True
   precision: 32
+  parallel_envs: 5
 
 no_adaptation:
   task: go_to_goal

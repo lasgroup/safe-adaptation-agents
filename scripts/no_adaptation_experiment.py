@@ -6,16 +6,14 @@ import cloudpickle
 
 import numpy as np
 
-from gym import Env
+from gym.vector import VectorEnv
 from gym.wrappers import TimeLimit
 
-import safe_adaptation_gym
-
-from safe_adaptation_agents import agents, logging, train
+from safe_adaptation_agents import agents, logging, train, episodic_async_env
 from safe_adaptation_agents import config as options
 
 
-def evaluate(agent: agents.Agent, env: Env, task_name: str,
+def evaluate(agent: agents.Agent, env: VectorEnv, task_name: str,
              test_driver: train.Driver, trials: int):
   results = [
       test_driver.run(agent, [(task_name, env)], False)[0]
@@ -65,6 +63,15 @@ def resume_experiment(log_dir):
   return env, agent, agent.logger, agent.config, epoch
 
 
+def make_env(config):
+  # Importing safe-adaptation-gym inside the function to allow the process to
+  # load it internally.
+  import safe_adaptation_gym
+  env = safe_adaptation_gym.make(config.task, config.robot)
+  env = TimeLimit(env, config.time_limit)
+  return env
+
+
 def main():
   config = options.load_config()
   if not config.jit:
@@ -73,8 +80,8 @@ def main():
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
     env, agent, logger, config, epoch = resume_experiment(config.log_dir)
   else:
-    env = safe_adaptation_gym.make(config.task, config.robot)
-    env = TimeLimit(env, config.time_limit)
+    env = episodic_async_env.EpisodicAsync(lambda: make_env(config),
+                                           config.parallel_envs)
     env.seed(config.seed)
     logger = logging.TrainingLogger(config.log_dir)
     agent = agents.make(config, env, logger)
@@ -86,7 +93,6 @@ def main():
   test_driver = train.Driver(
       **config.test_driver,
       on_episode_end=partial(on_episode_end, train=False, logger=logger),
-      render_options=config.render_options,
       render_episodes=config.render_episodes)
   for epoch in range(epoch, config.epochs):
     print('Training epoch #{}'.format(epoch))

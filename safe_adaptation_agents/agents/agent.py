@@ -14,8 +14,12 @@ class Transition(NamedTuple):
   action: np.ndarray
   reward: np.ndarray
   cost: np.ndarray
-  last: np.ndarray
+  done: np.ndarray
   info: Tuple[Dict]
+
+  @property
+  def last(self):
+    return self.done.all()
 
   @property
   def steps(self):
