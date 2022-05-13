@@ -88,9 +88,9 @@ def main():
                                          config.parallel_envs)
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
     seeds, agent, logger, config, epoch = resume_experiment(config.log_dir)
-    env.seed([rs.get_state()[1] for rs in env_rs])
+    env.reset(seed=seeds)
   else:
-    env.seed(config.seed)
+    env.reset(seed=config.seed)
     logger = logging.TrainingLogger(config.log_dir)
     agent = agents.make(config, env.observation_space, env.action_space, logger)
     epoch = 0

@@ -51,6 +51,7 @@ class EpisodicAsync(VectorEnv):
         process.start()
       self.observation_space = self.get_attr('observation_space')[0]
       self.action_space = self.get_attr('action_space')[0]
+      self.num_envs = len(self.parents)
 
   def _make_worker(self):
     parent, child = mp.Pipe()
@@ -150,8 +151,18 @@ class EpisodicAsync(VectorEnv):
                  seed: Optional[Union[int, List[int]]] = None,
                  return_info: bool = False,
                  options: Optional[dict] = None):
-    self.call_async(
-        'reset', seed=seed, return_info=return_info, options=options)
+    if seed is None:
+      seed = [None for _ in range(self.num_envs)]
+    if isinstance(seed, int):
+      seed = [seed + i for i in range(self.num_envs)]
+    assert len(seed) == self.num_envs
+    for parent, s in zip(self.parents, seed):
+      payload = 'reset', (), {
+          'seed': s,
+          'return_info': return_info,
+          'options': options
+      }
+      parent.send((Protocol.CALL, payload))
     return np.asarray(self.call_wait())
 
 
