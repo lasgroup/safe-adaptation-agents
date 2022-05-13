@@ -70,12 +70,8 @@ class VanillaPolicyGrandients(Agent):
             reward: np.ndarray, _: np.ndarray):
     return_ = discounted_cumsum(reward, self.config.discount)
     advantage = self._advantage(self.critic.params, observation, reward)
-    self.actor.learning_state, actor_report = self.actor_update_step(
-        self.actor.learning_state, observation, action, advantage)
-    for k, v in actor_report.items():
-      self.logger[k] = v
-    for _ in range(self.config.value_update_steps):
-      (self.critic.learning_state,
+    for _ in range(self.config.update_steps):
+      (self.actor.learning_state, self.critic.learning_state,
        report) = self._update_step(self.actor.learning_state,
                                    self.critic.learning_state,
                                    observation, action, advantage, return_,
@@ -84,22 +80,21 @@ class VanillaPolicyGrandients(Agent):
         self.logger[k] = v
 
   @functools.partial(jax.jit, static_argnums=0)
-  def critic_update_step(self, critic_state: LearningState,
-                         return_: jnp.ndarray) -> [LearningState, dict]:
-    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
-        critic_state.params, observation, return_)
-    new_critic_state = self.critic.grad_step(value_grads, critic_state)
-    return new_critic_state, {'agent/critic/loss': value_loss}
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, actor_state: LearningState,
-                        observation: jnp.ndarray, actions: jnp.ndarray,
-                        advantage: jnp.ndarray,
-                        seed: jnp.ndarray) -> [LearningState, dict]:
+  def _update_step(
+      self, actor_state: LearningState, critic_state: LearningState,
+      observation: jnp.ndarray, actions: jnp.ndarray, advantage: jnp.ndarray,
+      return_: jnp.ndarray,
+      seed: jnp.ndarray) -> [utils.LearningState, LearningState, dict]:
     policy_loss, policy_grads = jax.value_and_grad(self.policy_loss)(
         actor_state.params, observation, actions, advantage, seed)
     new_actor_state = self.actor.grad_step(policy_grads, actor_state)
-    return new_actor_state, {'agent/actor/loss': policy_loss}
+    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
+        critic_state.params, observation, return_)
+    new_critic_state = self.critic.grad_step(value_grads, critic_state)
+    return new_actor_state, new_critic_state, {
+        'agent/actor/loss': policy_loss,
+        'agent/critic/loss': value_loss
+    }
 
   def policy_loss(self, actor_params: hk.Params, observation: jnp.ndarray,
                   actions: jnp.ndarray, advantage: jnp.ndarray,
