@@ -176,6 +176,7 @@ def _worker(ctor, conn):
         setattr(env, name, value)
         result = True
         conn.send((Protocol.RESULT, result))
+        continue
       if message == Protocol.CALL:
         name, args, kwargs = payload
         result = getattr(env, name)(*args, **kwargs)

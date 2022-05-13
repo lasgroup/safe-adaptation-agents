@@ -87,8 +87,8 @@ def main():
   env = episodic_async_env.EpisodicAsync(lambda: make_env(config),
                                          config.parallel_envs)
   if os.path.exists(os.path.join(config.log_dir, 'state.pkl')):
-    env_rs, agent, logger, config, epoch = resume_experiment(config.log_dir)
-    env.set_attr('rs', env_rs)
+    seeds, agent, logger, config, epoch = resume_experiment(config.log_dir)
+    env.seed([rs.get_state()[1] for rs in env_rs])
   else:
     env.seed(config.seed)
     logger = logging.TrainingLogger(config.log_dir)
@@ -114,7 +114,7 @@ def main():
       for task_name, video in videos.items():
         logger.log_video(video, task_name + '_video', step=epoch, fps=60)
     state_writer.write({
-        'env_rs': env.get_attr('rs'),
+        'env_rs': [rs.get_state()[1] for rs in env.get_attr('rs')],
         'agent': agent,
         'epoch': epoch
     })
