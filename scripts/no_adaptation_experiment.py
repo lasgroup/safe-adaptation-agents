@@ -9,7 +9,7 @@ import numpy as np
 from gym.vector import VectorEnv
 from gym.wrappers import TimeLimit
 
-from safe_adaptation_agents import agents, logging, train, episodic_async_env
+from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 from safe_adaptation_agents import config as options
 
 
@@ -96,10 +96,10 @@ def main():
     agent = agents.make(config, env.observation_space, env.action_space, logger)
     epoch = 0
   state_writer = logging.StateWriter(config.log_dir)
-  train_driver = train.Driver(
+  train_driver = driver.Driver(
       **config.train_driver,
       on_episode_end=partial(on_episode_end, train=True, logger=logger))
-  test_driver = train.Driver(
+  test_driver = driver.Driver(
       **config.test_driver,
       on_episode_end=partial(on_episode_end, train=False, logger=logger),
       render_episodes=config.render_episodes)

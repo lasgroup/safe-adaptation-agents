@@ -65,7 +65,7 @@ class TrajectoryBuffer:
               self.length] = transition.cost[:batch_size].copy()
     if transition.last:
       self.observation[self.task_id, episode_slice, self.length +
-                       1] = transition.info[0]['last_observation'][:batch_size]
+                       1] = transition.next_observation[:batch_size].copy()
       if self.episode_id + batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True

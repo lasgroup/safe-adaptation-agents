@@ -11,7 +11,7 @@ import safe_adaptation_gym
 from safe_adaptation_agents.agents import Agent, Transition
 from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
     TrajectoryBuffer)
-from safe_adaptation_agents import train
+from safe_adaptation_agents import driver
 
 N_TASKS = 5
 EPISODE_LENGTH = 100

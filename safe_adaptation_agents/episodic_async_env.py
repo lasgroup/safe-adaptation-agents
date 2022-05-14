@@ -117,13 +117,6 @@ class EpisodicAsync(VectorEnv):
 
   def step_wait(self, **kwargs):
     observations, rewards, dones, infos = zip(*self._receive())
-    if any(dones):
-      assert all(dones), (
-          'We treat only the episodic case, so done means that time limit was '
-          'reached')
-      for info in infos:
-        info['last_observation'] = observations
-      observations = self.call('reset')
     return np.asarray(observations), np.asarray(rewards), np.asarray(
         dones, dtype=bool), infos
 

@@ -42,6 +42,7 @@ def interact(agent: Agent,
       if on_episode_end:
         on_episode_end(episodes[-1])
       episodes.append(defaultdict(list))
+      observations = environment.reset()
     transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)

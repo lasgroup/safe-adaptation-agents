@@ -8,7 +8,7 @@ from gym.wrappers import TimeLimit
 
 from safe_adaptation_gym import benchmark
 
-from safe_adaptation_agents import train, agents
+from safe_adaptation_agents import driver, agents
 from safe_adaptation_agents.agents import Transition
 
 

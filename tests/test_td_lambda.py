@@ -1,14 +1,36 @@
 import jax.numpy as jnp
 
+import scipy.signal
+
 from safe_adaptation_agents import utils
 
 
 def test_discounted_cumsum():
   gamma = 0.99
-  x = jnp.arange(3)
+  x = jnp.arange(100)
   y_hat = utils.discounted_cumsum(x, gamma)
-  y = jnp.array([0. + gamma * 1. + gamma**2 * 2., 1. + gamma * 2., 2.])
+  y = discount_cumsum(x, gamma)
   assert jnp.isclose(y, y_hat).all()
+
+
+
+def discount_cumsum(x, discount):
+  """
+  magic from rllab for computing discounted cumulative sums of vectors.
+
+  input:
+      vector x,
+      [x0,
+       x1,
+       x2]
+
+  output:
+      [x0 + discount * x1 + discount^2 * x2,
+       x1 + discount * x2,
+       x2]
+  """
+  return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[
+         ::-1]
 
 
 def test_td_lambda():
