@@ -51,12 +51,13 @@ class Actor(hk.Module):
       mu, stddev = x, hk.get_parameter('pi_stddev', (x.shape[-1],), x.dtype,
                                        hk.initializers.Constant(0.5))
     init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
-    stddev = jnp.clip(
-        jnn.softplus(stddev + init_std), self._min_stddev, self._max_stddev)
-    multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
+    stddev = jnn.softplus(stddev + init_std) +  self._min_stddev
     if self._squash:
+      multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
       multivariate_normal_diag = tfd.TransformedDistribution(
           multivariate_normal_diag, StableTanhBijector())
+    else:
+      multivariate_normal_diag = tfd.Normal(mu, stddev)
     dist = tfd.Independent(multivariate_normal_diag, 1)
     if self._squash:
       dist = SampleDist(dist)
@@ -104,7 +105,7 @@ class StableTanhBijector(tfb.Tanh):
   def _inverse(self, y):
     dtype = y.dtype
     y = y.astype(jnp.float32)
-    y = jnp.clip(y, -0.99999997, -0.99999997)
+    y = jnp.clip(y, -0.99999997, 0.99999997)
     y = jnp.arctanh(y)
     return y.astype(dtype)
 
