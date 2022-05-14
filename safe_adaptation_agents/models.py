@@ -49,14 +49,15 @@ class Actor(hk.Module):
       mu, stddev = jnp.split(x, 2, -1)
     else:
       mu, stddev = x, hk.get_parameter('pi_stddev', (x.shape[-1],), x.dtype,
-                                       hk.initializers.Constant(0.5))
-    init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
-    stddev = jnn.softplus(stddev + init_std) +  self._min_stddev
+                                       hk.initializers.Constant(-0.5))
     if self._squash:
+      init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
+      stddev = jnn.softplus(stddev + init_std) +  self._min_stddev
       multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
       multivariate_normal_diag = tfd.TransformedDistribution(
           multivariate_normal_diag, StableTanhBijector())
     else:
+      stddev = jnp.exp(stddev)
       multivariate_normal_diag = tfd.Normal(mu, stddev)
     dist = tfd.Independent(multivariate_normal_diag, 1)
     if self._squash:

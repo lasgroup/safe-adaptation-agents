@@ -49,8 +49,7 @@ class VanillaPolicyGrandients(Agent):
       self.logger.log_metrics(self.training_step)
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
-    print(action, 'action!')
-    return np.clip(action, -1.0, 1.0)
+    return action
 
   def observe(self, transition: Transition):
     self.buffer.add(transition)
