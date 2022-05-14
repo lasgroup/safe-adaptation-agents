@@ -53,33 +53,28 @@ class TrajectoryBuffer:
     """
     Adds transitions to the current running trajectory.
     """
-    transition_batch_size = min(transition.observation.shape[0],
-                                self.observation.shape[1])
-    episode_slice = slice(self.episode_id,
-                          self.episode_id + transition_batch_size)
-    self.observation[
-        self.task_id, episode_slice,
-        self.length] = transition.observation[:transition_batch_size].copy()
+    batch_size = min(transition.observation.shape[0], self.observation.shape[1])
+    episode_slice = slice(self.episode_id, self.episode_id + batch_size)
+    self.observation[self.task_id, episode_slice,
+                     self.length] = transition.observation[:batch_size].copy()
     self.action[self.task_id, episode_slice,
-                self.length] = transition.action[:transition_batch_size].copy()
+                self.length] = transition.action[:batch_size].copy()
     self.reward[self.task_id, episode_slice,
-                self.length] = transition.reward[:transition_batch_size].copy()
+                self.length] = transition.reward[:batch_size].copy()
     self.cost[self.task_id, episode_slice,
-              self.length] = transition.cost[:transition_batch_size].copy()
+              self.length] = transition.cost[:batch_size].copy()
     if transition.last:
-      self.observation[
-          self.task_id, episode_slice, self.length +
-          1] = transition.info[0]['last_observation'][:transition_batch_size]
-      if self.episode_id + transition_batch_size == self.observation.shape[
+      self.observation[self.task_id, episode_slice, self.length +
+                       1] = transition.info[0]['last_observation'][:batch_size]
+      if self.episode_id + batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
-      self.episode_id += transition_batch_size
+      self.episode_id += batch_size
       self.length = -1
     self.length += 1
 
   def dump(
-      self,
-  ) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+      self,) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
