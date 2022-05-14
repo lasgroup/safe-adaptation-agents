@@ -33,11 +33,11 @@ class Learner:
     return self.model.apply
 
   @property
-  def learning_state(self):
+  def state(self):
     return LearningState(self.params, self.opt_state)
 
-  @learning_state.setter
-  def learning_state(self, state: LearningState):
+  @state.setter
+  def state(self, state: LearningState):
     self.params = state.params
     self.opt_state = state.opt_state
 

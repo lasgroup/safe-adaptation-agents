@@ -70,20 +70,20 @@ class VanillaPolicyGrandients(Agent):
             reward: np.ndarray, _: np.ndarray):
     return_ = discounted_cumsum(reward, self.config.discount)
     advantage = self._advantage(self.critic.params, observation, reward)
-    self.actor.learning_state, actor_report = self.actor_update_step(
-        self.actor.learning_state, observation, action, advantage,
-        next(self.rng_seq))
+    self.actor.state, actor_report = self.actor_update_step(
+        self.actor.state, observation, action, advantage, next(self.rng_seq))
     for k, v in actor_report.items():
       self.logger[k] = v
     for _ in range(self.config.value_update_steps):
-      (self.critic.learning_state, report) = self.critic_update_step(
-          self.actor.learning_state, self.critic.learning_state, observation,
-          action, advantage, return_)
+      (self.critic.state,
+       report) = self.critic_update_step(self.critic.state, observation,
+                                         return_)
       for k, v in report.items():
         self.logger[k] = v
 
   @functools.partial(jax.jit, static_argnums=0)
   def critic_update_step(self, critic_state: LearningState,
+                         observation: jnp.ndarray,
                          return_: jnp.ndarray) -> [LearningState, dict]:
     value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
         critic_state.params, observation, return_)
