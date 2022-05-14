@@ -1,5 +1,6 @@
 from typing import Sequence, Optional, Callable, Union
 
+import jax.random
 import numpy as np
 
 import jax.numpy as jnp
@@ -101,7 +102,7 @@ class StableTanhBijector(tfb.Tanh):
     return y.astype(dtype)
 
 
-class SampleDist(object):
+class SampleDist:
 
   def __init__(self, dist, samples=100):
     self._dist = dist
@@ -114,18 +115,18 @@ class SampleDist(object):
   def __getattr__(self, name):
     return getattr(self._dist, name)
 
-  def mean(self, seed):
-    samples = self._dist.sample(self._samples, seed=seed)
+  def mean(self):
+    samples = self._dist.sample(self._samples, seed=jax.random.PRNGKey(666))
     return jnp.mean(samples, 0)
 
-  def mode(self, seed):
-    sample = self._dist.sample(self._samples, seed=seed)
+  def mode(self):
+    sample = self._dist.sample(self._samples, seed=jax.random.PRNGKey(666))
     logprob = self._dist.log_prob(sample)
     return jnp.take_along_axis(sample,
                                jnp.argmax(logprob, 0)[None, :, None],
                                0).squeeze(0)
 
-  def entropy(self, seed):
-    sample = self._dist.sample(self._samples, seed=seed)
+  def entropy(self):
+    sample = self._dist.sample(self._samples, seed=jax.random.PRNGKey(666))
     logprob = self.log_prob(sample)
     return -jnp.mean(logprob, 0)

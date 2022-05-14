@@ -63,9 +63,9 @@ class VanillaPolicyGrandients(Agent):
              observation: jnp.ndarray,
              params: hk.Params,
              key: jnp.ndarray,
-             training=True) -> jnp.ndarray:
+             training: bool = True) -> jnp.ndarray:
     policy = self.actor.apply(params, observation)
-    action = policy.sample(seed=key) if training else policy.mode(seed=key)
+    action = policy.sample(seed=key) if training else policy.mode()
     return action
 
   def train(self, observation: np.ndarray, action: np.ndarray,
@@ -119,7 +119,7 @@ class VanillaPolicyGrandients(Agent):
         actor_state.params, observation, actions, advantage, seed)
     new_actor_state = self.actor.grad_step(policy_grads, actor_state)
     entropy = self.actor.apply(actor_state.params,
-                               observation).entropy(seed=seed).mean()
+                               observation).entropy().mean()
     return new_actor_state, {
         'agent/actor/loss': policy_loss,
         'agent/actor/grad': optax.global_norm(policy_grads),
@@ -132,7 +132,7 @@ class VanillaPolicyGrandients(Agent):
     pi = self.actor.apply(actor_params, observation)
     objective = (
         pi.log_prob(actions) * advantage +
-        self.config.entropy_regularization * pi.entropy(seed=seed))
+        self.config.entropy_regularization * pi.entropy())
     return -objective.mean()
 
   def critic_loss(self, critic_params: hk.Params, observation: jnp.ndarray,

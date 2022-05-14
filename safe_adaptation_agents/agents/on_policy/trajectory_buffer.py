@@ -93,7 +93,7 @@ class TrajectoryBuffer:
     r = self.reward
     c = self.cost
     if self.observation.shape[0] == 1:
-      o, a, r, c = tuple(map(lambda x: x.squeeze(0), (o, a, r, c)))
+      o, a, r, c = map(lambda x: x.squeeze(0), (o, a, r, c))
     return o, a, r, c
 
   @property
