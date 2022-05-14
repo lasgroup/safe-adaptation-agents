@@ -69,7 +69,8 @@ class VanillaPolicyGrandients(Agent):
     return np.clip(action, -1., 1.)
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            advantage: np.ndarray, return_: np.ndarray):
+            reward: np.ndarray, *_):
+    advantage, return_ = self._evaluate(self.critic.params, observation, reward)
     for _ in range(self.config.update_steps):
       (self.actor.state, self.critic.state,
        report) = self._update_step(self.actor.state, self.critic.state,
@@ -112,15 +113,16 @@ class VanillaPolicyGrandients(Agent):
                               observation).log_prob(return_).mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def _advantage(self, critic_params: hk.Params, observation: jnp.ndarray,
-                 reward: jnp.ndarray):
+  def _evaluate(self, critic_params: hk.Params, observation: jnp.ndarray,
+                reward: jnp.ndarray):
     bootstrap = self.critic.apply(critic_params, observation).mode()
     diff = reward + (
         self.config.discount * bootstrap[..., 1:] - bootstrap[..., :-1])
     advantage = discounted_cumsum(diff,
                                   self.config.lambda_ * self.config.discount)
     mean, stddev = advantage.mean(), advantage.std()
-    return (advantage - mean) / (stddev + 1e-8)
+    return_ = discounted_cumsum(reward, self.config.discount)
+    return (advantage - mean) / (stddev + 1e-8), return_
 
   @property
   def time_to_update(self):
