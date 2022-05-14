@@ -49,6 +49,7 @@ class VanillaPolicyGrandients(Agent):
       self.logger.log_metrics(self.training_step)
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
+    print(action, 'action!')
     return np.clip(action, -1.0, 1.0)
 
   def observe(self, transition: Transition):
@@ -66,7 +67,7 @@ class VanillaPolicyGrandients(Agent):
              training: bool = True) -> jnp.ndarray:
     policy = self.actor.apply(params, observation)
     action = policy.sample(seed=key) if training else policy.mode()
-    return np.clip(action, -1., 1.)
+    return action
 
   def train(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, *_):
