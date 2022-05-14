@@ -114,7 +114,7 @@ def main():
       logger.log_summary(summary, epoch)
       for task_name, video in videos.items():
         logger.log_video(
-            np.asarray(video).transpose([1, 0, 2, 3, 4]),
+            np.asarray(video).transpose([1, 0, 2, 3, 4])[:1],
             task_name + '_video',
             step=epoch)
     state_writer.write({
