@@ -17,15 +17,15 @@ tfb = tfp.bijectors
 
 class Actor(hk.Module):
 
-  def __init__(
-      self,
-      output_size: Sequence[int],
-      layers: Sequence[int],
-      min_stddev: float,
-      max_stddev: float,
-      initialization: str = 'glorot',
-      activation: Union[str, Callable[[jnp.ndarray], jnp.ndarray]] = jnn.relu,
-  ):
+  def __init__(self,
+               output_size: Sequence[int],
+               layers: Sequence[int],
+               min_stddev: float,
+               max_stddev: float,
+               initialization: str = 'glorot',
+               activation: Union[str, Callable[[jnp.ndarray],
+                                               jnp.ndarray]] = jnn.relu,
+               squash: bool = False):
     super().__init__()
     self.output_size = tuple(map(lambda x: 2 * x, output_size))
     self.layers = layers
@@ -33,6 +33,7 @@ class Actor(hk.Module):
     self._max_stddev = max_stddev
     self._initialization = initialization
     self._activation = activation if callable(activation) else eval(activation)
+    self._squash = squash
 
   def __call__(self, observation: jnp.ndarray):
     x = nets.mlp(
@@ -42,13 +43,16 @@ class Actor(hk.Module):
         activation=self._activation)
     mu, stddev = jnp.split(x, 2, -1)
     init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
-    stddev = jnn.softplus(stddev + init_std)
+    stddev = jnp.clip(
+        jnn.softplus(stddev + init_std), self._min_stddev, self._max_stddev)
     multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
-    # Squash actions to [-1, 1]
-    squashed = tfd.TransformedDistribution(multivariate_normal_diag,
-                                           StableTanhBijector())
-    dist = tfd.Independent(squashed, 1)
-    return SampleDist(dist)
+    if self._squash:
+      multivariate_normal_diag = tfd.TransformedDistribution(
+          multivariate_normal_diag, StableTanhBijector())
+    dist = tfd.Independent(multivariate_normal_diag, 1)
+    if self._squash:
+      dist = SampleDist(dist)
+    return dist
 
 
 class DenseDecoder(hk.Module):
