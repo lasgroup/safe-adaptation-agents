@@ -26,15 +26,18 @@ class Actor(hk.Module):
                initialization: str = 'glorot',
                activation: Union[str, Callable[[jnp.ndarray],
                                                jnp.ndarray]] = jnn.relu,
-               squash: bool = False):
+               squash: bool = False,
+               heteroscedastic: bool = True):
     super().__init__()
-    self.output_size = tuple(map(lambda x: 2 * x, output_size))
+    factor = 2 if heteroscedastic else 1
+    self.output_size = tuple(map(lambda x: factor * x, output_size))
     self.layers = layers
     self._min_stddev = min_stddev
     self._max_stddev = max_stddev
     self._initialization = initialization
     self._activation = activation if callable(activation) else eval(activation)
     self._squash = squash
+    self._heteroscedastic = heteroscedastic
 
   def __call__(self, observation: jnp.ndarray):
     x = nets.mlp(
@@ -42,7 +45,11 @@ class Actor(hk.Module):
         output_sizes=tuple(self.layers) + tuple(self.output_size),
         initializer=nets.initializer(self._initialization),
         activation=self._activation)
-    mu, stddev = jnp.split(x, 2, -1)
+    if self._heteroscedastic:
+      mu, stddev = jnp.split(x, 2, -1)
+    else:
+      mu, stddev = x, hk.get_parameter('pi_stddev', (x.shape[-1],), x.dtype,
+                                       hk.initializers.Constant(0.5))
     init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
     stddev = jnp.clip(
         jnn.softplus(stddev + init_std), self._min_stddev, self._max_stddev)
