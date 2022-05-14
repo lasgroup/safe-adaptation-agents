@@ -11,7 +11,7 @@ defaults:
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 1
   render_episodes: 1
-  render_options: {height: 240, width: 320, camera_id: 'fixedfar'}
+  render_options: {height: 120, width: 160, camera_id: 'fixedfar'}
   jit: True
   precision: 32
   parallel_envs: 5

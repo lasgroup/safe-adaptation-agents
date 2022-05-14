@@ -76,10 +76,9 @@ class VanillaPolicyGrandients(Agent):
     for k, v in actor_report.items():
       self.logger[k] = v
     for _ in range(self.config.value_update_steps):
-      (self.critic.learning_state,
-       report) = self._update_step(self.actor.learning_state,
-                                   self.critic.learning_state, observation,
-                                   action, advantage, return_)
+      (self.critic.learning_state, report) = self.critic_update_step(
+          self.actor.learning_state, self.critic.learning_state, observation,
+          action, advantage, return_)
       for k, v in report.items():
         self.logger[k] = v
 
