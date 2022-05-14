@@ -66,73 +66,44 @@ class VanillaPolicyGrandients(Agent):
              training: bool = True) -> jnp.ndarray:
     policy = self.actor.apply(params, observation)
     action = policy.sample(seed=key) if training else policy.mode()
-    return action
+    return np.clip(action, -1., 1.)
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, _: np.ndarray):
-    return_ = discounted_cumsum(reward, self.config.discount)
-    advantage = self._advantage(self.critic.params, observation, reward)
-    for o, a, r, advg, re in self.batch(observation[:, :-1], action, reward,
-                                        advantage, return_):
-      self.actor.state, actor_report = self.actor_update_step(
-          self.actor.state, o, a, advg, next(self.rng_seq))
-      for k, v in actor_report.items():
+            advantage: np.ndarray, return_: np.ndarray):
+    for _ in range(self.config.update_steps):
+      (self.actor.state, self.critic.state,
+       report) = self._update_step(self.actor.state, self.critic.state,
+                                   observation[:, :-1], action, advantage,
+                                   return_, next(self.rng_seq))
+      for k, v in report.items():
         self.logger[k] = v
-      for _ in range(self.config.value_update_steps):
-        (self.critic.state,
-         report) = self.critic_update_step(self.critic.state, o, re)
-        for k, v in report.items():
-          self.logger[k] = v
-
-  # https://github.com/DLR-RM/stable-baselines3/blob/a6f5049a99a4c21a6f0bcce458ca3306cef310e0/stable_baselines3/common/buffers.py#L438
-  def batch(self, *args):
-    # Merge episode and trajectory dimensions.
-    flatten_vals = tuple(map(lambda x: x.reshape(-1, *x.shape[2:]), args))
-    size = flatten_vals[0].shape[0]
-    indices = self.rs.permutation(size)
-    start_idx = 0
-    while start_idx < size:
-      yield tuple(
-          map(
-              lambda x: x[indices[start_idx:start_idx + self.config.batch_size]
-                         ], flatten_vals))
-      start_idx += self.config.batch_size
 
   @functools.partial(jax.jit, static_argnums=0)
-  def critic_update_step(self, critic_state: LearningState,
-                         observation: jnp.ndarray,
-                         return_: jnp.ndarray) -> [LearningState, dict]:
-    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
-        critic_state.params, observation, return_)
-    new_critic_state = self.critic.grad_step(value_grads, critic_state)
-    return new_critic_state, {
-        'agent/critic/loss': value_loss,
-        'agent/critic/grad': optax.global_norm(value_grads)
-    }
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, actor_state: LearningState,
-                        observation: jnp.ndarray, actions: jnp.ndarray,
-                        advantage: jnp.ndarray,
-                        seed: jnp.ndarray) -> [LearningState, dict]:
+  def _update_step(self, actor_state: LearningState,
+                   critic_state: LearningState, observation: jnp.ndarray,
+                   actions: jnp.ndarray, advantage: jnp.ndarray,
+                   return_: jnp.ndarray,
+                   seed: jnp.ndarray) -> [LearningState, LearningState, dict]:
     policy_loss, policy_grads = jax.value_and_grad(self.policy_loss)(
         actor_state.params, observation, actions, advantage, seed)
     new_actor_state = self.actor.grad_step(policy_grads, actor_state)
-    entropy = self.actor.apply(actor_state.params,
-                               observation).entropy().mean()
-    return new_actor_state, {
+    value_loss, value_grads = jax.value_and_grad(self.critic_loss)(
+        critic_state.params, observation, return_)
+    new_critic_state = self.critic.grad_step(value_grads, critic_state)
+    entropy = self.actor.apply(actor_state.params, observation).entropy().mean()
+    return new_actor_state, new_critic_state, {
         'agent/actor/loss': policy_loss,
         'agent/actor/grad': optax.global_norm(policy_grads),
-        'agent/actor/entropy': entropy
+        'agent/actor/entropy': entropy,
+        'agent/critic/loss': value_loss,
+        'agent/critic/grad': optax.global_norm(value_grads)
     }
 
   def policy_loss(self, actor_params: hk.Params, observation: jnp.ndarray,
                   actions: jnp.ndarray, advantage: jnp.ndarray,
                   seed: jnp.ndarray):
     pi = self.actor.apply(actor_params, observation)
-    objective = (
-        pi.log_prob(actions) * advantage +
-        self.config.entropy_regularization * pi.entropy())
+    objective = pi.log_prob(actions) * advantage
     return -objective.mean()
 
   def critic_loss(self, critic_params: hk.Params, observation: jnp.ndarray,
