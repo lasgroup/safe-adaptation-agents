@@ -46,6 +46,7 @@ def interact(agent: Agent,
     transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)
+    observations = next_observations
   if not episodes[-1]:
     episodes.pop()
   return agent, episodes
