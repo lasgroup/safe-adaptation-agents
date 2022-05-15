@@ -126,9 +126,9 @@ class VanillaPolicyGrandients(Agent):
   @functools.partial(jax.jit, static_argnums=0)
   def _evaluate(self, critic_params: hk.Params, observation: jnp.ndarray,
                 reward: jnp.ndarray):
-    bootstrap = self.critic.apply(critic_params, observation).mode()
+    value = self.critic.apply(critic_params, observation).mode()
     diff = reward + (
-        self.config.discount * bootstrap[..., 1:] - bootstrap[..., :-1])
+        self.config.discount * value[..., 1:] - value[..., :-1])
     advantage = discounted_cumsum(diff,
                                   self.config.lambda_ * self.config.discount)
     mean, stddev = advantage.mean(), advantage.std()

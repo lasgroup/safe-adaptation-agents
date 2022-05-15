@@ -52,7 +52,7 @@ class Actor(hk.Module):
                                        hk.initializers.Constant(-0.5))
     if self._squash:
       init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
-      stddev = jnn.softplus(stddev + init_std) +  self._min_stddev
+      stddev = jnn.softplus(stddev + init_std) + self._min_stddev
       multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
       multivariate_normal_diag = tfd.TransformedDistribution(
           multivariate_normal_diag, StableTanhBijector())
