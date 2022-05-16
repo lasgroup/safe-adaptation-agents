@@ -35,11 +35,11 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
 
   def train(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
-    (advantage, return_, cost_advantage, cost_return,
-     logprob_pi) = self.evaluate_with_safety(self.critic.params,
-                                             self.safety_critic.params,
-                                             self.actor.params, observation,
-                                             action, reward, cost)
+    (advantage, return_, cost_advantage,
+     cost_return) = self.evaluate_with_safety(self.critic.params,
+                                              self.safety_critic.params,
+                                              self.actor.params, observation,
+                                              action, reward, cost)
     self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
         self.lagrangian.state, running_cost, self.config.cost_limit)
     lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
@@ -47,7 +47,6 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
         self.actor.state,
         observation[:, :-1],
         action=action,
-        old_pi_logprob=logprob_pi,
         advantage=advantage,
         lagrangian=lagrangian,
         cost_advantage=cost_advantage)
@@ -65,6 +64,7 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
                         **kwargs) -> [LearningState, dict]:
     observation, *_ = args
     old_pi = self.actor.apply(state.params, observation)
+    kwargs['old_pi_logprob'] = old_pi.log_prob(kwargs['action'])
 
     def cond(val):
       iter_, _, info = val
@@ -88,6 +88,9 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
       }
 
     iters, new_actor_state, info = jax.lax.while_loop(cond, body, (0, state, {
+        'agent/actor/loss': 0.,
+        'agent/actor/grad': 0.,
+        'agent/actor/entropy': 0.,
         'agent/actor/delta_kl': 0.
     }))
     info['agent/actor/update_iters'] = iters
@@ -98,8 +101,8 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
                              running_cost: jnp.ndarray,
                              cost_limits: jnp.ndarray):
 
-    def loss(lagrangian):
-      return -self.lagrangian.apply(lagrangian) * (running_cost - cost_limits)
+    def loss(params):
+      return -self.lagrangian.apply(params) * (running_cost - cost_limits)
 
     loss, grad = jax.value_and_grad(loss)(lagrangian.params)
     new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)

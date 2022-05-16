@@ -50,3 +50,5 @@ ppo_lagrangian:
   critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
   cost_discount: 0.95
   clip_ratio: 1.
+  kl_margin: 0.
+  target_kl: 0.

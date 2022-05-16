@@ -59,8 +59,8 @@ class SafeVanillaPolicyGradients(ABC, vpg.VanillaPolicyGrandients):
   @abc.abstractmethod
   def policy_loss(self, params: hk.Params, *args, **kwargs) -> float:
     """
-      Implements a loss for the policy.
-      """
+    Implements a loss for the policy.
+    """
 
   def safety_critic_loss(self, params: hk.Params, observation: jnp.ndarray,
                          return_: jnp.ndarray) -> float:
@@ -74,10 +74,9 @@ class SafeVanillaPolicyGradients(ABC, vpg.VanillaPolicyGrandients):
       reward: jnp.ndarray, cost: jnp.ndarray
   ) -> [jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     advantage, return_ = self.evaluate(critic_params, observation, reward)
-    logprob_pi = self.actor.apply(actor_params, observation).log_prob(action)
     if not self.safe:
       return advantage, return_, jnp.zeros_like(advantage), jnp.zeros_like(
-          return_), logprob_pi
+          return_)
     cost_value = self.safety_critic.apply(safety_critic_params,
                                           observation).mode()
     cost_return = vpg.discounted_cumsum(cost, self.config.cost_discount)
@@ -89,7 +88,7 @@ class SafeVanillaPolicyGradients(ABC, vpg.VanillaPolicyGrandients):
     # https://github.com/openai/safety-starter-agents/blob
     # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/buffer.py#L71
     cost_advantage -= cost_advantage.mean()
-    return advantage, return_, cost_advantage, cost_return, logprob_pi
+    return advantage, return_, cost_advantage, cost_return
 
   @property
   def safe(self):
