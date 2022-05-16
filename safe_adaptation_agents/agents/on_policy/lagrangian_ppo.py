@@ -34,9 +34,9 @@ class LagrangianPPO(vpg.VanillaPolicyGrandients):
         utils.get_mixed_precision_policy(config.precision))
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray, running_cost: jnp.ndarray):
-    (advantage, return_, cost_advantage, cost_return, logprob_pi,
-     lagrangian) = self.evaluate_with_safety(self.critic.params,
+            reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
+    (advantage, return_, cost_advantage, cost_return,
+     logprob_pi) = self.evaluate_with_safety(self.critic.params,
                                              self.safety_critic.params,
                                              self.actor.params, observation,
                                              action, reward, cost)
