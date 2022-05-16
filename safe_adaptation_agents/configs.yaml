@@ -1,6 +1,8 @@
 defaults:
   agent: vanilla_policy_gradients
+  safe: False
   robot: point
+  cost_limit: 25
   log_dir: results
   seed: 0
   time_limit: 1000
@@ -25,12 +27,26 @@ no_adaptation:
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
-  value_update_steps: 5
+  vf_iters: 5
+  pi_iters: 1
   actor: {layers: [32, 32], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [32, 32], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
-  safety_discount: 0.95
   lambda_: 0.97
   num_trajectories: 30
   actor_opt: {lr: 0.01, eps: 1e-7, clip: 10}
   critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
+
+ppo_lagrangian:
+  entropy_regularization: 0.
+  vf_iters: 5
+  pi_iters: 10
+  actor: {layers: [32, 32], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
+  critic: {layers: [32, 32], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
+  discount: 0.99
+  lambda_: 0.97
+  num_trajectories: 30
+  actor_opt: {lr: 0.01, eps: 1e-7, clip: 10}
+  critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
+  cost_discount: 0.95
+  clip_ratio: 1.
