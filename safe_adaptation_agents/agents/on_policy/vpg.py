@@ -98,22 +98,17 @@ class VanillaPolicyGrandients(Agent):
   @functools.partial(jax.jit, static_argnums=0)
   def actor_update_step(self, state: LearningState, *args,
                         **kwargs) -> [LearningState, dict]:
-
-    def update(actor_state: LearningState):
-      observation, *_ = args
-      loss, grads = jax.value_and_grad(self.policy_loss)(actor_state.params,
-                                                         *args, **kwargs)
-      new_actor_state = self.actor.grad_step(grads, actor_state)
-      entropy = self.actor.apply(actor_state.params,
-                                 observation).entropy().mean()
-      return new_actor_state, {
-          'agent/actor/loss': loss,
-          'agent/actor/grad': optax.global_norm(grads),
-          'agent/actor/entropy': entropy
-      }
-
-    return jax.lax.scan(lambda state, _: update(state), state,
-                        jnp.arange(self.config.pi_iters))
+    observation, *_ = args
+    loss, grads = jax.value_and_grad(self.policy_loss)(actor_state.params,
+                                                       *args, **kwargs)
+    new_actor_state = self.actor.grad_step(grads, actor_state)
+    entropy = self.actor.apply(actor_state.params,
+                               observation).entropy().mean()
+    return new_actor_state, {
+        'agent/actor/loss': loss,
+        'agent/actor/grad': optax.global_norm(grads),
+        'agent/actor/entropy': entropy
+    }
 
   def policy_loss(self, params: hk.Params, *args, **kwargs):
     observation, actions, advantage = args
