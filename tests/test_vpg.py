@@ -14,35 +14,13 @@ def make_env(config):
 
 def test_score():
   config = options.load_config([
-      '--configs',
-      'defaults',
-      'no_adaptation',
-      '--agent',
-      'vanilla_policy_gradients',
-      '--num_trajectories',
-      '300',
-      '--time_limit',
-      '150',
-      '--actor.max_stddev',
-      '10.',
-      '--actor.min_stddev',
-      '1e-4',
-      '--vf_iters',
-      '5',
-      '--eval_every',
-      '5',
-      '--eval_trials',
-      '0',
-      '--test_driver.adaptation_steps',
-      '3000',
-      'train_driver.adaptation_steps',
-      '45000',
-      '--actor_opt.lr',
-      '0.02',
-      '--critic_opt.lr',
-      '0.02',
-      '--discount',
-      '0.95',
+      '--configs', 'defaults', 'no_adaptation', '--agent',
+      'vanilla_policy_gradients', '--num_trajectories', '300', '--time_limit',
+      '150', '--actor.max_stddev', '10.', '--actor.min_stddev', '1e-4',
+      '--vf_iters', '5', '--eval_every', '5', '--eval_trials', '0',
+      '--test_driver.adaptation_steps', '3000', 'train_driver.adaptation_steps',
+      '45000', '--actor_opt.lr', '0.02', '--critic_opt.lr', '0.02',
+      '--discount', '0.95', '--epochs', '50'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -52,5 +30,5 @@ def test_score():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, cost = trainer.train()
-  assert objective > 150.
+  assert objective > 185.
   assert cost == 0.
