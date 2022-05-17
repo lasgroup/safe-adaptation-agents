@@ -8,10 +8,12 @@ import cloudpickle
 import numpy as np
 
 from gym.vector import VectorEnv
+from gym import Env
+from gym.spaces import Space
 
 from safe_adaptation_gym import benchmark
 from safe_adaptation_gym import tasks as sagt
-from safe_adaptation_agents import agents, logging, driver
+from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
 
 def evaluate(agent: agents.Agent, env: VectorEnv,
@@ -72,23 +74,33 @@ class Trainer:
 
   def __init__(self,
                config: SimpleNamespace,
-               agent: agents.Agent,
-               make_env: Callable[[], VectorEnv],
+               make_agent: Callable[
+                   [SimpleNamespace, Space, Space, logging.TrainingLogger],
+                   agents.Agent],
+               make_env: Callable[[], Env],
                task_generator: Optional[benchmark.Benchmark] = None,
-               start_epoch: int = 0):
+               start_epoch: int = 0,
+               seeds: Optional[List[int]] = None):
     self.config = config
-    self.agent = agent
+    self.make_agent = make_agent
     self.make_env = make_env
     self.tasks_gen = task_generator
     self.epoch = start_epoch
+    self.seeds = seeds
     self.logger = None
     self.state_writer = None
     self.env = None
+    self.agent = None
 
   def __enter__(self):
     self.state_writer = logging.StateWriter(self.config.log_dir)
     self.logger = logging.TrainingLogger(self.config.logidr)
-    self.env = self.make_env()
+    self.env = episodic_async_env.EpisodicAsync(lambda: self.make_env(),
+                                                self.config.parallel_envs)
+    if self.seeds is not None:
+      self.env.reset(seed=self.seeds)
+    self.agent = self.make_agent(self.config, self.env.observation_space,
+                                 self.env.action_space, self.logger)
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
@@ -96,7 +108,7 @@ class Trainer:
     self.state_writer.close()
     self.logger.flush()
 
-  def train(self):
+  def train(self, epochs: Optional[int] = None):
     config = self.config
     agent = self.agent
     env = self.env
@@ -110,7 +122,7 @@ class Trainer:
         **config.test_driver,
         on_episode_end=partial(on_episode_end, train=False, logger=logger),
         render_episodes=config.render_episodes)
-    for epoch in range(epoch, config.epochs):
+    for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
       episodes, _ = train_driver.run(agent, env, self.tasks(train=True), True)
       if epoch % config.eval_every == 0 and config.eval_trials:
@@ -150,7 +162,7 @@ class Trainer:
     with open(os.path.join(log_dir, 'state.pkl'), 'rb') as f:
       make_env, env_rs, agent, epoch, task_gen = cloudpickle.load(f).values()
 
-    return cls(agent.config, agent, make_env, task_gen)
+    return cls(agent.config, agent, make_env, task_gen, epoch, env_rs)
 
   @property
   def state(self):
