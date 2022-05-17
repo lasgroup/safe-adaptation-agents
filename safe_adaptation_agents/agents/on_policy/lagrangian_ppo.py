@@ -1,4 +1,3 @@
-from typing import Optional
 from types import SimpleNamespace
 import functools
 
@@ -8,6 +7,7 @@ from gym.spaces import Space
 import optax
 import jax
 import jax.numpy as jnp
+import jax.nn as jnn
 import haiku as hk
 
 from safe_adaptation_agents.agents.on_policy import safe_vpg
@@ -23,14 +23,11 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
     super(LagrangianPPO, self).__init__(observation_space, action_space, config,
-                                        logger, actor, critic)
-    self.safety_critic = utils.Learner(
-        safety_critic, next(self.rng_seq), config.critic_opt,
-        utils.get_mixed_precision_policy(config.precision),
-        observation_space.sample())
+                                        logger, actor, critic, safety_critic)
+    lagrangian = hk.without_apply_rng(
+        hk.transform(lambda: Lagrangian(self.config.initial_lagrangian)()))
     self.lagrangian = utils.Learner(
-        Lagrangian(self.config.initial_lagrangian),
-        next(self.rng_seq), config.lagrangian_opt,
+        lagrangian, next(self.rng_seq), config.lagrangian_opt,
         utils.get_mixed_precision_policy(config.precision))
 
   def train(self, observation: np.ndarray, action: np.ndarray,
@@ -69,7 +66,8 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
     def cond(val):
       iter_, _, info = val
       kl = info['agent/actor/delta_kl']
-      if iter_ == self.config.pi_iter or kl > self.kl_margin * target_kl:
+      if (iter_ == self.config.pi_iter) or (
+          kl > self.self.config.kl_margin * self.config.target_kl):
         return False
       return True
 
@@ -81,12 +79,14 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
       pi = self.actor.apply(actor_state.params, observation)
       kl_d = old_pi.kl_divergence(pi).mean()
       return iter_ + 1, new_actor_state, {
-          'agent/actor/loss': loss,
-          'agent/actor/grad': optax.global_norm(grads),
-          'agent/actor/entropy': pi.entropy().mean(),
-          'agent/actor/delta_kl': kl_d
+          'agent/actor/loss': float(loss),
+          'agent/actor/grad': float(optax.global_norm(grads)),
+          'agent/actor/entropy': float(pi.entropy().mean()),
+          'agent/actor/delta_kl': float(kl_d)
       }
 
+    # Implements a for-loop (through iter_) with an early-break condition (
+    # too big kl)
     iters, new_actor_state, info = jax.lax.while_loop(cond, body, (0, state, {
         'agent/actor/loss': 0.,
         'agent/actor/grad': 0.,
@@ -98,11 +98,10 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
 
   @functools.partial(jax.jit, static_argnums=0)
   def lagrangian_update_step(self, lagrangian: LearningState,
-                             running_cost: jnp.ndarray,
-                             cost_limits: jnp.ndarray):
+                             running_cost: jnp.ndarray, cost_limit: float):
 
     def loss(params):
-      return -self.lagrangian.apply(params) * (running_cost - cost_limits)
+      return -self.lagrangian.apply(params) * (running_cost - cost_limit)
 
     loss, grad = jax.value_and_grad(loss)(lagrangian.params)
     new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)
@@ -141,8 +140,7 @@ class Lagrangian(hk.Module):
     self._initial_lagrangian = initial_lagrangian
 
   def __call__(self):
-    init_lagrangian = np.log(
-        max(np.exp(self.config.init_lagrangian) - 1., 1e-8))
-    lagrangian = hk.get_parameter('lagrangian', running_cost.shape, jnp.float32,
+    init_lagrangian = np.log(max(np.exp(self._initial_lagrangian) - 1., 1e-8))
+    lagrangian = hk.get_parameter('lagrangian', (1,), jnp.float32,
                                   hk.initializers.Constant(init_lagrangian))
     return lagrangian
