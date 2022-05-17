@@ -10,6 +10,7 @@ import numpy as np
 from gym.vector import VectorEnv
 from gym import Env
 from gym.spaces import Space
+from gym.utils import seeding
 
 from safe_adaptation_gym import benchmark
 from safe_adaptation_gym import tasks as sagt
@@ -73,15 +74,19 @@ class Trainer:
 
   def __init__(self,
                config: SimpleNamespace,
-               make_agent: Callable[
-                   [SimpleNamespace, Space, Space, logging.TrainingLogger],
-                   agents.Agent],
                make_env: Callable[[], Env],
+               make_agent: Optional[Callable[
+                   [SimpleNamespace, Space, Space, logging.TrainingLogger],
+                   agents.Agent]] = None,
+               agent: Optional[agents.Agent] = None,
                task_generator: Optional[benchmark.Benchmark] = None,
                start_epoch: int = 0,
                seeds: Optional[List[int]] = None):
     self.config = config
+    assert not (agent is not None and make_agent is not None), (
+        'agent and make_agent parameters are mutually exclusice.')
     self.make_agent = make_agent
+    self.agent = agent
     self.make_env = make_env
     self.tasks_gen = task_generator
     self.epoch = start_epoch
@@ -89,17 +94,17 @@ class Trainer:
     self.logger = None
     self.state_writer = None
     self.env = None
-    self.agent = None
 
   def __enter__(self):
     self.state_writer = logging.StateWriter(self.config.log_dir)
-    self.logger = logging.TrainingLogger(self.config.logidr)
-    self.env = episodic_async_env.EpisodicAsync(lambda: self.make_env(),
+    self.logger = logging.TrainingLogger(self.config.log_dir)
+    self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs)
     if self.seeds is not None:
       self.env.reset(seed=self.seeds)
-    self.agent = self.make_agent(self.config, self.env.observation_space,
-                                 self.env.action_space, self.logger)
+    if self.make_agent is not None:
+      self.agent = self.make_agent(self.config, self.env.observation_space,
+                                   self.env.action_space, self.logger)
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
@@ -108,12 +113,8 @@ class Trainer:
     self.logger.flush()
 
   def train(self, epochs: Optional[int] = None) -> [float, float]:
-    config = self.config
-    agent = self.agent
-    env = self.env
-    epoch = self.epoch
-    logger = self.logger
-    state_writer = self.state_writer
+    config, agent, env = self.config, self.agent, self.env
+    epoch, logger, state_writer = self.epoch, self.logger, self.state_writer
     train_driver = driver.Driver(
         **config.train_driver,
         on_episode_end=partial(on_episode_end, train=True, logger=logger))
@@ -145,27 +146,38 @@ class Trainer:
     return objective, cost
 
   def get_env_random_state(self):
-    try:
-      rs = [rs.get_state()[1] for rs in self.env.get_attr('rs')]
-    except Exception as er:
-      rs = [seed for seed in self.env.get_attr('np_random')]
-      print(er)
+    rs = []
+    for state in self.env.get_attr('np_random'):
+      if isinstance(state, np.random.RandomState):
+        s = state.get_state()[1]
+      elif isinstance(state, seeding.RandomNumberGenerator):
+        s = state.get_state()['state']['state']
+      else:
+        raise ValueError('Cannot handle this random number generator.')
+      rs.append(s)
     return rs
 
   def tasks(self, train=True):
     if self.tasks_gen is None:
-      return [self.config.task, benchmark.TASKS[self.config.task]()]
+      return [(self.config.task, benchmark.TASKS[self.config.task]())]
     if train:
       return self.tasks_gen.train_tasks
     else:
       return self.tasks_gen.test_tasks
 
   @classmethod
-  def from_pickle(cls, log_dir):
-    with open(os.path.join(log_dir, 'state.pkl'), 'rb') as f:
+  def from_pickle(cls, config: SimpleNamespace):
+    with open(os.path.join(config.log_dir, 'state.pkl'), 'rb') as f:
       make_env, env_rs, agent, epoch, task_gen = cloudpickle.load(f).values()
-
-    return cls(agent.config, agent, make_env, task_gen, epoch, env_rs)
+    print('Resuming experiment from {}'.format(config.log_dir))
+    assert agent.config == config, 'Loaded different hyperparameters.'
+    return cls(
+        config=agent.config,
+        make_env=make_env,
+        task_generator=task_gen,
+        start_epoch=epoch,
+        seeds=env_rs,
+        agent=agent)
 
   @property
   def state(self):

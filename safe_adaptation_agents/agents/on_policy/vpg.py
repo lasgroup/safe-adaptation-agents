@@ -69,7 +69,7 @@ class VanillaPolicyGrandients(Agent):
     return action
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, _):
+            reward: np.ndarray, _, __):
     advantage, return_ = self.evaluate(self.critic.params, observation, reward)
     self.actor.state, actor_report = self.actor_update_step(
         self.actor.state, observation[:, :-1], action, advantage)
@@ -99,10 +99,10 @@ class VanillaPolicyGrandients(Agent):
   def actor_update_step(self, state: LearningState, *args,
                         **kwargs) -> [LearningState, dict]:
     observation, *_ = args
-    loss, grads = jax.value_and_grad(self.policy_loss)(actor_state.params,
+    loss, grads = jax.value_and_grad(self.policy_loss)(state.params,
                                                        *args, **kwargs)
-    new_actor_state = self.actor.grad_step(grads, actor_state)
-    entropy = self.actor.apply(actor_state.params,
+    new_actor_state = self.actor.grad_step(grads, state)
+    entropy = self.actor.apply(state.params,
                                observation).entropy().mean()
     return new_actor_state, {
         'agent/actor/loss': loss,

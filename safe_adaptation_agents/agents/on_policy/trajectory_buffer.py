@@ -112,6 +112,6 @@ class MovingAverage:
 
   def update(self, new_val, at=None):
     if at is None:
-      self.value = (self.value * n + new_val) / (n + 1.)
+      self.value = (self.value * self.n + new_val) / (self.n + 1.)
     else:
-      self.value[at] = (self.value[at] * n + new_val) / (n + 1.)
+      self.value[at] = (self.value[at] * self.n + new_val) / (self.n + 1.)

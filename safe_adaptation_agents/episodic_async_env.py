@@ -37,7 +37,6 @@ class EpisodicAsync(VectorEnv):
 
   def __init__(self, ctor: Callable[[], Env], vector_size: int = 1):
     self.env_fn = cloudpickle.dumps(ctor)
-
     if vector_size < 1:
       self._env = ctor()
       self.observation_space = self._env.observation_space
