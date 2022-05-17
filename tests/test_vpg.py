@@ -28,7 +28,7 @@ def test_score():
       '--actor.min_stddev',
       '1e-4',
       '--vf_iters',
-      '1',
+      '5',
       '--eval_every',
       '5',
       '--eval_trials',
