@@ -37,7 +37,6 @@ def evaluation_summary(runs: List[driver.IterationSummary]) -> [Dict, Dict]:
   for i, run in enumerate(runs):
     all_tasks = []
     for task_name, task in run.items():
-
       episode_return_ = return_([episode['reward'] for episode in task])
       cost_return_ = return_([episode['cost'] for episode in task])
       if i == 0:
@@ -108,7 +107,7 @@ class Trainer:
     self.state_writer.close()
     self.logger.flush()
 
-  def train(self, epochs: Optional[int] = None):
+  def train(self, epochs: Optional[int] = None) -> [float, float]:
     config = self.config
     agent = self.agent
     env = self.env
@@ -122,14 +121,17 @@ class Trainer:
         **config.test_driver,
         on_episode_end=partial(on_episode_end, train=False, logger=logger),
         render_episodes=config.render_episodes)
+    objective, cost = 0, 0
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
-      episodes, _ = train_driver.run(agent, env, self.tasks(train=True), True)
+      train_driver.run(agent, env, self.tasks(train=True), True)
       if epoch % config.eval_every == 0 and config.eval_trials:
         print('Evaluating...')
         results = evaluate(agent, env, self.tasks(train=False), test_driver,
                            config.eval_trials)
         summary, videos = evaluation_summary(results)
+        objective = max(objective, summary['evaluation/return'])
+        cost = min(cost, summary['evaluation/cost_return'])
         logger.log_summary(summary, epoch)
         for task_name, video in videos.items():
           logger.log_video(
@@ -140,6 +142,7 @@ class Trainer:
       state_writer.write(self.state)
     state_writer.close()
     logger.flush()
+    return objective, cost
 
   def get_env_random_state(self):
     try:
