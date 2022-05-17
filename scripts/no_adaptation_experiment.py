@@ -14,7 +14,7 @@ from safe_adaptation_agents import config as options
 
 
 def evaluate(agent: agents.Agent, env: VectorEnv, task_name: str,
-             test_driver: train.Driver, trials: int):
+             test_driver: driver.Driver, trials: int):
   results = [
       test_driver.run(agent, [(task_name, env)], False)[0]
       for _ in range(trials)
@@ -22,7 +22,7 @@ def evaluate(agent: agents.Agent, env: VectorEnv, task_name: str,
   return results
 
 
-def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
+def evaluation_summary(runs: List[driver.IterationSummary]) -> [Dict, Dict]:
   all_runs = []
   task_vids = {}
 
@@ -46,7 +46,7 @@ def evaluation_summary(runs: List[train.IterationSummary]) -> [Dict, Dict]:
   }, task_vids
 
 
-def on_episode_end(episode: train.EpisodeSummary,
+def on_episode_end(episode: driver.EpisodeSummary,
                    logger: logging.TrainingLogger, train: bool):
 
   def return_(arr):
@@ -57,8 +57,10 @@ def on_episode_end(episode: train.EpisodeSummary,
   print("\nReward return: {} -- Cost return: {}".format(episode_return,
                                                         cost_return))
   if train:
-    summary = {'training/episode_return': episode_return}
-    summary['training/episode_cost_return'] = cost_return
+    summary = {
+        'training/episode_return': episode_return,
+        'training/episode_cost_return': cost_return
+    }
     logger.log_summary(summary)
     logger.step += np.asarray(episode['reward']).size
 

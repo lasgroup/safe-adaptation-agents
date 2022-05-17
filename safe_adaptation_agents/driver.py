@@ -9,6 +9,8 @@ from gym.vector import VectorEnv
 import numpy as np
 from tqdm import tqdm
 
+from safe_adaptation_gym import tasks as sagt
+
 from safe_adaptation_agents.agents import Agent, Transition
 
 EpisodeSummary = Dict[str, List]
@@ -38,6 +40,7 @@ def interact(agent: Agent,
     episodes[-1] = _append(transition, episodes[-1])
     if train:
       agent.observe(transition)
+    observations = next_observations
     if transition.last:
       if on_episode_end:
         on_episode_end(episodes[-1])
@@ -46,7 +49,6 @@ def interact(agent: Agent,
     transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)
-    observations = next_observations
   if not episodes[-1]:
     episodes.pop()
   return agent, episodes
@@ -77,15 +79,17 @@ class Driver:
     self.render_episodes = render_episodes
     self.expose_task_id = expose_task_id
 
-  def run(self, agent: Agent, tasks: Iterable[Tuple[str, VectorEnv]],
+  def run(self, agent: Agent, env: VectorEnv, tasks: Iterable[Tuple[str,
+                                                                    sagt.Task]],
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
     for task_name, task in adaptation_tasks:
+      env.reset(options={'task': task})
       agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, adaptation_episodes = interact(
           agent,
-          task,
+          env,
           self.adaptation_steps,
           train=train,
           adapt=True,
@@ -93,10 +97,11 @@ class Driver:
           render_episodes=self.render_episodes)
       iter_adaptation_episodes[task_name] = adaptation_episodes
     for task_name, task in query_tasks:
+      env.reset(options={'task': task})
       agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, query_episodes = interact(
           agent,
-          task,
+          env,
           self.query_steps,
           train=train,
           adapt=False,

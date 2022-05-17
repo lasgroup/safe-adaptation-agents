@@ -115,5 +115,3 @@ class StateWriter:
   def close(self):
     self.queue.join()
     self._thread.join()
-    if self._file_handle is not None:
-      self._file_handle.close()
