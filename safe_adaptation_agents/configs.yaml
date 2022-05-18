@@ -39,16 +39,18 @@ vanilla_policy_gradients:
 
 ppo_lagrangian:
   entropy_regularization: 0.
-  vf_iters: 5
-  pi_iters: 10
-  actor: {layers: [32, 32], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
-  critic: {layers: [32, 32], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
+  vf_iters: 80
+  pi_iters: 80
+  actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
   lambda_: 0.97
+  cost_discount: 0.99
   num_trajectories: 30
-  actor_opt: {lr: 0.01, eps: 1e-7, clip: 10}
-  critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
-  cost_discount: 0.95
-  clip_ratio: 1.
-  kl_margin: 0.
-  target_kl: 0.
+  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
+  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  clip_ratio: 0.2
+  kl_margin: 1.2
+  target_kl: 0.01
+  initial_lagrangian: 1.

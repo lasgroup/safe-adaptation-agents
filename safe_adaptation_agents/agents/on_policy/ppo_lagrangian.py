@@ -16,13 +16,13 @@ from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
 
 
-class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
+class PPOLagrangian(safe_vpg.SafeVanillaPolicyGradients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(LagrangianPPO, self).__init__(observation_space, action_space, config,
+    super(PPOLagrangian, self).__init__(observation_space, action_space, config,
                                         logger, actor, critic, safety_critic)
     lagrangian = hk.without_apply_rng(
         hk.transform(lambda: Lagrangian(self.config.initial_lagrangian)()))
@@ -37,9 +37,13 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
                                               self.safety_critic.params,
                                               self.actor.params, observation,
                                               action, reward, cost)
-    self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
-        self.lagrangian.state, running_cost, self.config.cost_limit)
-    lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
+    if self.safe:
+      self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
+          self.lagrangian.state, running_cost, self.config.cost_limit)
+      lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
+    else:
+      lagrangian = 0.
+      lagrangian_report = {}
     self.actor.state, actor_report = self.actor_update_step(
         self.actor.state,
         observation[:, :-1],
@@ -48,12 +52,12 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
         lagrangian=lagrangian,
         cost_advantage=cost_advantage)
     self.critic.state, critic_report = self.critic_update_step(
-        self.critic.state, observation[:, -1], return_)
+        self.critic.state, observation[:, :-1], return_)
     if self.safe:
       self.safety_critic.state, safety_report = self.safe_critic_update_step(
           self.safety_critic.state, observation[:, :-1], cost_return)
-      critic_report.update(safety_report)
-    for k, v in {**actor_report, **critic_report, **lagrangian_report}.items():
+      critic_report.update([safety_report, lagrangian_report])
+    for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
@@ -66,10 +70,11 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
     def cond(val):
       iter_, _, info = val
       kl = info['agent/actor/delta_kl']
-      if (iter_ == self.config.pi_iter) or (
-          kl > self.self.config.kl_margin * self.config.target_kl):
-        return False
-      return True
+      # Returns Truthy if iter is smaller than pi_iters and kl smaller than
+      # kl threshold to continue iterating
+      return jax.lax.bitwise_not(
+          jax.lax.bitwise_or(kl > self.config.kl_margin * self.config.target_kl,
+                             iter_ == self.config.pi_iters))
 
     def body(val):
       iter_, actor_state, _ = val
@@ -79,13 +84,13 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
       pi = self.actor.apply(actor_state.params, observation)
       kl_d = old_pi.kl_divergence(pi).mean()
       return iter_ + 1, new_actor_state, {
-          'agent/actor/loss': float(loss),
-          'agent/actor/grad': float(optax.global_norm(grads)),
-          'agent/actor/entropy': float(pi.entropy().mean()),
-          'agent/actor/delta_kl': float(kl_d)
+          'agent/actor/loss': loss,
+          'agent/actor/grad': optax.global_norm(grads),
+          'agent/actor/entropy': pi.entropy().mean(),
+          'agent/actor/delta_kl': kl_d
       }
 
-    # Implements a for-loop (through iter_) with an early-break condition (
+    # Implements a for-loop (through iter_) with an early-break condition (ppo's
     # too big kl)
     iters, new_actor_state, info = jax.lax.while_loop(cond, body, (0, state, {
         'agent/actor/loss': 0.,
@@ -95,20 +100,6 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
     }))
     info['agent/actor/update_iters'] = iters
     return new_actor_state, info
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def lagrangian_update_step(self, lagrangian: LearningState,
-                             running_cost: jnp.ndarray, cost_limit: float):
-
-    def loss(params):
-      return -self.lagrangian.apply(params) * (running_cost - cost_limit)
-
-    loss, grad = jax.value_and_grad(loss)(lagrangian.params)
-    new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)
-    return new_lagrangian_state, {
-        'agent/lagrangian/loss': loss,
-        'agent/lagrangian/grad': optax.global_norm(grad)
-    }
 
   def policy_loss(self, params: hk.Params, *args, **kwargs) -> float:
     observation, *_ = args
@@ -121,8 +112,7 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
                         (1. - self.config.clip_ratio) * advantage)
     surr_advantage = jnp.minimum(ratio * advantage, min_adv)
     objective = (
-        log_prob * surr_advantage +
-        self.config.entropy_regularization * pi.entropy())
+        surr_advantage + self.config.entropy_regularization * pi.entropy())
     if self.safe:
       # https: // github.com / openai / safety - starter - agents / blob / 4151
       # a283967520ee000f03b3a79bf35262ff3509 / safe_rl / pg / run_agent.py  #
@@ -131,6 +121,21 @@ class LagrangianPPO(safe_vpg.SafeVanillaPolicyGradients):
       objective -= lagrangian * ratio * kwargs['cost_advantage']
       objective /= (1. + lagrangian)
     return -objective.mean()
+
+  @functools.partial(jax.jit, static_argnums=0)
+  def lagrangian_update_step(self, lagrangian: LearningState,
+                             running_cost: jnp.ndarray,
+                             cost_limit: float) -> [LearningState, dict]:
+
+    def loss(params):
+      return -(self.lagrangian.apply(params) * (running_cost - cost_limit))[0]
+
+    loss, grad = jax.value_and_grad(loss)(lagrangian.params)
+    new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)
+    return new_lagrangian_state, {
+        'agent/lagrangian/loss': loss,
+        'agent/lagrangian/grad': optax.global_norm(grad)
+    }
 
 
 class Lagrangian(hk.Module):

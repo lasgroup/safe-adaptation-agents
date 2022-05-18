@@ -114,4 +114,5 @@ class StateWriter:
 
   def close(self):
     self.queue.join()
-    self._thread.join()
+    if self._thread.is_alive():
+      self._thread.join()

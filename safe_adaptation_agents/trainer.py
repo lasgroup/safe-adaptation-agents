@@ -108,7 +108,9 @@ class Trainer:
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    self.state_writer.write(self.state)
+    if all(map(lambda x: x is None,
+               (exc_type, exc_val, exc_tb))) or exc_type == KeyboardInterrupt:
+      self.state_writer.write(self.state)
     self.state_writer.close()
     self.logger.flush()
 

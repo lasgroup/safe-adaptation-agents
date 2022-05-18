@@ -18,7 +18,7 @@ from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
 
 
-class SafeVanillaPolicyGradients(ABC, vpg.VanillaPolicyGrandients):
+class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
