@@ -8,7 +8,8 @@ from gym.wrappers import TimeLimit
 
 from safe_adaptation_gym import benchmark
 
-from safe_adaptation_agents import driver, agents
+from safe_adaptation_agents import agents
+from safe_adaptation_agents import driver as d
 from safe_adaptation_agents.agents import Transition
 
 
@@ -35,7 +36,7 @@ def driver():
   def on_episode(episode_summary):
     pass
 
-  return train.Driver(100, 50, on_episode_end=on_episode)
+  return d.Driver(100, 50, on_episode_end=on_episode)
 
 
 @pytest.fixture(params=['no_adaptation'])

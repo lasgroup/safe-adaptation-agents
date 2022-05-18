@@ -18,10 +18,8 @@ def main():
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
       '--num_trajectories', '30', '--vf_iters', '80', '--pi_iters', '80',
-      '--eval_every', '5', '--eval_trials', '0',
-      '--test_driver.adaptation_steps', '3000', 'train_driver.adaptation_steps',
-      '45000', '--actor_opt.lr', '0.02', '--critic_opt.lr', '0.02',
-      '--discount', '0.95', '--epochs', '50'
+      '--eval_trials', '0', 'train_driver.adaptation_steps', '30000',
+      '--epochs', '334'
   ])
   if not config.jit:
     from jax.config import config as jax_config

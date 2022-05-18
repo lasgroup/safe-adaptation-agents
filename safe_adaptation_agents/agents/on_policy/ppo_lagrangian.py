@@ -35,8 +35,7 @@ class PPOLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     (advantage, return_, cost_advantage,
      cost_return) = self.evaluate_with_safety(self.critic.params,
                                               self.safety_critic.params,
-                                              self.actor.params, observation,
-                                              action, reward, cost)
+                                              observation, reward, cost)
     if self.safe:
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
           self.lagrangian.state, running_cost, self.config.cost_limit)
@@ -56,7 +55,7 @@ class PPOLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     if self.safe:
       self.safety_critic.state, safety_report = self.safe_critic_update_step(
           self.safety_critic.state, observation[:, :-1], cost_return)
-      critic_report.update([safety_report, lagrangian_report])
+      critic_report.update({**safety_report, **lagrangian_report})
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 

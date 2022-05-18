@@ -50,7 +50,7 @@ class TrainingLogger:
     print("\n----Training step {} summary----".format(step))
     for k, v in self._metrics.items():
       val = float(v.result())
-      print("{:<40} {:<.2f}".format(k, val))
+      print("{:<40} {:<.4f}".format(k, val))
       self._writer.add_scalar(k, val, step)
       v.reset_states()
     if flush:

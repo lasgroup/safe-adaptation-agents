@@ -70,8 +70,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
   @functools.partial(jax.jit, static_argnums=0)
   def evaluate_with_safety(
       self, critic_params: hk.Params, safety_critic_params: hk.Params,
-      actor_params: hk.Params, observation: jnp.ndarray, action: jnp.ndarray,
-      reward: jnp.ndarray, cost: jnp.ndarray
+      observation: jnp.ndarray, reward: jnp.ndarray, cost: jnp.ndarray
   ) -> [jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     advantage, return_ = self.evaluate(critic_params, observation, reward)
     if not self.safe:

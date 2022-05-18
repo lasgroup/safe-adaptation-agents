@@ -102,6 +102,8 @@ class Trainer:
                                                 self.config.parallel_envs)
     if self.seeds is not None:
       self.env.reset(seed=self.seeds)
+    else:
+      self.env.reset(seed=self.config.seed)
     if self.make_agent is not None:
       self.agent = self.make_agent(self.config, self.env.observation_space,
                                    self.env.action_space, self.logger)
@@ -148,15 +150,16 @@ class Trainer:
     return objective, cost
 
   def get_env_random_state(self):
-    rs = []
-    for state in self.env.get_attr('np_random'):
-      if isinstance(state, np.random.RandomState):
-        s = state.get_state()[1]
-      elif isinstance(state, seeding.RandomNumberGenerator):
-        s = state.get_state()['state']['state']
-      else:
-        raise ValueError('Cannot handle this random number generator.')
-      rs.append(s)
+    rs = [
+        state.get_state()[1]
+        for state in self.env.get_attr('rs')
+        if state is not None
+    ]
+    if not rs:
+      rs = [
+          state.get_state()['state']['state']
+          for state in self.env.get_attr('np_random')
+      ]
     return rs
 
   def tasks(self, train=True):

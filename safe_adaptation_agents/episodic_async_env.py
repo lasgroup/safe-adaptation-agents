@@ -171,7 +171,10 @@ def _worker(ctor, conn):
         break
       if message == Protocol.ACCESS:
         name = payload
-        result = getattr(env, name)
+        try:
+          result = getattr(env, name)
+        except AttributeError:
+          result = None
         conn.send((Protocol.RESULT, result))
         continue
       if message == Protocol.SET:

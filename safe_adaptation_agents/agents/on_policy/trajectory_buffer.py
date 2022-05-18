@@ -102,7 +102,7 @@ class TrajectoryBuffer:
 
   @property
   def full(self):
-    return self._full
+    return self._full or self.length == self.reward.shape[2]
 
 
 @dataclass
