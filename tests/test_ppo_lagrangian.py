@@ -45,7 +45,7 @@ def test_safe():
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
       '--num_trajectories', '30', '--time_limit', '1000', '--vf_iters', '80',
       '--pi_iters', '80', '--eval_trials', '0', 'train_driver.adaptation_steps',
-      '30000', '--lambda_', '0.95', '--epochs', '334', '--safe', 'True',
+      '30000', '--lambda_', '0.95', '--epochs', '100', '--safe', 'True',
       '--log_dir', 'results/test_ppo_lagrangian_safe'
   ])
   if not config.jit:
