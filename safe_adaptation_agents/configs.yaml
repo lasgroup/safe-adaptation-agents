@@ -7,7 +7,7 @@ defaults:
   seed: 0
   time_limit: 1000
   epochs: 200
-  eval_every: 10
+  eval_every: 5
   eval_trials: 5
   train_driver: {adaptation_steps: 5000, query_steps: 2000}
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
