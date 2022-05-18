@@ -16,13 +16,13 @@ from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
 
 
-class PPOLagrangian(safe_vpg.SafeVanillaPolicyGradients):
+class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(PPOLagrangian, self).__init__(observation_space, action_space, config,
+    super(PpoLagrangian, self).__init__(observation_space, action_space, config,
                                         logger, actor, critic, safety_critic)
     lagrangian = hk.without_apply_rng(
         hk.transform(lambda: Lagrangian(self.config.initial_lagrangian)()))

@@ -35,5 +35,5 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
         hk.transform(lambda x: models.DenseDecoder(
             **config.critic, output_size=(1,))(x)))
     safety_critic = deepcopy(critic)
-    return ppo_lagrangian.PPOLagrangian(observation_space, action_space, config,
+    return ppo_lagrangian.PpoLagrangian(observation_space, action_space, config,
                                         logger, actor, critic, safety_critic)
