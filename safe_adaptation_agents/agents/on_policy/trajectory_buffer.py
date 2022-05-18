@@ -96,7 +96,7 @@ class TrajectoryBuffer:
     c = self.cost
     rc = self.running_cost.value
     # Reset the on-policy running cost.
-    self.running_cost.value = np.zeros_like(rc)
+    self.running_cost.reset()
     if self.observation.shape[0] == 1:
       o, a, r, c, rc = map(lambda x: x.squeeze(0), (o, a, r, c, rc))
     return o, a, r, c, rc
@@ -116,3 +116,7 @@ class MovingAverage:
       self.value = (self.value * self.n + new_val) / (self.n + 1.)
     else:
       self.value[at] = (self.value[at] * self.n + new_val) / (self.n + 1.)
+
+  def reset(self):
+    self.value = np.zeros_like(self.value)
+    self.n = 0
