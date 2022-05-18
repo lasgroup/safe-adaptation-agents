@@ -14,6 +14,7 @@ defaults:
   action_repeat: 1
   render_episodes: 1
   render_options: {height: 120, width: 160, camera_id: 'fixedfar'}
+  render_mode: rgb_array
   jit: True
   precision: 32
   parallel_envs: 5

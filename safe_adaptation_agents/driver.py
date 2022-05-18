@@ -23,14 +23,15 @@ def interact(agent: Agent,
              train: bool,
              adapt: bool,
              on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
-             render_episodes: int = 0) -> [Agent, List[EpisodeSummary]]:
+             render_episodes: int = 0,
+             render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
   step = 0
   pbar = tqdm(total=steps, leave=True, position=0)
   episodes = [defaultdict(list, {'observation': [observations]})]
   while step < steps:
     if render_episodes:
-      frames = environment.render()
+      frames = environment.render(render_mode)
       episodes[-1]['frames'].append(frames)
     actions = agent(observations, train, adapt)
     next_observations, rewards, dones, infos = environment.step(actions)
@@ -72,11 +73,13 @@ class Driver:
                expose_task_id: bool = False,
                on_episode_end: Optional[Callable[[EpisodeSummary],
                                                  None]] = None,
-               render_episodes: int = 0):
+               render_episodes: int = 0,
+               render_mode: str = 'rgb_array'):
     self.adaptation_steps = adaptation_steps
     self.query_steps = query_steps
     self.episode_callback = on_episode_end
     self.render_episodes = render_episodes
+    self.render_mode = render_mode
     self.expose_task_id = expose_task_id
 
   def run(self, agent: Agent, env: VectorEnv, tasks: Iterable[Tuple[str,
@@ -94,7 +97,8 @@ class Driver:
           train=train,
           adapt=True,
           on_episode_end=self.episode_callback,
-          render_episodes=self.render_episodes)
+          render_episodes=self.render_episodes,
+          render_mode=self.render_mode)
       iter_adaptation_episodes[task_name] = adaptation_episodes
     for task_name, task in query_tasks:
       env.reset(options={'task': task})
@@ -106,6 +110,7 @@ class Driver:
           train=train,
           adapt=False,
           on_episode_end=self.episode_callback,
-          render_episodes=self.render_episodes)
+          render_episodes=self.render_episodes,
+          render_mode=self.render_mode)
       iter_query_episodes[task_name] = query_episodes
     return iter_adaptation_episodes, iter_query_episodes

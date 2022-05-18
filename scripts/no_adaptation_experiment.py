@@ -9,7 +9,8 @@ from safe_adaptation_agents.trainer import Trainer
 
 def make_env(config):
   import safe_adaptation_gym
-  env = safe_adaptation_gym.make(config.robot, config.task)
+  env = safe_adaptation_gym.make(
+      config.robot, config.task, render_options=config.render_options)
   env = TimeLimit(env, config.time_limit)
   return env
 
