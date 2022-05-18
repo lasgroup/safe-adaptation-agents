@@ -76,7 +76,6 @@ class TrajectoryBuffer:
       if self.episode_id + batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
-
       self.episode_id += batch_size
       self.length = -1
     self.length += 1
@@ -96,6 +95,8 @@ class TrajectoryBuffer:
     r = self.reward
     c = self.cost
     rc = self.running_cost.value
+    # Reset the on-policy running cost.
+    self.running_cost.value = np.zeros_like(rc)
     if self.observation.shape[0] == 1:
       o, a, r, c, rc = map(lambda x: x.squeeze(0), (o, a, r, c, rc))
     return o, a, r, c, rc
