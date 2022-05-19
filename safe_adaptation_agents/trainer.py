@@ -10,6 +10,7 @@ import numpy as np
 
 from gym.vector import VectorEnv
 from gym import Env
+
 from gym.spaces import Space
 
 from safe_adaptation_gym import benchmark
@@ -117,9 +118,6 @@ class Trainer:
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    if all(map(lambda x: x is None,
-               (exc_type, exc_val, exc_tb))) or exc_type == KeyboardInterrupt:
-      self.state_writer.write(self.state)
     self.state_writer.close()
     self.logger.flush()
 
@@ -143,9 +141,8 @@ class Trainer:
                            config.eval_trials)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
             results)
-        for (_, reward), (task_name, cost), (_, video) in zip(reward_returns.items(),
-                                                  cost_returns.items(),
-                                                  videos.items()):
+        for (_, reward), (task_name, cost) in zip(reward_returns.items(),
+                                                  cost_returns.items()):
           objective[task_name] = max(objective[task_name], reward)
           constraint[task_name] = min(constraint[task_name], cost)
         logger.log_summary(summary, epoch)
