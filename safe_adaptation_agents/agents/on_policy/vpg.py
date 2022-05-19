@@ -51,9 +51,10 @@ class VanillaPolicyGrandients(Agent):
                          train)
     return action
 
-  def observe(self, transition: Transition):
-    self.buffer.add(transition)
-    self.training_step += sum(transition.steps)
+  def observe(self, transition: Transition, train: bool, adapt: bool):
+    if train:
+      self.buffer.add(transition)
+      self.training_step += sum(transition.steps)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass

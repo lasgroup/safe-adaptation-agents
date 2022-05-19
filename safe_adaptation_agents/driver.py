@@ -39,8 +39,7 @@ def interact(agent: Agent,
     transition = Transition(observations, next_observations, actions, rewards,
                             costs, dones, infos)
     episodes[-1] = _append(transition, episodes[-1])
-    if train or adapt:
-      agent.observe(transition)
+    agent.observe(transition, train, adapt)
     observations = next_observations
     if transition.last:
       if on_episode_end:

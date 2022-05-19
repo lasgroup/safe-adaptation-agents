@@ -41,7 +41,7 @@ class Agent(abc.ABC):
     """
 
   @abc.abstractmethod
-  def observe(self, transition: Transition):
+  def observe(self, transition: Transition, train: bool, adapt: bool):
     """
     Observe a transition, update internal state as needed.
     """

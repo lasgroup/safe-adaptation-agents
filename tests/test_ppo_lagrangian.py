@@ -19,7 +19,7 @@ def test_not_safe():
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
       '--num_trajectories', '300', '--time_limit', '150', '--vf_iters', '5',
       '--pi_iters', '5', '--eval_trials', '1',
-      '--train_driver.adaptation_steps', '45000',
+      '--train_driver.adaptation_steps', '45000', '--render_episodes', '0',
       '--test_driver.adaptation_steps', '1500', '--lambda_', '0.95', '--epochs',
       '50', '--safe', 'False', '--log_dir',
       'results/test_ppo_lagrangian_not_safe'
@@ -49,7 +49,7 @@ def test_safe():
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
       '--num_trajectories', '30', '--time_limit', '1000', '--vf_iters', '80',
-      '--pi_iters', '80', '--eval_trials', '1',
+      '--pi_iters', '80', '--eval_trials', '1', '--render_episodes', '0',
       '--train_driver.adaptation_steps', '30000', '--lambda_', '0.95',
       '--epochs', '100', '--safe', 'True', '--log_dir',
       'results/test_ppo_lagrangian_safe'

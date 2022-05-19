@@ -77,7 +77,6 @@ class TrajectoryBuffer:
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
       self.episode_id += batch_size
-      self.length = -1
     self.length += 1
 
   def dump(
@@ -86,16 +85,16 @@ class TrajectoryBuffer:
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
     """
+    o = self.observation[:, :self.episode_id, :self.length + 1]
+    a = self.action[:, :self.episode_id, :self.length]
+    r = self.reward[:, :self.episode_id, :self.length]
+    c = self.cost[:, :self.episode_id, :self.length]
+    rc = self.running_cost.value
+    # Reset the on-policy running cost.
     self.length = 0
     self.episode_id = 0
     self.task_id = 0
     self._full = False
-    o = self.observation
-    a = self.action
-    r = self.reward
-    c = self.cost
-    rc = self.running_cost.value
-    # Reset the on-policy running cost.
     self.running_cost.reset()
     if self.observation.shape[0] == 1:
       o, a, r, c, rc = map(lambda x: x.squeeze(0), (o, a, r, c, rc))
