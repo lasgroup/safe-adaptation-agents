@@ -1,6 +1,7 @@
 import os
 from typing import Optional, List, Dict, Iterable, Tuple, Callable
 from types import SimpleNamespace
+from collections import defaultdict
 from functools import partial
 
 import cloudpickle
@@ -27,31 +28,37 @@ def evaluate(agent: agents.Agent, env: VectorEnv,
   return results
 
 
-def evaluation_summary(runs: List[driver.IterationSummary]) -> [Dict, Dict]:
-  all_runs = []
+def evaluation_summary(
+    runs: List[driver.IterationSummary]) -> [Dict, Dict, Dict, Dict]:
+  reward_returns = defaultdict(float)
+  cost_returns = defaultdict(float)
+  summary = defaultdict(float)
   task_vids = {}
 
   def return_(arr):
     return np.asarray(arr).sum(0).mean()
 
+  def average(old_val, new_val, i):
+    return (old_val * i + new_val) / (i + 1)
+
   for i, run in enumerate(runs):
-    all_tasks = []
     for task_name, task in run.items():
-      episode_return_ = return_([episode['reward'] for episode in task])
-      cost_return_ = return_([episode['cost'] for episode in task])
+      reward_return = return_([episode['reward'] for episode in task])
+      cost_return = return_([episode['cost'] for episode in task])
+      reward_returns[task_name] = average(reward_returns[task_name],
+                                          reward_return, i)
+      cost_returns[task_name] = average(cost_returns[task_name], cost_return, i)
+      reward_id = 'evaluation/{}/reward_return'.format(task_name)
+      cost_id = 'evaluation/{}/cost_return'.format(task_name)
+      summary[reward_id] = reward_returns[task_name]
+      summary[cost_id] = cost_returns[task_name]
       if i == 0:
         if frames := task[0].get('frames', []):
           task_vids[task_name] = frames
-      all_tasks.append((episode_return_, cost_return_))
-    all_runs.append(all_tasks)
-  total_return, total_cost = np.split(np.asarray(all_runs), 2, axis=-1)
-  return {
-      'evaluation/return': total_return.mean(),
-      'evaluation/cost_return': total_cost.mean()
-  }, task_vids
+  return summary, reward_returns, cost_returns, task_vids
 
 
-def on_episode_end(episode: driver.EpisodeSummary,
+def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
                    logger: logging.TrainingLogger, train: bool):
 
   def return_(arr):
@@ -59,12 +66,12 @@ def on_episode_end(episode: driver.EpisodeSummary,
 
   episode_return = return_(episode['reward'])
   cost_return = return_(episode['cost'])
-  print("\nReward return: {} -- Cost return: {}".format(episode_return,
-                                                        cost_return))
+  print("\ntask: {} / reward return: {:.4f} / cost return: {:.4f}".format(
+      task_name, episode_return, cost_return))
   if train:
     summary = {
-        'training/episode_return': episode_return,
-        'training/episode_cost_return': cost_return
+        'training/{}/episode_return'.format(task_name): episode_return,
+        'training/{}/episode_cost_return'.format(task_name): cost_return
     }
     logger.log_summary(summary)
     logger.step += np.asarray(episode['reward']).size
@@ -126,7 +133,7 @@ class Trainer:
         **config.test_driver,
         on_episode_end=partial(on_episode_end, train=False, logger=logger),
         render_episodes=config.render_episodes)
-    objective, cost = 0, 0
+    objective, constraint = defaultdict(float), defaultdict(float)
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
       train_driver.run(agent, env, self.tasks(train=True), True)
@@ -134,9 +141,13 @@ class Trainer:
         print('Evaluating...')
         results = evaluate(agent, env, self.tasks(train=False), test_driver,
                            config.eval_trials)
-        summary, videos = evaluation_summary(results)
-        objective = max(objective, summary['evaluation/return'])
-        cost = min(cost, summary['evaluation/cost_return'])
+        summary, reward_returns, cost_returns, videos = evaluation_summary(
+            results)
+        for (_, reward), (task_name, cost), (_, video) in zip(reward_returns.items(),
+                                                  cost_returns.items(),
+                                                  videos.items()):
+          objective[task_name] = max(objective[task_name], reward)
+          constraint[task_name] = min(constraint[task_name], cost)
         logger.log_summary(summary, epoch)
         for task_name, video in videos.items():
           logger.log_video(
@@ -147,7 +158,7 @@ class Trainer:
       state_writer.write(self.state)
     state_writer.close()
     logger.flush()
-    return objective, cost
+    return objective, constraint
 
   def get_env_random_state(self):
     rs = [

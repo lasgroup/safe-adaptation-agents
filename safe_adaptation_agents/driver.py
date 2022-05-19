@@ -1,3 +1,4 @@
+from functools import partial
 from itertools import tee
 
 from collections import defaultdict
@@ -27,30 +28,30 @@ def interact(agent: Agent,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
   step = 0
-  pbar = tqdm(total=steps, leave=True, position=0)
   episodes = [defaultdict(list, {'observation': [observations]})]
-  while step < steps:
-    if render_episodes:
-      frames = environment.render(render_mode)
-      episodes[-1]['frames'].append(frames)
-    actions = agent(observations, train, adapt)
-    next_observations, rewards, dones, infos = environment.step(actions)
-    costs = np.array([info.get('cost', 0) for info in infos])
-    transition = Transition(observations, next_observations, actions, rewards,
-                            costs, dones, infos)
-    episodes[-1] = _append(transition, episodes[-1])
-    agent.observe(transition, train, adapt)
-    observations = next_observations
-    if transition.last:
-      if on_episode_end:
-        on_episode_end(episodes[-1])
-      episodes.append(defaultdict(list))
-      observations = environment.reset()
-    transition_steps = sum(transition.steps)
-    step += transition_steps
-    pbar.update(transition_steps)
-  if not episodes[-1] or len(episodes[-1]['reward']) == 1:
-    episodes.pop()
+  with tqdm(total=steps, leave=True, position=0) as pbar:
+    while step < steps:
+      if render_episodes:
+        frames = environment.render(render_mode)
+        episodes[-1]['frames'].append(frames)
+      actions = agent(observations, train, adapt)
+      next_observations, rewards, dones, infos = environment.step(actions)
+      costs = np.array([info.get('cost', 0) for info in infos])
+      transition = Transition(observations, next_observations, actions, rewards,
+                              costs, dones, infos)
+      episodes[-1] = _append(transition, episodes[-1])
+      agent.observe(transition, train, adapt)
+      observations = next_observations
+      if transition.last:
+        if on_episode_end:
+          on_episode_end(episodes[-1])
+        observations = environment.reset()
+        episodes.append(defaultdict(list, {'observation': [observations]}))
+      transition_steps = sum(transition.steps)
+      step += transition_steps
+      pbar.update(transition_steps)
+    if not episodes[-1] or len(episodes[-1]['reward']) == 0:
+      episodes.pop()
   return agent, episodes
 
 
@@ -70,7 +71,7 @@ class Driver:
                adaptation_steps: int,
                query_steps: int,
                expose_task_id: bool = False,
-               on_episode_end: Optional[Callable[[EpisodeSummary],
+               on_episode_end: Optional[Callable[[str, EpisodeSummary],
                                                  None]] = None,
                render_episodes: int = 0,
                render_mode: str = 'rgb_array'):
@@ -95,7 +96,7 @@ class Driver:
           self.adaptation_steps,
           train=train,
           adapt=True,
-          on_episode_end=self.episode_callback,
+          on_episode_end=partial(self.episode_callback, task_name=task_name),
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_adaptation_episodes[task_name] = adaptation_episodes
@@ -108,7 +109,7 @@ class Driver:
           self.query_steps,
           train=train,
           adapt=False,
-          on_episode_end=self.episode_callback,
+          on_episode_end=partial(self.episode_callback, task_name=task_name),
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_query_episodes[task_name] = query_episodes
