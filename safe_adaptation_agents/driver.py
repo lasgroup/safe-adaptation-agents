@@ -49,7 +49,7 @@ def interact(agent: Agent,
     transition_steps = sum(transition.steps)
     step += transition_steps
     pbar.update(transition_steps)
-  if not episodes[-1]:
+  if not episodes[-1] or len(episodes[-1]['reward']) == 1:
     episodes.pop()
   return agent, episodes
 

@@ -22,7 +22,7 @@ defaults:
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 30000, query_steps: 0}
-  test_driver: {adaptation_steps: 10000, query_steps: 0}
+  test_driver: {adaptation_steps: 0, query_steps: 10000}
   eval_trials: 1
 
 
@@ -55,3 +55,25 @@ ppo_lagrangian:
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
+
+maml_ppo_lagrangian:
+  entropy_regularization: 0.
+  vf_iters: 80
+  pi_iters: 80
+  actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
+  discount: 0.99
+  lambda_: 0.97
+  cost_discount: 0.99
+  num_trajectories: 30
+  query_num_trajectories: 15
+  policy_lr: 0.1
+  lagrangian_lr: 1e-3
+  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
+  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  clip_ratio: 0.2
+  kl_margin: 1.2
+  target_kl: 0.01
+  initial_lagrangian: 1.
+
