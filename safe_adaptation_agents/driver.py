@@ -29,7 +29,7 @@ def interact(agent: Agent,
   observations = environment.reset()
   step = 0
   episodes = [defaultdict(list, {'observation': [observations]})]
-  with tqdm(total=steps, leave=True, position=0) as pbar:
+  with tqdm(total=steps) as pbar:
     while step < steps:
       if render_episodes:
         frames = environment.render(render_mode)
