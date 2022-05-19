@@ -10,7 +10,6 @@ import numpy as np
 from gym.vector import VectorEnv
 from gym import Env
 from gym.spaces import Space
-from gym.utils import seeding
 
 from safe_adaptation_gym import benchmark
 from safe_adaptation_gym import tasks as sagt
@@ -41,7 +40,8 @@ def evaluation_summary(runs: List[driver.IterationSummary]) -> [Dict, Dict]:
       episode_return_ = return_([episode['reward'] for episode in task])
       cost_return_ = return_([episode['cost'] for episode in task])
       if i == 0:
-        task_vids[task_name] = task[0].get('frames', [])
+        if frames := task[0].get('frames', []):
+          task_vids[task_name] = frames
       all_tasks.append((episode_return_, cost_return_))
     all_runs.append(all_tasks)
   total_return, total_cost = np.split(np.asarray(all_runs), 2, axis=-1)
