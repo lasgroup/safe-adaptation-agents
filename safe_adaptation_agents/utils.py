@@ -1,6 +1,7 @@
 from typing import Callable, Tuple, Union, Any, Dict, NamedTuple
 
 import haiku as hk
+import jax
 import jax.numpy as jnp
 import jmp
 import optax
@@ -71,3 +72,10 @@ def discounted_cumsum(x: jnp.ndarray, discount: float) -> jnp.ndarray:
   scales = jnp.cumprod(jnp.ones_like(x) * discount) / discount
   # Flip scales since jnp.convolve flips it as default.
   return jnp.convolve(x, scales[::-1])[-x.shape[0]:]
+
+
+def gradient_decent(grads: Any, params: hk.Params, lr: float):
+  """
+  Performs one step of gradient decent.
+  """
+  return jax.tree_map(lambda p, g: p - lr * g, params, grads)

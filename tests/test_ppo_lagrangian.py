@@ -48,9 +48,9 @@ def test_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
-      '--num_trajectories', '30', '--time_limit', '1000', '--vf_iters', '80',
-      '--pi_iters', '80', '--eval_trials', '1', '--render_episodes', '0',
-      '--train_driver.adaptation_steps', '30000', '--lambda_', '0.95',
+      '--num_trajectories', '5', '--time_limit', '1000', '--vf_iters', '80',
+      '--pi_iters', '80', '--eval_trials', '0', '--render_episodes', '0',
+      '--train_driver.adaptation_steps', '10000', '--lambda_', '0.95',
       '--epochs', '100', '--safe', 'True', '--log_dir',
       'results/test_ppo_lagrangian_safe'
   ])
@@ -61,6 +61,6 @@ def test_safe():
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
-    objective, cost = trainer.train()
-  assert objective > 14.
-  assert cost < 25.
+    objective, constraint = trainer.train()
+  assert objective[config.task] > 5.
+  assert constraint[config.task] < config.cost_limit

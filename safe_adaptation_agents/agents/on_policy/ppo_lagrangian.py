@@ -37,19 +37,16 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
                                               self.safety_critic.params,
                                               observation, reward, cost)
     if self.safe:
+      running_cost = cost_return.sum(1).mean()
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
-          self.lagrangian.state, running_cost, self.config.cost_limit)
+          self.lagrangian.state, running_cost)
       lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
     else:
       lagrangian = 0.
       lagrangian_report = {}
     self.actor.state, actor_report = self.actor_update_step(
-        self.actor.state,
-        observation[:, :-1],
-        action=action,
-        advantage=advantage,
-        lagrangian=lagrangian,
-        cost_advantage=cost_advantage)
+        self.actor.state, observation[:, :-1], action, advantage,
+        cost_advantage, lagrangian)
     self.critic.state, critic_report = self.critic_update_step(
         self.critic.state, observation[:, :-1], return_)
     if self.safe:
@@ -60,11 +57,11 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, state: LearningState, *args,
-                        **kwargs) -> [LearningState, dict]:
-    observation, *_ = args
+  def actor_update_step(self, state: LearningState,
+                        *args) -> [LearningState, dict]:
+    observation, action, advantage, cost_advantage, lagrangian = args
     old_pi = self.actor.apply(state.params, observation)
-    kwargs['old_pi_logprob'] = old_pi.log_prob(kwargs['action'])
+    old_pi_logprob = old_pi.log_prob(action)
 
     def cond(val):
       iter_, _, info = val
@@ -77,8 +74,9 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
 
     def body(val):
       iter_, actor_state, _ = val
-      loss, grads = jax.value_and_grad(self.policy_loss)(actor_state.params,
-                                                         *args, **kwargs)
+      loss, grads = jax.value_and_grad(
+          self.policy_loss)(actor_state.params, observation, action, advantage,
+                            cost_advantage, lagrangian, old_pi_logprob)
       new_actor_state = self.actor.grad_step(grads, actor_state)
       pi = self.actor.apply(actor_state.params, observation)
       kl_d = old_pi.kl_divergence(pi).mean()
@@ -100,12 +98,12 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     info['agent/actor/update_iters'] = iters
     return new_actor_state, info
 
-  def policy_loss(self, params: hk.Params, *args, **kwargs) -> float:
-    observation, *_ = args
+  def policy_loss(self, params: hk.Params, *args) -> float:
+    (observation, action, advantage, cost_advantage, lagrangian,
+     old_pi_logprob) = args
     pi = self.actor.apply(params, observation)
-    log_prob = pi.log_prob(kwargs['action'])
-    ratio = jnp.exp(log_prob - kwargs['old_pi_logprob'])
-    advantage = kwargs['advantage']
+    log_prob = pi.log_prob(action)
+    ratio = jnp.exp(log_prob - old_pi_logprob)
     min_adv = jnp.where(advantage > 0.,
                         (1. + self.config.clip_ratio) * advantage,
                         (1. - self.config.clip_ratio) * advantage)
@@ -116,18 +114,18 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
       # https: // github.com / openai / safety - starter - agents / blob / 4151
       # a283967520ee000f03b3a79bf35262ff3509 / safe_rl / pg / run_agent.py  #
       # L178
-      lagrangian = kwargs['lagrangian']
-      objective -= lagrangian * ratio * kwargs['cost_advantage']
+      objective -= lagrangian * ratio * cost_advantage
       objective /= (1. + lagrangian)
     return -objective.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def lagrangian_update_step(self, lagrangian: LearningState,
-                             running_cost: jnp.ndarray,
-                             cost_limit: float) -> [LearningState, dict]:
+  def lagrangian_update_step(
+      self, lagrangian: LearningState,
+      running_cost: jnp.ndarray) -> [LearningState, dict]:
 
     def loss(params):
-      return -(self.lagrangian.apply(params) * (running_cost - cost_limit))[0]
+      return -(self.lagrangian.apply(params) *
+               (running_cost - self.config.cost_limit))[0]
 
     loss, grad = jax.value_and_grad(loss)(lagrangian.params)
     new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)

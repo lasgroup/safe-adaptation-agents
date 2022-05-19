@@ -111,7 +111,7 @@ class VanillaPolicyGrandients(Agent):
         'agent/actor/entropy': entropy
     }
 
-  def policy_loss(self, params: hk.Params, *args, **kwargs):
+  def policy_loss(self, params: hk.Params, *args):
     observation, actions, advantage = args
     pi = self.actor.apply(params, observation)
     objective = (

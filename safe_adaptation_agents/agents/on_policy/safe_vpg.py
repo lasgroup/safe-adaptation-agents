@@ -41,7 +41,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
 
   @functools.partial(jax.jit, static_argnums=0)
   def safe_critic_update_step(
-      self, critic_state: LearningState, observation: jnp.ndarray,
+      self, state: LearningState, observation: jnp.ndarray,
       cost_return: jnp.ndarray) -> [LearningState, dict]:
 
     def update(critic_state: LearningState):
@@ -53,7 +53,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
           'agent/safety_critic/grad': optax.global_norm(grads)
       }
 
-    return jax.lax.scan(lambda state, _: update(state), critic_state,
+    return jax.lax.scan(lambda state, _: update(state), state,
                         jnp.arange(self.config.vf_iters))
 
   @abc.abstractmethod
