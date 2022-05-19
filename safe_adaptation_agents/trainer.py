@@ -37,7 +37,7 @@ def evaluation_summary(
   task_vids = {}
 
   def return_(arr):
-    return np.asarray(arr).sum(0).mean()
+    return np.asarray(arr).sum(1).mean()
 
   def average(old_val, new_val, i):
     return (old_val * i + new_val) / (i + 1)

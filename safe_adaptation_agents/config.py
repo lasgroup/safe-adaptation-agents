@@ -31,7 +31,7 @@ def resolve_agent(remaining, config_names, configs):
       if 'agent' in configs[name]:
         agent_name = configs[name]['agent']
         return configs[agent_name]
-  raise ValueError('No agent provided')
+  return 'ppo_lagrangian'
 
 
 # Acknowledgement: https://github.com/danijar

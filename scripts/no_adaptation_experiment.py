@@ -16,12 +16,7 @@ def make_env(config):
 
 
 def main():
-  config = options.load_config([
-      '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
-      '--num_trajectories', '30', '--vf_iters', '80', '--pi_iters', '80',
-      '--eval_trials', '0', 'train_driver.adaptation_steps', '30000',
-      '--epochs', '334'
-  ])
+  config = options.load_config()
   if not config.jit:
     from jax.config import config as jax_config
     jax_config.update('jax_disable_jit', True)
