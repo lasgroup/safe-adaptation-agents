@@ -85,10 +85,10 @@ class TrajectoryBuffer:
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
     """
-    o = self.observation[:, :self.episode_id, :self.length + 1]
-    a = self.action[:, :self.episode_id, :self.length]
-    r = self.reward[:, :self.episode_id, :self.length]
-    c = self.cost[:, :self.episode_id, :self.length]
+    o = self.observation[:, :, :self.length + 1]
+    a = self.action[:, :, :self.length]
+    r = self.reward[:, :, :self.length]
+    c = self.cost[:, :, :self.length]
     rc = self.running_cost.value
     # Reset the on-policy running cost.
     self.length = 0
@@ -102,7 +102,7 @@ class TrajectoryBuffer:
 
   @property
   def full(self):
-    return self._full or self.length == self.reward.shape[2]
+    return self._full
 
 
 @dataclass
