@@ -64,6 +64,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
   def observe_task_id(self, task_id: Optional[str] = None):
     self.task_id = task_id if task_id is not None else self.task_id + 1
+    self.buffer.set_task(self.task_id)
+    self.adaptation_buffer.set_task(self.task_id)
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
