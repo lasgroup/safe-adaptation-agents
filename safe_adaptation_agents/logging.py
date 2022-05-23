@@ -21,7 +21,7 @@ from tensorflow import metrics
 class TrainingLogger:
 
   def __init__(self, log_dir):
-    self._writer = SummaryWriter(log_dir)
+    self._writer = SummaryWriter(log_dir, flush_secs=60)
     self._metrics = defaultdict(metrics.Mean)
     self.step = 0
     self.log_dir = log_dir
