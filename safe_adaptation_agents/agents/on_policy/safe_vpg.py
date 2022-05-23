@@ -1,6 +1,4 @@
 import abc
-from abc import ABC
-from typing import Optional
 from types import SimpleNamespace
 import functools
 
@@ -40,7 +38,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
     """
 
   @functools.partial(jax.jit, static_argnums=0)
-  def safe_critic_update_step(
+  def update_safety_critic(
       self, state: LearningState, observation: jnp.ndarray,
       cost_return: jnp.ndarray) -> [LearningState, dict]:
 

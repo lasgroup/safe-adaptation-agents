@@ -18,13 +18,13 @@ defaults:
   jit: True
   precision: 32
   parallel_envs: 5
+  task_batch_size: 16
 
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 30000, query_steps: 0}
   test_driver: {adaptation_steps: 0, query_steps: 10000}
   eval_trials: 1
-
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
@@ -66,7 +66,7 @@ maml_ppo_lagrangian:
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 30
-  query_num_trajectories: 15
+  num_query_trajectories: 15
   policy_lr: 0.1
   lagrangian_lr: 1e-3
   actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}

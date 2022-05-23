@@ -44,21 +44,21 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     else:
       lagrangian = 0.
       lagrangian_report = {}
-    self.actor.state, actor_report = self.actor_update_step(
+    self.actor.state, actor_report = self.update_actor(
         self.actor.state, observation[:, :-1], action, advantage,
         cost_advantage, lagrangian)
-    self.critic.state, critic_report = self.critic_update_step(
+    self.critic.state, critic_report = self.update_critic(
         self.critic.state, observation[:, :-1], return_)
     if self.safe:
-      self.safety_critic.state, safety_report = self.safe_critic_update_step(
+      self.safety_critic.state, safety_report = self.update_safety_critic(
           self.safety_critic.state, observation[:, :-1], cost_return)
       critic_report.update({**safety_report, **lagrangian_report})
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, state: LearningState,
-                        *args) -> [LearningState, dict]:
+  def update_actor(self, state: LearningState,
+                   *args) -> [LearningState, dict]:
     observation, action, advantage, cost_advantage, lagrangian = args
     old_pi = self.actor.apply(state.params, observation)
     old_pi_logprob = old_pi.log_prob(action)

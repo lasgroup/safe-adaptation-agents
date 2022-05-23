@@ -72,17 +72,17 @@ class VanillaPolicyGrandients(Agent):
   def train(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, _, __):
     advantage, return_ = self.evaluate(self.critic.params, observation, reward)
-    self.actor.state, actor_report = self.actor_update_step(
+    self.actor.state, actor_report = self.update_actor(
         self.actor.state, observation[:, :-1], action, advantage)
     (self.critic.state,
-     critic_report) = self.critic_update_step(self.critic.state,
+     critic_report) = self.update_critic(self.critic.state,
                                               observation[:, :-1], return_)
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def critic_update_step(self, state: LearningState, observation: jnp.ndarray,
-                         return_: jnp.ndarray) -> [LearningState, dict]:
+  def update_critic(self, state: LearningState, observation: jnp.ndarray,
+                    return_: jnp.ndarray) -> [LearningState, dict]:
 
     def update(critic_state: LearningState):
       loss, grads = jax.value_and_grad(self.critic_loss)(critic_state.params,
@@ -97,8 +97,8 @@ class VanillaPolicyGrandients(Agent):
                         jnp.arange(self.config.vf_iters))
 
   @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, state: LearningState, *args,
-                        **kwargs) -> [LearningState, dict]:
+  def update_actor(self, state: LearningState, *args,
+                   **kwargs) -> [LearningState, dict]:
     observation, *_ = args
     loss, grads = jax.value_and_grad(self.policy_loss)(state.params,
                                                        *args, **kwargs)
