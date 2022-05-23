@@ -44,7 +44,7 @@ class Learner:
   def grad_step(self, grads, state: LearningState):
     params, opt_state = state
     grads = self.precision.cast_to_param(grads)
-    updates, new_opt_state = self.optimizer.update(grads, opt_state)
+    updates, new_opt_state = self.optimizer.update(grads, opt_state, params)
     new_params = optax.apply_updates(params, updates)
     grads_finite = jmp.all_finite(grads)
     new_params, new_opt_state = jmp.select_tree(grads_finite,

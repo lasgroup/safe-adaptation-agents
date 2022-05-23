@@ -31,9 +31,9 @@ def test_not_safe():
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
-    objective, cost = trainer.train()
-  assert objective > 185.
-  assert cost == 0.
+    objective, constraint = trainer.train()
+  assert objective[config.task] > 185.
+  assert constraint[config.task] == 0.
 
 
 @pytest.mark.safe
@@ -61,6 +61,6 @@ def test_safe():
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
-    objective, cost = trainer.train()
-  assert objective > 14.
-  assert cost < 25.
+    objective, constraint = trainer.train()
+  assert objective[config.task] > 10.
+  assert constraint[config.task] < config.cost_limit
