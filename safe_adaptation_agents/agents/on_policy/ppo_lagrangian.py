@@ -31,22 +31,24 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
         utils.get_mixed_precision_policy(config.precision))
 
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
+            reward: np.ndarray, cost: np.ndarray):
     (advantage, return_, cost_advantage,
      cost_return) = self.evaluate_with_safety(self.critic.params,
                                               self.safety_critic.params,
                                               observation, reward, cost)
     if self.safe:
-      running_cost = cost_return.sum(1).mean()
+      running_cost = cost.sum(1).mean()
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
           self.lagrangian.state, running_cost)
       lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
     else:
       lagrangian = 0.
       lagrangian_report = {}
-    self.actor.state, actor_report = self.update_actor(
-        self.actor.state, observation[:, :-1], action, advantage,
-        cost_advantage, lagrangian)
+    self.actor.state, actor_report = self.update_actor(self.actor.state,
+                                                       observation[:, :-1],
+                                                       action, advantage,
+                                                       cost_advantage,
+                                                       lagrangian)
     self.critic.state, critic_report = self.update_critic(
         self.critic.state, observation[:, :-1], return_)
     if self.safe:
@@ -57,8 +59,7 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def update_actor(self, state: LearningState,
-                   *args) -> [LearningState, dict]:
+  def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, action, advantage, cost_advantage, lagrangian = args
     old_pi = self.actor.apply(state.params, observation)
     old_pi_logprob = old_pi.log_prob(action)

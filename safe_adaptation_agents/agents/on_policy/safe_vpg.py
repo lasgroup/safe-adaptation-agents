@@ -32,7 +32,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
 
   @abc.abstractmethod
   def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
+            reward: np.ndarray, cost: np.ndarray):
     """
     Implements a training loop for safe policy-grandients algorithm.
     """

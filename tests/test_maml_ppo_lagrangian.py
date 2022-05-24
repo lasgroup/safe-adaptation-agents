@@ -40,15 +40,6 @@ def agent_env_config():
   return agent, env, config
 
 
-def test_adaptation_buffer_empty(agent_env_config):
-  agent, env, config = agent_env_config
-  tasks_gen = benchmark.make(
-      'domain_randomization', batch_size=config.task_batch_size)
-  train_driver = driver.Driver(**config.train_driver)
-  train_driver.run(agent, env, tasks_gen.train_tasks, True)
-  assert not agent.adaptation_buffer.full
-
-
 def test_adapt(agent_env_config):
   agent, env, config = agent_env_config
   obs = np.ones((
@@ -63,6 +54,6 @@ def test_adapt(agent_env_config):
       (config.task_batch_size, config.num_trajectories, config.time_limit))
   cost = rs.random(
       (config.task_batch_size, config.num_trajectories, config.time_limit))
-  running_costs = rs.random((config.task_batch_size,))
-  agent.adapt(obs, act, reward, cost, running_costs)
-  assert len(agent.pi_posterior) == config.task_batch_size
+  agent.adapt(obs, act, reward, cost)
+  assert all(
+      task_posterior is not None for task_posterior in agent.pi_posterior)

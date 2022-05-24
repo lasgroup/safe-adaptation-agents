@@ -126,9 +126,17 @@ class Trainer:
     epoch, logger, state_writer = self.epoch, self.logger, self.state_writer
     train_driver = driver.Driver(
         **config.train_driver,
+        time_limit=config.time_limit,
+        observation_shape=env.observation_space.shape,
+        action_shape=env.action_space.shape,
+        task_batch_size=config.task_batch_size,
         on_episode_end=partial(on_episode_end, train=True, logger=logger))
     test_driver = driver.Driver(
         **config.test_driver,
+        time_limit=config.time_limit,
+        observation_shape=env.observation_space.shape,
+        action_shape=env.action_space.shape,
+        task_batch_size=config.task_batch_size,
         on_episode_end=partial(on_episode_end, train=False, logger=logger),
         render_episodes=config.render_episodes)
     objective, constraint = defaultdict(float), defaultdict(float)

@@ -1,8 +1,7 @@
-import pytest
-
 from safe_adaptation_agents import episodic_async_env
 
 NUM_ENVS = 5
+
 
 def make_env():
   import safe_adaptation_gym
