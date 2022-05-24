@@ -74,7 +74,7 @@ def discounted_cumsum(x: jnp.ndarray, discount: float) -> jnp.ndarray:
   return jnp.convolve(x, scales[::-1])[-x.shape[0]:]
 
 
-def gradient_decent(grads: Any, params: hk.Params, lr: float):
+def gradient_descent(grads: Any, params: hk.Params, lr: float):
   """
   Performs one step of gradient decent.
   """

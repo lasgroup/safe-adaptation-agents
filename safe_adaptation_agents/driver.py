@@ -87,7 +87,11 @@ class Driver:
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
+    print('Collecting support data...')
     for task_name, task in adaptation_tasks:
+      callback = partial(
+          self.episode_callback,
+          task_name=task_name) if self.episode_callback is not None else None
       env.reset(options={'task': task})
       agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, adaptation_episodes = interact(
@@ -96,11 +100,15 @@ class Driver:
           self.adaptation_steps,
           train=train,
           adapt=True,
-          on_episode_end=partial(self.episode_callback, task_name=task_name),
+          on_episode_end=callback,
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_adaptation_episodes[task_name] = adaptation_episodes
+    print('Collecting query data...')
     for task_name, task in query_tasks:
+      callback = partial(
+          self.episode_callback,
+          task_name=task_name) if self.episode_callback is not None else None
       env.reset(options={'task': task})
       agent.observe_task_id(task_name if self.expose_task_id else None)
       agent, query_episodes = interact(
@@ -109,7 +117,7 @@ class Driver:
           self.query_steps,
           train=train,
           adapt=False,
-          on_episode_end=partial(self.episode_callback, task_name=task_name),
+          on_episode_end=callback,
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_query_episodes[task_name] = query_episodes

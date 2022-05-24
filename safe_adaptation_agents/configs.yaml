@@ -80,4 +80,7 @@ maml_ppo_lagrangian:
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
+  init_lagrangian_inner_lr: 0.1
+  init_policy_inner_lr: 0.1
+  inner_steps: 1
 

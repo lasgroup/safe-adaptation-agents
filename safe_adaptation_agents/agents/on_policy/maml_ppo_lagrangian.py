@@ -42,13 +42,16 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     self.task_id = 0
     self.lagrangian_inner_lr = self.config.init_lagrangian_inner_lr
     self.policy_inner_lr = self.config.init_policy_inner_lr
-    # A dictionary mapping task_id to policy parameters
-    self.pi_posterior = dict()
+    # Map task id to it's corresponding fine-tuned/adapted parameters.
+    self.pi_posterior = [None] * self.config.task_batch_size
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
-    if self.buffer.full and train:
+    if train and self.buffer.full:
+      assert adapt, ('Should train (and dump the trajectory buffer) only after '
+                     'finished querying.')
       self.train(*self.buffer.dump())
+      self.task_id = 0
     if self.adaptation_buffer.full:
       assert not adapt, 'Should not adapt while collecting adaptation data.'
       self.adapt(*self.adaptation_buffer.dump())
@@ -63,9 +66,9 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       self.adaptation_buffer.add(transition)
 
   def observe_task_id(self, task_id: Optional[str] = None):
-    self.task_id = task_id if task_id is not None else self.task_id + 1
     self.buffer.set_task(self.task_id)
     self.adaptation_buffer.set_task(self.task_id)
+    self.task_id += 1
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, running_cost: np.ndarray):
@@ -73,21 +76,23 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     return_, cost_return = self.returns(reward, cost)
     critic_states, _ = self.update_critic(self.critic.state,
                                           observation[:, :, :-1], return_)
-    safety_critic_states, _ = self.update_safety_critic(
-        self.safety_critic.state, observation[:, :, :-1], cost_return)
+    if self.safe:
+      safety_critic_states, _ = self.update_safety_critic(
+          self.safety_critic.state, observation[:, :, :-1], cost_return)
+    else:
+      safety_critic_states = critic_states
     # Evaluate with the task specific value functions.
     (advantage, return_, cost_advantage,
      cost_return) = self.evaluate_with_safety(critic_states.params,
                                               safety_critic_states.params,
                                               observation, reward, cost)
-    _, policy_posteriors = self.adaptation_step(self.lagrangian.params,
-                                                self.actor.params,
-                                                self.lagrangian_inner_lr,
-                                                self.policy_inner_lr,
-                                                observation, action, advantage,
-                                                cost_advantage, running_cost)
-    # pi_posterior is a dict that maps a task id to policy parameters.
-    self.pi_posterior = '123'
+    _, pi_posteriors = self.adaptation_step(
+        self.lagrangian.params, self.actor.params, self.lagrangian_inner_lr,
+        self.policy_inner_lr, observation[:, :, :-1], action, advantage,
+        cost_advantage, running_cost)
+    for i in range(self.config.task_batch_size):
+      self.pi_posterior[i] = jax.tree_util.tree_map(lambda node: node[i],
+                                                    pi_posteriors)
 
   @functools.partial(jax.jit, static_argnums=0)
   def adaptation_step(self, lagrangian_prior: hk.Params,
@@ -97,12 +102,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                       cost_advantage: np.ndarray,
                       running_cost: np.ndarray) -> [hk.Params, hk.Params]:
     per_task_adaptation = jax.vmap(
-        functools.partial(
-            self.task_adaptation,
-            lagrangian_prior=lagrangian_prior,
-            policy_prior=policy_prior,
-            lagrangian_lr=lagrangian_lr,
-            policy_lr=policy_lr))
+        functools.partial(self.task_adaptation, lagrangian_prior, policy_prior,
+                          lagrangian_lr, policy_lr))
     return per_task_adaptation(observation, action, advantage, cost_advantage,
                                running_cost)
 
@@ -115,6 +116,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     """
     Finds policy's and lagrangian MAP paramters for a single task.
     """
+    old_pi = self.actor.apply(policy_prior, observation)
+    old_pi_logprob = old_pi.log_prob(action)
 
     def inner_step(prior: Tuple[hk.Params, hk.Params], _):
       lagrangian_prior, policy_prior = prior
@@ -122,25 +125,26 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         lagrange_grads = jax.grad(lambda prior: self.lagrangian.apply(prior) *
                                   (running_cost - self.config.cost_limit))(
                                       lagrangian_prior)
-        lagrangian_posterior = utils.gradient_decent(lagrange_grads,
-                                                     lagrangian_prior,
-                                                     lagrangian_lr)
+        lagrangian_posterior = utils.gradient_descent(lagrange_grads,
+                                                      lagrangian_prior,
+                                                      lagrangian_lr)
         lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
       else:
         lagrangian = 0.
         lagrangian_posterior = lagrangian_prior
-      old_pi = self.actor.apply(policy_prior, observation)
-      old_pi_logprob = old_pi.log_prob(action)
-      policy_loss = jax.vmap(self.policy_loss, [None, 0, 0, 0, 0])
-      policy_grads = jax.grad(policy_loss)(policy_prior, observation, action,
-                                           advantage, cost_advantage,
-                                           lagrangian, old_pi_logprob)
-      policy_posterior = utils.gradient_decent(policy_grads, policy_prior,
-                                               policy_lr)
-      return lagrangian_posterior, policy_posterior
+      policy_grads = jax.grad(self.policy_loss)(policy_prior, observation,
+                                                action, advantage,
+                                                cost_advantage, lagrangian,
+                                                old_pi_logprob)
+      policy_posterior = utils.gradient_descent(policy_grads, policy_prior,
+                                                policy_lr)
+      return (lagrangian_posterior, policy_posterior), None
 
-    return jax.lax.scan(inner_step, (lagrangian_prior, policy_prior),
-                        jnp.arange(self.config.inner_steps))
+    (lagrangian_posteriors,
+     policy_posteriors), _ = jax.lax.scan(inner_step,
+                                          (lagrangian_prior, policy_prior),
+                                          jnp.arange(self.config.inner_steps))
+    return lagrangian_posteriors, policy_posteriors
 
   @functools.partial(jax.jit, static_argnums=0)
   def evaluate_with_safety(
@@ -155,7 +159,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def update_critic(self, state: LearningState, observation: jnp.ndarray,
                     return_: jnp.ndarray) -> [LearningState, dict]:
     partial = functools.partial(
-        super(MamlPpoLagrangian, self).update_critic, state=state)
+        super(MamlPpoLagrangian, self).update_critic, state)
     # vmap over the task axis.
     return jax.vmap(partial)(observation, return_)
 
@@ -163,7 +167,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def update_safety_critic(self, state: LearningState, observation: jnp.ndarray,
                            cost_return: jnp.ndarray) -> [LearningState, dict]:
     partial = functools.partial(
-        super(MamlPpoLagrangian, self).update_safety_critic, state=state)
+        super(MamlPpoLagrangian, self).update_safety_critic, state)
     # vmap over the task axis.
     return jax.vmap(partial)(observation, cost_return)
 
@@ -175,13 +179,6 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
   @property
   def task_posterior_params(self):
-    if self.pi_posterior:
+    if None in self.pi_posterior:
       return self.actor.params
     return self.pi_posterior[self.task_id]
-
-    def partition_cond():
-      self.task_id
-      self.pi_posterior
-      pass
-
-    return hk.data_structures.partition(partition_cond)
