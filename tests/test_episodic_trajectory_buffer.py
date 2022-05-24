@@ -6,8 +6,7 @@ import numpy as np
 
 from gym.wrappers import TimeLimit
 
-import safe_adaptation_gym
-
+from safe_adaptation_agents.episodic_async_env import EpisodicAsync
 from safe_adaptation_agents.agents import Agent, Transition
 from safe_adaptation_agents.episodic_trajectory_buffer import (
     EpisodicTrajectoryBuffer)
@@ -33,11 +32,21 @@ class DummyAgent(Agent):
   def observe_task_id(self, task_id: Optional[int] = None):
     self.buffer.set_task(task_id)
 
+  def adapt(self, observation: np.ndarray, action: np.ndarray,
+            reward: np.ndarray, cost: np.ndarray):
+    pass
+
 
 @pytest.fixture
 def buffer_and_env():
-  env = TimeLimit(
-      safe_adaptation_gym.make('go_to_goal', 'point'), EPISODE_LENGTH)
+
+  def make_env():
+    import safe_adaptation_gym
+    env = TimeLimit(
+        safe_adaptation_gym.make('point', 'go_to_goal'), EPISODE_LENGTH)
+    return env
+
+  env = EpisodicAsync(make_env, 1)
   return EpisodicTrajectoryBuffer(
       2,
       EPISODE_LENGTH,
@@ -52,7 +61,7 @@ def test_fill(buffer_and_env):
   for i in range(N_TASKS):
     agent.observe_task_id(i)
     driver.interact(agent, env, EPISODE_LENGTH * 2, True)
-  observation, action, reward, cost, terminal = agent.buffer.dump()
+  observation, action, reward, cost = agent.buffer.dump()
   assert observation.shape == (N_TASKS, 2,
                                EPISODE_LENGTH + 1) + env.observation_space.shape
   # Make sure that all needed episodes were filled.

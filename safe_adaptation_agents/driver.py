@@ -23,19 +23,20 @@ def interact(agent: Agent,
              environment: VectorEnv,
              steps: int,
              train: bool,
-             trajectory_buffer: Optional[etb.EpisodicTrajectoryBuffer] = None,
+             adaptation_buffer: Optional[etb.EpisodicTrajectoryBuffer] = None,
              on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
   step = 0
   episodes = [defaultdict(list, {'observation': [observations]})]
+  adapt = adaptation_buffer is not None
   with tqdm(total=steps) as pbar:
     while step < steps:
       if render_episodes:
         frames = environment.render(render_mode)
         episodes[-1]['frames'].append(frames)
-      actions = agent(observations, train)
+      actions = agent(observations, train, adapt)
       next_observations, rewards, dones, infos = environment.step(actions)
       costs = np.array([info.get('cost', 0) for info in infos])
       transition = Transition(observations, next_observations, actions, rewards,
@@ -44,8 +45,8 @@ def interact(agent: Agent,
       if train:
         agent.observe(transition)
       # Append adaptation data if needed.
-      if trajectory_buffer is not None:
-        trajectory_buffer.add(transition)
+      if adaptation_buffer is not None:
+        adaptation_buffer.add(transition)
       observations = next_observations
       if transition.last:
         if on_episode_end:
@@ -112,7 +113,7 @@ class Driver:
           env,
           self.adaptation_steps,
           train=train,
-          trajectory_buffer=self.adaptation_buffer,
+          adaptation_buffer=self.adaptation_buffer,
           on_episode_end=callback,
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
