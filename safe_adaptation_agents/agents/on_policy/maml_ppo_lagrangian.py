@@ -181,7 +181,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
   def task_adaptation(self, lagrangian_prior: hk.Params,
                       policy_prior: hk.Params, lagrangian_lr: float,
-                      policy_lr: float, observation: jnp.ndarray,
+                      pi_lr: float, observation: jnp.ndarray,
                       action: jnp.ndarray, advantage: jnp.ndarray,
                       cost_advantage: jnp.ndarray,
                       constraint: jnp.ndarray) -> [hk.Params, hk.Params]:
@@ -194,10 +194,13 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     def grad_step(prior: Tuple[hk.Params, hk.Params], _):
       lagrangian_prior, policy_prior = prior
       if self.safe:
-        lagrange_grads = jax.grad(lambda prior: self.lagrangian.apply(prior) *
-                                  (constraint - self.config.cost_limit))(
-                                      lagrangian_prior)
-        lagrangian_posterior = utils.gradient_descent(lagrange_grads,
+
+        def lagrangian_loss(params):
+          return -(self.lagrangian.apply(params) *
+                   (constraint - self.config.cost_limit))[0]
+
+        lagrangian_grads = jax.grad(lagrangian_loss)(lagrangian_prior)
+        lagrangian_posterior = utils.gradient_descent(lagrangian_grads,
                                                       lagrangian_prior,
                                                       lagrangian_lr)
         lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
@@ -209,7 +212,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                                 cost_advantage, lagrangian,
                                                 old_pi_logprob)
       policy_posterior = utils.gradient_descent(policy_grads, policy_prior,
-                                                policy_lr)
+                                                pi_lr)
       return (lagrangian_posterior, policy_posterior), None
 
     (lagrangian_posteriors,

@@ -9,7 +9,6 @@ from safe_adaptation_agents import agents
 from safe_adaptation_agents.agents.on_policy import maml_ppo_lagrangian
 from safe_adaptation_agents import config as options
 from safe_adaptation_agents import logging
-from safe_adaptation_agents.episodic_async_env import EpisodicAsync
 from safe_adaptation_agents.trainer import Trainer
 
 
@@ -20,8 +19,8 @@ def agent_env_config():
       'maml_ppo_lagrangian', '--num_trajectories', '30', '--time_limit', '1000',
       '--vf_iters', '80', '--pi_iters', '80', '--eval_trials', '1',
       '--render_episodes', '0', '--train_driver.adaptation_steps', '1000',
-      '--train_driver.query_steps', '100', '--safe', 'False',
-      '--task_batch_size', '2', '--jit', 'True'
+      '--train_driver.query_steps', '100', '--safe', 'True',
+      '--task_batch_size', '2'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -34,7 +33,7 @@ def agent_env_config():
     env = TimeLimit(env, config.time_limit)
     return env
 
-  env = EpisodicAsync(lambda: make_env(config), config.parallel_envs)
+  env = make_env(config)
   agent: maml_ppo_lagrangian.MamlPpoLagrangian = agents.make(
       config, env.observation_space, env.action_space,
       logging.TrainingLogger(config.log_dir))
@@ -72,22 +71,22 @@ def test_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'domain_randomization', '--agent',
-      'ppo_lagrangian', '--num_trajectories', '30', '--time_limit', '1000',
-      '--vf_iters', '80', '--pi_iters', '80', '--eval_trials', '1',
-      '--render_episodes', '0', '--train_driver.adaptation_steps', '30000',
+      'maml_ppo_lagrangian', '--time_limit', '1000', '--vf_iters', '80',
+      '--pi_iters', '80', '--eval_trials', '1', '--render_episodes', '0',
       '--epochs', '334', '--safe', 'True', '--log_dir',
-      'results/test_ppo_lagrangian_safe'
+      'results/test_ppo_lagrangian_safe', '--task_batch_size', '2'
   ])
   if not config.jit:
     from jax.config import config as jax_config
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
-  task_sampler = benchmark.make('domain_randomization', batch_size=8)
+  task_sampler = benchmark.make(
+      'domain_randomization', batch_size=config.task_batch_size)
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config,
       make_agent=agents.make,
       make_env=lambda: make_env(config),
-      task_generator=task_sampler) as trainer:
+      task_sampler=task_sampler) as trainer:
     objective, constraint = trainer.train()
-  assert all(value >= 14. for value in objective.values())
+  assert np.asarray(objective.values()).mean() > 5.
   assert all(value < config.cost_limit for value in constraint.values())

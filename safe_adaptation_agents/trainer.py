@@ -87,7 +87,7 @@ class Trainer:
                    [SimpleNamespace, Space, Space, logging.TrainingLogger],
                    agents.Agent]] = None,
                agent: Optional[agents.Agent] = None,
-               task_generator: Optional[benchmark.Benchmark] = None,
+               task_sampler: Optional[benchmark.Benchmark] = None,
                start_epoch: int = 0,
                seeds: Optional[List[int]] = None):
     self.config = config
@@ -96,7 +96,7 @@ class Trainer:
     self.make_agent = make_agent
     self.agent = agent
     self.make_env = make_env
-    self.tasks_gen = task_generator
+    self.tasks_sampler = task_sampler
     self.epoch = start_epoch
     self.seeds = seeds
     self.logger = None
@@ -180,12 +180,12 @@ class Trainer:
     return rs
 
   def tasks(self, train=True):
-    if self.tasks_gen is None:
+    if self.tasks_sampler is None:
       return [(self.config.task, benchmark.TASKS[self.config.task]())]
     if train:
-      return self.tasks_gen.train_tasks
+      return self.tasks_sampler.train_tasks
     else:
-      return self.tasks_gen.test_tasks
+      return self.tasks_sampler.test_tasks
 
   @classmethod
   def from_pickle(cls, config: SimpleNamespace):
@@ -208,5 +208,5 @@ class Trainer:
         'env_rs': self.get_env_random_state(),
         'agent': self.agent,
         'epoch': self.epoch,
-        'task_gen': self.tasks_gen
+        'task_gen': self.tasks_sampler
     }

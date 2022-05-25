@@ -28,8 +28,8 @@ no_adaptation:
   task_batch_size: 1
 
 domain_randomization:
-  train_driver: {adaptation_steps: 5000, query_steps: 1000}
-  test_driver: {adaptation_steps: 5000, query_steps: 1000}
+  train_driver: {adaptation_steps: 10000, query_steps: 5000}
+  test_driver: {adaptation_steps: 10000, query_steps: 5000}
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
@@ -70,8 +70,8 @@ maml_ppo_lagrangian:
   discount: 0.99
   lambda_: 0.97
   cost_discount: 0.99
-  num_trajectories: 30
-  num_query_trajectories: 15
+  num_trajectories: 10
+  num_query_trajectories: 5
   policy_lr: 0.1
   lagrangian_lr: 1e-3
   actor_opt: {lr: 3e-4, eps: 1e-5}
