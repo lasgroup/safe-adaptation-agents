@@ -108,10 +108,11 @@ class Trainer:
     self.logger = logging.TrainingLogger(self.config.log_dir)
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs)
+    _, task = next(self.tasks())
     if self.seeds is not None:
-      self.env.reset(seed=self.seeds)
+      self.env.reset(seed=self.seeds, options={'task': task})
     else:
-      self.env.reset(seed=self.config.seed)
+      self.env.reset(seed=self.config.seed, options={'task': task})
     if self.make_agent is not None:
       self.agent = self.make_agent(self.config, self.env.observation_space,
                                    self.env.action_space, self.logger)
