@@ -43,7 +43,7 @@ def interact(agent: Agent,
                               costs, dones, infos)
       episodes[-1] = _append(transition, episodes[-1])
       if train:
-        agent.observe(transition)
+        agent.observe(transition, adapt)
       # Append adaptation data if needed.
       if adaptation_buffer is not None:
         adaptation_buffer.add(transition)
@@ -118,6 +118,8 @@ class Driver:
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_adaptation_episodes[task_name] = adaptation_episodes
+    assert self.adaptation_buffer.full, ('Adaptation buffer should be full at '
+                                         'this point')
     agent.adapt(*self.adaptation_buffer.dump())
     print('Collecting query data...')
     for task_name, task in query_tasks:

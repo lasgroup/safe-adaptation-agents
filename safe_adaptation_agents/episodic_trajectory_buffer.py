@@ -76,10 +76,9 @@ class EpisodicTrajectoryBuffer:
       if self.episode_id + batch_size == self.observation.shape[
           1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
+      else:
+        self.idx = -1
       self.episode_id += batch_size
-      assert self.idx + 1 == self.reward.shape[
-          2], 'Supports only episodic setting.'
-      self.idx = -1
     self.idx += 1
 
   def dump(self,) -> TrajectoryData:
