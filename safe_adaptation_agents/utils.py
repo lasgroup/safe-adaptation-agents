@@ -27,10 +27,10 @@ class Learner:
             optax.scale_by_adam(eps=optimizer_config.get('eps', 1 - 8)),
             optax.scale(-optimizer_config.get('lr', 1e-3))))
     self.model = model
-    if isinstance(model, chex.ArrayTree):
-      self.params = model
-    else:
+    if isinstance(model, (hk.Transformed, hk.MultiTransformed)):
       self.params = self.model.init(seed, *input_example)
+    else:
+      self.params = model
     self.opt_state = self.optimizer.init(self.params)
     self.precision = precision
 

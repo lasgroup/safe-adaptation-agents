@@ -83,6 +83,6 @@ maml_ppo_lagrangian:
   initial_lagrangian: 1.
   lagrangian_inner_lr: 0.1
   policy_inner_lr: 0.1
-  inner_lrs_opt: {lr: 1e-3}
+  inner_lr_opt: {lr: 1e-3}
   inner_steps: 1
 

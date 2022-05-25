@@ -39,7 +39,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     self.task_id = -1
     self.inner_lrs = utils.Learner(
         (self.config.lagrangian_inner_lr, self.config.policy_inner_lr),
-        next(self.rng_seq), *self.config.inner_lr_opt,
+        next(self.rng_seq), self.config.inner_lr_opt,
         utils.get_mixed_precision_policy(config.precision))
     # Map task id to it's corresponding fine-tuned/adapted parameters.
     self.pi_posterior = [None] * self.config.task_batch_size
