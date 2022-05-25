@@ -102,11 +102,9 @@ class VanillaPolicyGrandients(Agent):
                         jnp.arange(self.config.vf_iters))
 
   @functools.partial(jax.jit, static_argnums=0)
-  def update_actor(self, state: LearningState, *args,
-                   **kwargs) -> [LearningState, dict]:
+  def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, *_ = args
-    loss, grads = jax.value_and_grad(self.policy_loss)(state.params, *args,
-                                                       **kwargs)
+    loss, grads = jax.value_and_grad(self.policy_loss)(state.params, *args)
     new_actor_state = self.actor.grad_step(grads, state)
     entropy = self.actor.apply(state.params, observation).entropy().mean()
     return new_actor_state, {

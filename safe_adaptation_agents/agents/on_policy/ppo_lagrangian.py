@@ -37,9 +37,9 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
                                               self.safety_critic.params,
                                               observation, reward, cost)
     if self.safe:
-      running_cost = cost.sum(1).mean()
+      constraint = cost.sum(1).mean()
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
-          self.lagrangian.state, running_cost)
+          self.lagrangian.state, constraint)
       lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
     else:
       lagrangian = 0.
@@ -122,11 +122,11 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
   @functools.partial(jax.jit, static_argnums=0)
   def lagrangian_update_step(
       self, lagrangian: LearningState,
-      running_cost: jnp.ndarray) -> [LearningState, dict]:
+      constraint: jnp.ndarray) -> [LearningState, dict]:
 
     def loss(params):
       return -(self.lagrangian.apply(params) *
-               (running_cost - self.config.cost_limit))[0]
+               (constraint - self.config.cost_limit))[0]
 
     loss, grad = jax.value_and_grad(loss)(lagrangian.params)
     new_lagrangian_state = self.lagrangian.grad_step(grad, lagrangian)

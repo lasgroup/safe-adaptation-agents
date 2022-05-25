@@ -5,33 +5,41 @@ import jax
 import jax.numpy as jnp
 import jmp
 import optax
+import chex
 
 PRNGKey = jnp.ndarray
 
 
 class LearningState(NamedTuple):
-  params: hk.Params
+  params: Union[hk.Params, chex.ArrayTree]
   opt_state: optax.OptState
 
 
 class Learner:
 
-  def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed],
-               seed: PRNGKey, optimizer_config: Dict, precision: jmp.Policy,
+  def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed,
+                                  chex.ArrayTree], seed: PRNGKey,
+               optimizer_config: Dict, precision: jmp.Policy,
                *input_example: Any):
     self.optimizer = optax.flatten(
         optax.chain(
-            optax.clip_by_global_norm(optimizer_config['clip']),
-            optax.scale_by_adam(eps=optimizer_config['eps']),
-            optax.scale(-optimizer_config['lr'])))
+            optax.clip_by_global_norm(optimizer_config.get('clip', 100)),
+            optax.scale_by_adam(eps=optimizer_config.get('eps', 1 - 8)),
+            optax.scale(-optimizer_config.get('lr', 1e-3))))
     self.model = model
-    self.params = self.model.init(seed, *input_example)
+    if isinstance(model, chex.ArrayTree):
+      self.params = model
+    else:
+      self.params = self.model.init(seed, *input_example)
     self.opt_state = self.optimizer.init(self.params)
     self.precision = precision
 
   @property
   def apply(self) -> Union[Callable, Tuple[Callable]]:
-    return self.model.apply
+    if isinstance(self.model, (hk.Transformed, hk.MultiTransformed)):
+      return self.model.apply
+    else:
+      return lambda: self.model
 
   @property
   def state(self):

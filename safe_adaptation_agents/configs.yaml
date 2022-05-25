@@ -53,9 +53,9 @@ ppo_lagrangian:
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 30
-  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
-  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  actor_opt: {lr: 3e-4, eps: 1e-5}
+  critic_opt: {lr: 1e-3, eps: 1e-5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
@@ -74,14 +74,15 @@ maml_ppo_lagrangian:
   num_query_trajectories: 15
   policy_lr: 0.1
   lagrangian_lr: 1e-3
-  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
-  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  actor_opt: {lr: 3e-4, eps: 1e-5}
+  critic_opt: {lr: 1e-3, eps: 1e-5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
-  init_lagrangian_inner_lr: 0.1
-  init_policy_inner_lr: 0.1
+  lagrangian_inner_lr: 0.1
+  policy_inner_lr: 0.1
+  inner_lrs_opt: {lr: 1e-3}
   inner_steps: 1
 

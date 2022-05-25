@@ -2,9 +2,6 @@ import pytest
 
 import numpy as np
 
-from safe_adaptation_gym import benchmark
-
-from safe_adaptation_agents import driver
 from safe_adaptation_agents import agents
 from safe_adaptation_agents.agents.on_policy import maml_ppo_lagrangian
 from safe_adaptation_agents import config as options

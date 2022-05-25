@@ -1,4 +1,5 @@
 import abc
+from typing import NamedTuple
 from types import SimpleNamespace
 import functools
 
@@ -14,6 +15,13 @@ from safe_adaptation_agents.agents.on_policy import vpg
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
+
+
+class Evaluation(NamedTuple):
+  advantage: np.ndarray
+  return_: np.ndarray
+  cost_advantage: np.ndarray
+  cost_return: np.ndarray
 
 
 class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
@@ -38,9 +46,8 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
     """
 
   @functools.partial(jax.jit, static_argnums=0)
-  def update_safety_critic(
-      self, state: LearningState, observation: jnp.ndarray,
-      cost_return: jnp.ndarray) -> [LearningState, dict]:
+  def update_safety_critic(self, state: LearningState, observation: jnp.ndarray,
+                           cost_return: jnp.ndarray) -> [LearningState, dict]:
 
     def update(critic_state: LearningState):
       loss, grads = jax.value_and_grad(self.safety_critic_loss)(
@@ -66,14 +73,14 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
                                      observation).log_prob(return_).mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def evaluate_with_safety(
-      self, critic_params: hk.Params, safety_critic_params: hk.Params,
-      observation: jnp.ndarray, reward: jnp.ndarray, cost: jnp.ndarray
-  ) -> [jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+  def evaluate_with_safety(self, critic_params: hk.Params,
+                           safety_critic_params: hk.Params,
+                           observation: jnp.ndarray, reward: jnp.ndarray,
+                           cost: jnp.ndarray) -> Evaluation:
     advantage, return_ = self.evaluate(critic_params, observation, reward)
     if not self.safe:
-      return advantage, return_, jnp.zeros_like(advantage), jnp.zeros_like(
-          return_)
+      return Evaluation(advantage, return_, jnp.zeros_like(advantage),
+                        jnp.zeros_like(return_))
     cost_value = self.safety_critic.apply(safety_critic_params,
                                           observation).mode()
     cost_return = vpg.discounted_cumsum(cost, self.config.cost_discount)
@@ -85,7 +92,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
     # https://github.com/openai/safety-starter-agents/blob
     # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/buffer.py#L71
     cost_advantage -= cost_advantage.mean()
-    return advantage, return_, cost_advantage, cost_return
+    return Evaluation(advantage, return_, cost_advantage, cost_return)
 
   @property
   def safe(self):

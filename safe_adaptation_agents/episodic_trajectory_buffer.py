@@ -1,9 +1,15 @@
-from typing import Tuple
-from dataclasses import dataclass
+from typing import Tuple, NamedTuple
 
 import numpy as np
 
 from safe_adaptation_agents.agents import Transition
+
+
+class TrajectoryData(NamedTuple):
+  o: np.ndarray
+  a: np.ndarray
+  r: np.ndarray
+  c: np.ndarray
 
 
 class EpisodicTrajectoryBuffer:
@@ -19,27 +25,27 @@ class EpisodicTrajectoryBuffer:
     self.task_id = 0
     self._full = False
     self.observation = np.zeros(
-      (
-        n_tasks,
-        batch_size,
-        max_length + 1,
-      ) + observation_shape,
-      dtype=np.float32)
+        (
+            n_tasks,
+            batch_size,
+            max_length + 1,
+        ) + observation_shape,
+        dtype=np.float32)
     self.action = np.zeros(
-      (
+        (
+            n_tasks,
+            batch_size,
+            max_length,
+        ) + action_shape, dtype=np.float32)
+    self.reward = np.zeros((
         n_tasks,
         batch_size,
         max_length,
-      ) + action_shape, dtype=np.float32)
-    self.reward = np.zeros((
-      n_tasks,
-      batch_size,
-      max_length,
     ), dtype=np.float32)
     self.cost = np.zeros((
-      n_tasks,
-      batch_size,
-      max_length,
+        n_tasks,
+        batch_size,
+        max_length,
     ), dtype=np.float32)
 
   def set_task(self, task_id: int):
@@ -68,16 +74,15 @@ class EpisodicTrajectoryBuffer:
       self.observation[self.task_id, episode_slice, self.idx +
                        1] = transition.next_observation[:batch_size].copy()
       if self.episode_id + batch_size == self.observation.shape[
-        1] and self.task_id + 1 == self.observation.shape[0]:
+          1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
       self.episode_id += batch_size
       assert self.idx + 1 == self.reward.shape[
-        2], 'Supports only episodic setting.'
+          2], 'Supports only episodic setting.'
       self.idx = -1
     self.idx += 1
 
-  def dump(
-      self, ) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+  def dump(self,) -> TrajectoryData:
     """
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
@@ -93,7 +98,7 @@ class EpisodicTrajectoryBuffer:
     self._full = False
     if self.observation.shape[0] == 1:
       o, a, r, c = map(lambda x: x.squeeze(0), (o, a, r, c))
-    return o, a, r, c
+    return TrajectoryData(o, a, r, c)
 
   @property
   def full(self):
