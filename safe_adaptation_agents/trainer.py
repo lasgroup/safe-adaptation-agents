@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Iterable, Tuple, Callable
 from types import SimpleNamespace
 from collections import defaultdict
 from functools import partial
+from itertools import repeat
 
 import cloudpickle
 
@@ -181,7 +182,8 @@ class Trainer:
 
   def tasks(self, train=True):
     if self.tasks_sampler is None:
-      return [(self.config.task, benchmark.TASKS[self.config.task]())]
+      return repeat((self.config.task, benchmark.TASKS[self.config.task]()),
+                    self.config.task_batch_size)
     if train:
       return self.tasks_sampler.train_tasks
     else:
