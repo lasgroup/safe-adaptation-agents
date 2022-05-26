@@ -190,13 +190,14 @@ class Trainer:
   @classmethod
   def from_pickle(cls, config: SimpleNamespace):
     with open(os.path.join(config.log_dir, 'state.pkl'), 'rb') as f:
-      make_env, env_rs, agent, epoch, task_gen = cloudpickle.load(f).values()
+      make_env, env_rs, agent, epoch, task_sampler = cloudpickle.load(
+          f).values()
     print('Resuming experiment from {}'.format(config.log_dir))
     assert agent.config == config, 'Loaded different hyperparameters.'
     return cls(
         config=agent.config,
         make_env=make_env,
-        task_generator=task_gen,
+        task_sampler=task_sampler,
         start_epoch=epoch,
         seeds=env_rs,
         agent=agent)
@@ -208,5 +209,5 @@ class Trainer:
         'env_rs': self.get_env_random_state(),
         'agent': self.agent,
         'epoch': self.epoch,
-        'task_gen': self.tasks_sampler
+        'task_sampler': self.tasks_sampler
     }
