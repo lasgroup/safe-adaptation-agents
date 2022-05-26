@@ -118,8 +118,9 @@ class Driver:
           render_episodes=self.render_episodes,
           render_mode=self.render_mode)
       iter_adaptation_episodes[task_name] = adaptation_episodes
-    assert self.adaptation_buffer.full, ('Adaptation buffer should be full at '
-                                         'this point')
+    assert not (self.adaptation_steps != 0) ^ self.adaptation_buffer.full, (
+        'Adaptation buffer should be full at '
+        'this point')
     agent.adapt(*self.adaptation_buffer.dump())
     print('Collecting query data...')
     for task_name, task in query_tasks:
