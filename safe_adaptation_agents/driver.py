@@ -100,42 +100,44 @@ class Driver:
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
     adaptation_tasks, query_tasks = tee(tasks)
-    print('Collecting support data...')
-    for i, (task_name, task) in enumerate(adaptation_tasks):
-      callback = partial(
-          self.episode_callback,
-          task_name=task_name) if self.episode_callback is not None else None
-      env.reset(options={'task': task})
-      agent.observe_task_id(task_name if self.expose_task_id else None)
-      self.adaptation_buffer.set_task(i)
-      agent, adaptation_episodes = interact(
-          agent,
-          env,
-          self.adaptation_steps,
-          train=train,
-          adaptation_buffer=self.adaptation_buffer,
-          on_episode_end=callback,
-          render_episodes=self.render_episodes,
-          render_mode=self.render_mode)
-      iter_adaptation_episodes[task_name] = adaptation_episodes
-    assert not (self.adaptation_steps != 0) ^ self.adaptation_buffer.full, (
-        'Adaptation buffer should be full at '
-        'this point')
-    agent.adapt(*self.adaptation_buffer.dump())
-    print('Collecting query data...')
-    for task_name, task in query_tasks:
-      callback = partial(
-          self.episode_callback,
-          task_name=task_name) if self.episode_callback is not None else None
-      env.reset(options={'task': task})
-      agent.observe_task_id(task_name if self.expose_task_id else None)
-      agent, query_episodes = interact(
-          agent,
-          env,
-          self.query_steps,
-          train=train,
-          on_episode_end=callback,
-          render_episodes=self.render_episodes,
-          render_mode=self.render_mode)
-      iter_query_episodes[task_name] = query_episodes
-    return iter_adaptation_episodes, iter_query_episodes
+    if self.adaptation_steps > 0:
+      print('Collecting support data...')
+      for i, (task_name, task) in enumerate(adaptation_tasks):
+        callback = partial(
+            self.episode_callback,
+            task_name=task_name) if self.episode_callback is not None else None
+        env.reset(options={'task': task})
+        agent.observe_task_id(task_name if self.expose_task_id else None)
+        self.adaptation_buffer.set_task(i)
+        agent, adaptation_episodes = interact(
+            agent,
+            env,
+            self.adaptation_steps,
+            train=train,
+            adaptation_buffer=self.adaptation_buffer,
+            on_episode_end=callback,
+            render_episodes=self.render_episodes,
+            render_mode=self.render_mode)
+        iter_adaptation_episodes[task_name] = adaptation_episodes
+      assert self.adaptation_buffer.full, (
+          'Adaptation buffer should be full at '
+          'this point')
+      agent.adapt(*self.adaptation_buffer.dump())
+    if self.query_steps > 0:
+      print('Collecting query data...')
+      for task_name, task in query_tasks:
+        callback = partial(
+            self.episode_callback,
+            task_name=task_name) if self.episode_callback is not None else None
+        env.reset(options={'task': task})
+        agent.observe_task_id(task_name if self.expose_task_id else None)
+        agent, query_episodes = interact(
+            agent,
+            env,
+            self.query_steps,
+            train=train,
+            on_episode_end=callback,
+            render_episodes=self.render_episodes,
+            render_mode=self.render_mode)
+        iter_query_episodes[task_name] = query_episodes
+      return iter_adaptation_episodes, iter_query_episodes
