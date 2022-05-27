@@ -90,12 +90,14 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
 
     # Implements a for-loop (through iter_) with an early-break condition (ppo's
     # too big kl)
-    iters, new_actor_state, info = jax.lax.while_loop(cond, body, (0, state, {
+    init_state = (0, state, {
         'agent/actor/loss': 0.,
         'agent/actor/grad': 0.,
         'agent/actor/entropy': 0.,
         'agent/actor/delta_kl': 0.
-    }))
+    })
+    iters, new_actor_state, info = jax.lax.while_loop(cond, body,
+                                                      init_state)  # noqa
     info['agent/actor/update_iters'] = iters
     return new_actor_state, info
 
@@ -120,9 +122,8 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     return -objective.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def lagrangian_update_step(
-      self, lagrangian: LearningState,
-      constraint: jnp.ndarray) -> [LearningState, dict]:
+  def lagrangian_update_step(self, lagrangian: LearningState,
+                             constraint: jnp.ndarray) -> [LearningState, dict]:
 
     def loss(params):
       return -(self.lagrangian.apply(params) *

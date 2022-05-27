@@ -17,7 +17,7 @@ defaults:
   render_mode: rgb_array
   jit: True
   precision: 32
-  parallel_envs: 5
+  parallel_envs: 10
   task_batch_size: 8
 
 no_adaptation:
@@ -26,10 +26,6 @@ no_adaptation:
   test_driver: {adaptation_steps: 0, query_steps: 10000}
   eval_trials: 1
   task_batch_size: 1
-
-domain_randomization:
-  train_driver: {adaptation_steps: 10000, query_steps: 5000}
-  test_driver: {adaptation_steps: 10000, query_steps: 5000}
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
@@ -61,6 +57,11 @@ ppo_lagrangian:
   target_kl: 0.01
   initial_lagrangian: 1.
 
+
+domain_randomization:
+  train_driver: {adaptation_steps: 10000, query_steps: 5000}
+  test_driver: {adaptation_steps: 10000, query_steps: 5000}
+
 maml_ppo_lagrangian:
   entropy_regularization: 0.
   vf_iters: 80
@@ -72,16 +73,14 @@ maml_ppo_lagrangian:
   cost_discount: 0.99
   num_trajectories: 10
   num_query_trajectories: 5
-  lagrangian_lr: 1e-3
   actor_opt: {lr: 3e-4, eps: 1e-5}
   critic_opt: {lr: 1e-3, eps: 1e-5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
   lagrangian_inner_lr: 0.1
   policy_inner_lr: 0.1
-  inner_lr_opt: {lr: 1e-3}
+  inner_lr_opt: {lr: 1e-4}
   inner_steps: 1
 
