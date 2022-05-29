@@ -57,6 +57,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
           'Should train at the first step of adaptation (after filling up the '
           'buffer with adaptation and query data)')
       self.train(self.buffer.dump())
+      self.logger.log_metrics(self.training_step)
     # Use the prior parameters on adaptation phase.
     policy_params = self.actor.params if adapt else self.task_posterior_params
     action = self.policy(observation, policy_params, next(self.rng_seq), train)
