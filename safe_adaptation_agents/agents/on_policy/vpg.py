@@ -13,7 +13,7 @@ import haiku as hk
 from safe_adaptation_agents.agents import Agent, Transition
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.episodic_trajectory_buffer import (
-    EpisodicTrajectoryBuffer)
+    EpisodicTrajectoryBuffer, TrajectoryData)
 from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
 
@@ -46,7 +46,7 @@ class VanillaPolicyGrandients(Agent):
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
     if self.time_to_update and train:
-      self.train(*self.buffer.dump())
+      self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
@@ -73,15 +73,15 @@ class VanillaPolicyGrandients(Agent):
     action = policy.sample(seed=key) if training else policy.mode()
     return action
 
-  def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, _):
-    advantage, return_ = self.evaluate(self.critic.params, observation, reward)
-    self.actor.state, actor_report = self.update_actor(self.actor.state,
-                                                       observation[:, :-1],
-                                                       action, advantage)
+  def train(self, trajectory_data: TrajectoryData):
+    advantage, return_ = self.evaluate(self.critic.params, trajectory_data.o,
+                                       trajectory_data.r)
+    self.actor.state, actor_report = self.update_actor(
+        self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
+        advantage)
     (self.critic.state,
-     critic_report) = self.update_critic(self.critic.state, observation[:, :-1],
-                                         return_)
+     critic_report) = self.update_critic(self.critic.state,
+                                         trajectory_data.o[:, :-1], return_)
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 

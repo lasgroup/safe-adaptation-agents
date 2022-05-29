@@ -1,6 +1,6 @@
 defaults:
   agent: vanilla_policy_gradients
-  safe: False
+  safe: True
   robot: point
   cost_limit: 25
   log_dir: results
@@ -13,7 +13,7 @@ defaults:
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 1
   render_episodes: 1
-  render_options: {height: 120, width: 160, camera_id: 'fixedfar'}
+  render_options: {camera_id: 'fixedfar'}
   render_mode: rgb_array
   jit: True
   precision: 32
@@ -57,7 +57,6 @@ ppo_lagrangian:
   target_kl: 0.01
   initial_lagrangian: 1.
 
-
 domain_randomization:
   train_driver: {adaptation_steps: 10000, query_steps: 5000}
   test_driver: {adaptation_steps: 10000, query_steps: 5000}
@@ -75,6 +74,7 @@ maml_ppo_lagrangian:
   num_query_trajectories: 5
   actor_opt: {lr: 3e-4, eps: 1e-5}
   critic_opt: {lr: 1e-3, eps: 1e-5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01

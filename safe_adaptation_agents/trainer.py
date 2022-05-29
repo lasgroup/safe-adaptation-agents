@@ -121,7 +121,7 @@ class Trainer:
 
   def __exit__(self, exc_type, exc_val, exc_tb):
     self.state_writer.close()
-    self.logger.flush()
+    self.logger.close()
 
   def train(self, epochs: Optional[int] = None) -> [float, float]:
     config, agent, env = self.config, self.agent, self.env
@@ -194,7 +194,7 @@ class Trainer:
     with open(os.path.join(config.log_dir, 'state.pkl'), 'rb') as f:
       make_env, env_rs, agent, epoch, task_sampler = cloudpickle.load(
           f).values()
-    print('Resuming experiment from {}'.format(config.log_dir))
+    print('Resuming experiment from: {}...'.format(config.log_dir))
     assert agent.config == config, 'Loaded different hyperparameters.'
     return cls(
         config=agent.config,

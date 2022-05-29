@@ -81,7 +81,7 @@ class EpisodicTrajectoryBuffer:
       self.episode_id += batch_size
     self.idx += 1
 
-  def dump(self,) -> TrajectoryData:
+  def dump(self) -> TrajectoryData:
     """
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).

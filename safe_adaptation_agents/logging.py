@@ -1,13 +1,11 @@
+import json
 import os
 
-from copy import deepcopy
+from typing import Optional
+from collections import defaultdict
 
 from queue import Queue
 from threading import Thread
-
-from typing import Optional
-
-from collections import defaultdict
 
 import cloudpickle
 
@@ -42,6 +40,8 @@ class TrainingLogger:
     step = step if step is not None else self.step
     for k, v in summary.items():
       self._writer.add_scalar(k, float(v), step)
+    with open(os.path.join(self.log_dir, 'summary.json'), 'a') as file:
+      file.write(json.dumps({'step': step, **summary}) + '\n')
     if flush:
       self._writer.flush()
 
@@ -86,6 +86,9 @@ class TrainingLogger:
   def __setstate__(self, state):
     self.__dict__.update(state)
     self._writer = SummaryWriter(self.log_dir)
+
+  def close(self):
+    self._writer.close()
 
 
 class StateWriter:

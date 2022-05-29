@@ -14,6 +14,7 @@ from safe_adaptation_agents.agents.on_policy import safe_vpg
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
+from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
 
 
 class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
@@ -30,30 +31,29 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
         lagrangian, next(self.rng_seq), config.lagrangian_opt,
         utils.get_mixed_precision_policy(config.precision))
 
-  def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
+  def train(self, trajectory_data: TrajectoryData):
     (advantage, return_, cost_advantage,
      cost_return) = self.evaluate_with_safety(self.critic.params,
                                               self.safety_critic.params,
-                                              observation, reward, cost)
+                                              trajectory_data.o,
+                                              trajectory_data.r,
+                                              trajectory_data.c)
     if self.safe:
-      constraint = cost.sum(1).mean()
+      constraint = trajectory_data.c.sum(1).mean()
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
           self.lagrangian.state, constraint)
       lagrangian = jnn.softplus(self.lagrangian.apply(self.lagrangian.params))
     else:
       lagrangian = 0.
       lagrangian_report = {}
-    self.actor.state, actor_report = self.update_actor(self.actor.state,
-                                                       observation[:, :-1],
-                                                       action, advantage,
-                                                       cost_advantage,
-                                                       lagrangian)
+    self.actor.state, actor_report = self.update_actor(
+        self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
+        advantage, cost_advantage, lagrangian)
     self.critic.state, critic_report = self.update_critic(
-        self.critic.state, observation[:, :-1], return_)
+        self.critic.state, trajectory_data.o[:, :-1], return_)
     if self.safe:
       self.safety_critic.state, safety_report = self.update_safety_critic(
-          self.safety_critic.state, observation[:, :-1], cost_return)
+          self.safety_critic.state, trajectory_data.o[:, :-1], cost_return)
       critic_report.update({**safety_report, **lagrangian_report})
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()

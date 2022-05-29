@@ -33,10 +33,11 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     super(MamlPpoLagrangian,
           self).__init__(observation_space, action_space, config, logger, actor,
                          critic, safety_critic)
-    self.buffer = etb.EpisodicTrajectoryBuffer(
-        self.config.num_trajectories, self.config.time_limit,
-        observation_space.shape, action_space.shape,
-        self.config.task_batch_size)
+    self.buffer = etb.EpisodicTrajectoryBuffer(self.config.num_trajectories,
+                                               self.config.time_limit,
+                                               observation_space.shape,
+                                               action_space.shape,
+                                               self.config.task_batch_size)
     self.query_buffer = etb.EpisodicTrajectoryBuffer(
         self.config.num_query_trajectories, self.config.time_limit,
         observation_space.shape, action_space.shape,
@@ -55,7 +56,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       assert adapt, (
           'Should train at the first step of adaptation (after filling up the '
           'buffer with adaptation and query data)')
-      self.train(*self.buffer.dump())
+      self.train(self.buffer.dump())
     # Use the prior parameters on adaptation phase.
     policy_params = self.actor.params if adapt else self.task_posterior_params
     action = self.policy(observation, policy_params, next(self.rng_seq), train)
@@ -72,14 +73,18 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     self.buffer.set_task(self.task_id)
     self.query_buffer.set_task(self.task_id)
 
-  def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
-    support = TrajectoryData(observation, action, reward, cost)
-    query = TrajectoryData(*self.query_buffer.dump())
+  def train(self, trajectory_data: TrajectoryData):
+    support = trajectory_data
+    query = self.query_buffer.dump()
+    (self.lagrangian.state, self.actor.state, self.inner_lrs.state,
+     info) = self.update_priors(self.lagrangian.state, self.actor.state,
+                                self.inner_lrs.state, support, query)
+    for k, v in info.items():
+      self.logger[k] = v.mean()
 
   def evaluate_support_and_query(
       self, support: TrajectoryData,
-      query: TrajectoryData) -> [TrajectoryData, TrajectoryData]:
+      query: TrajectoryData) -> [Evaluation, Evaluation]:
     support_eval = self.adapt_critics_and_evaluate(support.o, support.r,
                                                    support.c)
     query_eval = self.adapt_critics_and_evaluate(query.o, query.r, query.c)
@@ -90,8 +95,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                     actor_state: LearningState, inner_lr_state: LearningState,
                     support: TrajectoryData,
                     query: TrajectoryData) -> [LearningState, dict]:
-    support_eval, query_eval = self.evaluate_support_and_query(
-        TrajectoryData(*support), TrajectoryData(*query))
+    support_eval, query_eval = self.evaluate_support_and_query(support, query)
     old_pi = self.actor.apply(actor_state.params, support.o)
     old_pi_logprob = old_pi.log_prob(support.a)
 
@@ -135,10 +139,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         'agent/actor/entropy': 0.,
         'agent/actor/delta_kl': 0.
     })
-    iters, new_actor_state, info = jax.lax.while_loop(cond, body,
-                                                      init_state)  # noqa
+    (iters, new_lagrangian_state, new_actor_state, new_lr_state,
+     info) = jax.lax.while_loop(cond, body, init_state)  # noqa
     info['agent/actor/update_iters'] = iters
-    return new_actor_state, info
+    return new_lagrangian_state, new_actor_state, new_lr_state, info
 
   def meta_loss(self, lagrangian_prior: hk.Params, policy_prior: hk.Params,
                 inner_lrs: Tuple[float, float], support: TrajectoryData,

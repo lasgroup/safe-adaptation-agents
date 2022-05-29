@@ -15,6 +15,7 @@ from safe_adaptation_agents.agents.on_policy import vpg
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
+from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
 
 
 class Evaluation(NamedTuple):
@@ -39,8 +40,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
         observation_space.sample())
 
   @abc.abstractmethod
-  def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
+  def train(self, trajectory_data: TrajectoryData):
     """
     Implements a training loop for safe policy-grandients algorithm.
     """

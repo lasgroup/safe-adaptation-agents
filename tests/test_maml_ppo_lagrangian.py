@@ -71,10 +71,9 @@ def test_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'domain_randomization', '--agent',
-      'maml_ppo_lagrangian', '--time_limit', '1000', '--vf_iters', '80',
-      '--pi_iters', '80', '--eval_trials', '0', '--render_episodes', '0',
-      '--epochs', '334', '--safe', 'True', '--log_dir',
-      'results/test_ppo_lagrangian_safe', '--task_batch_size', '2'
+      'maml_ppo_lagrangian', '--eval_trials', '0', '--epochs', '334', '--safe',
+      'True', '--log_dir', 'results/test_ppo_lagrangian_safe',
+      '--task_batch_size', '2'
   ])
   if not config.jit:
     from jax.config import config as jax_config
