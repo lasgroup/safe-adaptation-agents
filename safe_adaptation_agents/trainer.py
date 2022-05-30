@@ -155,14 +155,13 @@ class Trainer:
     logger.flush()
     return objective, constraint
 
-  def evaluate(self):
+  def evaluate(self, test_driver: driver.Driver):
     # Taking only the query set results as support set is less relevant for
     # evaluation.
     results = []
     for _ in range(self.config.eval_trials):
       results.append(
-          self.test_driver.run(self.agent, self.env, self.tasks(False),
-                               False)[1])
+          test_driver.run(self.agent, self.env, self.tasks(False), False)[1])
     return results
 
   def get_env_random_state(self):
