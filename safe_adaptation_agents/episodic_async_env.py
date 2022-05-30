@@ -15,6 +15,7 @@ import numpy as np
 
 from gym.vector import VectorEnv
 from gym import Env
+from gym.wrappers import TimeLimit
 
 
 class Protocol(Enum):
@@ -35,10 +36,14 @@ class Protocol(Enum):
 # in the main process.)
 class EpisodicAsync(VectorEnv):
 
-  def __init__(self, ctor: Callable[[], Env], vector_size: int = 1):
+  def __init__(self,
+               ctor: Callable[[], Env],
+               vector_size: int = 1,
+               time_limit: int = 1000):
     self.env_fn = cloudpickle.dumps(ctor)
+    self.time_limit = time_limit
     if vector_size < 1:
-      self._env = ctor()
+      self._env = TimeLimit(ctor(), time_limit)
       self.observation_space = self._env.observation_space
       self.action_space = self._env.action_space
     else:
@@ -54,7 +59,8 @@ class EpisodicAsync(VectorEnv):
 
   def _make_worker(self):
     parent, child = mp.Pipe()
-    process = mp.Process(target=_worker, args=(self.env_fn, child))
+    process = mp.Process(
+        target=_worker, args=(self.env_fn, child, self.time_limit))
     return parent, process
 
   @functools.lru_cache
@@ -158,9 +164,9 @@ class EpisodicAsync(VectorEnv):
     return np.asarray(self.call_wait())
 
 
-def _worker(ctor, conn):
+def _worker(ctor, conn, time_limit):
   try:
-    env = cloudpickle.loads(ctor)()
+    env = TimeLimit(cloudpickle.loads(ctor)(), time_limit)
     while True:
       try:
         # Only block for short times to have keyboard exceptions be raised.

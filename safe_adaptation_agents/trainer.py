@@ -97,7 +97,8 @@ class Trainer:
     self.state_writer = logging.StateWriter(self.config.log_dir)
     self.logger = logging.TrainingLogger(self.config.log_dir)
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
-                                                self.config.parallel_envs)
+                                                self.config.parallel_envs,
+                                                self.config.time_limit)
     _, task = next(self.tasks())
     if self.seeds is not None:
       self.env.reset(seed=self.seeds, options={'task': task})
@@ -118,6 +119,7 @@ class Trainer:
     train_driver = driver.Driver(
         **config.train_driver,
         time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         task_batch_size=config.task_batch_size,
@@ -125,6 +127,7 @@ class Trainer:
     test_driver = driver.Driver(
         **config.test_driver,
         time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         task_batch_size=config.task_batch_size,
@@ -149,7 +152,7 @@ class Trainer:
               np.asarray(video).transpose([1, 0, 2, 3, 4])[:1],
               task_name + '_video',
               step=epoch)
-      self.epoch = epoch
+      self.epoch = epoch + 1
       state_writer.write(self.state)
     state_writer.close()
     logger.flush()

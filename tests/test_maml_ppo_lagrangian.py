@@ -64,9 +64,7 @@ def test_safe():
 
   def make_env(config):
     import safe_adaptation_gym
-    from gym.wrappers import TimeLimit
     env = safe_adaptation_gym.make(config.robot)
-    env = TimeLimit(env, config.time_limit)
     return env
 
   config = options.load_config([

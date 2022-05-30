@@ -42,11 +42,10 @@ def buffer_and_env():
 
   def make_env():
     import safe_adaptation_gym
-    env = TimeLimit(
-        safe_adaptation_gym.make('point', 'go_to_goal'), EPISODE_LENGTH)
+    safe_adaptation_gym.make('point', 'go_to_goal')
     return env
 
-  env = EpisodicAsync(make_env, 1)
+  env = EpisodicAsync(make_env, 1, EPISODE_LENGTH)
   return EpisodicTrajectoryBuffer(
       2,
       EPISODE_LENGTH,

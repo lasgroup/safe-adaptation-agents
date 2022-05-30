@@ -41,7 +41,6 @@ def test_safe():
 
   def make_env(config):
     import safe_adaptation_gym
-    from gym.wrappers import TimeLimit
     env = safe_adaptation_gym.make(
         config.robot,
         config.task,
@@ -49,7 +48,6 @@ def test_safe():
             'obstacles_size_noise_scale': 0.,
             'robot_ctrl_range_scale': 0.
         })
-    env = TimeLimit(env, config.time_limit)
     return env
 
   config = options.load_config([

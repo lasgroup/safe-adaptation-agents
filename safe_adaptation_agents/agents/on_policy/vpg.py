@@ -29,9 +29,9 @@ class VanillaPolicyGrandients(Agent):
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.rs = np.random.RandomState(config.seed)
     self.training_step = 0
+    num_steps = self.config.time_limit // self.config.action_repeat
     self.buffer = EpisodicTrajectoryBuffer(self.config.num_trajectories,
-                                           self.config.time_limit,
-                                           observation_space.shape,
+                                           num_steps, observation_space.shape,
                                            action_space.shape)
     self.buffer.set_task(0)
     self.actor = utils.Learner(
