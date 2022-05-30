@@ -9,7 +9,6 @@ import cloudpickle
 
 import numpy as np
 
-from gym.vector import VectorEnv
 from gym import Env
 
 from gym.spaces import Space
@@ -114,6 +113,7 @@ class Trainer:
     self.logger.close()
 
   def make_drivers(self):
+    env = self.env
     config = self.config
     train_driver = driver.Driver(
         **config.train_driver,
