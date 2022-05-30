@@ -152,11 +152,11 @@ def test_cheetah():
 
   config = options.load_config([
       '--configs', 'defaults', '--agent', 'maml_ppo_lagrangian',
-      '--eval_trials', '0', '--epochs', '334', '--log_dir',
+      '--eval_trials', '0', '--epochs', '1000', '--log_dir',
       'results/test_maml_ppo_half_cheetah', '--task_batch_size', '40', '--safe',
       'False', '--actor.layers', '[64, 64]', '--policy_inner_lr', '0.1',
-      '--time_limit', '100', '--num_trajectories', '20',
-      '--num_query_trajectories', '1', '--train_driver',
+      '--actor_opt.lr', '1e-3', '--time_limit', '100', '--num_trajectories',
+      '20', '--num_query_trajectories', '1', '--train_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 100}', '--test_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 100}'
   ])
@@ -171,4 +171,4 @@ def test_cheetah():
       make_env=lambda: make_env(config),
       task_sampler=task_sampler) as trainer:
     objective, constraint = trainer.train()
-  assert np.asarray(objective.values()).mean() > 100.0
+  assert objective['average'] > 150.0
