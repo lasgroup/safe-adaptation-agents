@@ -136,7 +136,7 @@ class Trainer:
       train_driver.run(agent, env, self.tasks(train=True), True)
       if epoch % config.eval_every == 0 and config.eval_trials:
         print('Evaluating...')
-        results = self.evaluate()
+        results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
             results)
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
