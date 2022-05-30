@@ -114,6 +114,7 @@ class Trainer:
     self.logger.close()
 
   def make_drivers(self):
+    config = self.config
     train_driver = driver.Driver(
         **config.train_driver,
         time_limit=config.time_limit,
