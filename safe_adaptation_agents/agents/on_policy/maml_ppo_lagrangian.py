@@ -162,8 +162,11 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         support_eval.cost_advantage, constraint, old_pi_logprob)
     # vmap lagrangian and policy loss over the task axis.
     loss = jax.vmap(self.policy_loss)
-    lagrangian = jax.vmap(self.lagrangian.apply)
-    lagrangian_posterior = jnn.softplus(lagrangian(lagrangian_posterior))
+    if self.safe:
+      lagrangian = jax.vmap(self.lagrangian.apply)
+      lagrangian_posterior = jnn.softplus(lagrangian(lagrangian_posterior))
+    else:
+      lagrangian_posterior = jnp.zeros_like(constraint)
     return loss(pi_posteriors, query.o[:, :, :-1], query.a,
                 query_eval.advantage, query_eval.cost_advantage,
                 lagrangian_posterior, old_pi_query_logprob).mean()
