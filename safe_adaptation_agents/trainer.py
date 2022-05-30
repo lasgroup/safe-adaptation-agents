@@ -113,9 +113,7 @@ class Trainer:
     self.state_writer.close()
     self.logger.close()
 
-  def train(self, epochs: Optional[int] = None) -> [float, float]:
-    config, agent, env = self.config, self.agent, self.env
-    epoch, logger, state_writer = self.epoch, self.logger, self.state_writer
+  def make_drivers(self):
     train_driver = driver.Driver(
         **config.train_driver,
         time_limit=config.time_limit,
@@ -133,7 +131,13 @@ class Trainer:
         task_batch_size=config.task_batch_size,
         on_episode_end=partial(on_episode_end, train=False, logger=logger),
         render_episodes=config.render_episodes)
+    return train_driver, test_driver
+
+  def train(self, epochs: Optional[int] = None) -> [float, float]:
+    config, agent, env = self.config, self.agent, self.env
+    epoch, logger, state_writer = self.epoch, self.logger, self.state_writer
     objective, constraint = defaultdict(float), defaultdict(float)
+    train_driver, test_driver = self.make_drivers()
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
       train_driver.run(agent, env, self.tasks(train=True), True)
@@ -154,7 +158,6 @@ class Trainer:
               step=epoch)
       self.epoch = epoch + 1
       state_writer.write(self.state)
-    state_writer.close()
     logger.flush()
     return objective, constraint
 

@@ -68,6 +68,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       self.buffer.add(transition)
     else:
       self.query_buffer.add(transition)
+    self.training_step += sum(transition.steps)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     self.task_id = (self.task_id + 1) % self.config.task_batch_size
