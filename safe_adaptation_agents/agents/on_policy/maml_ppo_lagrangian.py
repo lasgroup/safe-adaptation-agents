@@ -81,6 +81,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     (self.lagrangian.state, self.actor.state, self.inner_lrs.state,
      info) = self.update_priors(self.lagrangian.state, self.actor.state,
                                 self.inner_lrs.state, support, query)
+    info['agent/lagrangian_lr'] = self.inner_lrs.params[0]
+    info['agent/policy_lr'] = self.inner_lrs.params[0]
     for k, v in info.items():
       self.logger[k] = v.mean()
 
@@ -143,6 +145,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     (iters, new_lagrangian_state, new_actor_state, new_lr_state,
      info) = jax.lax.while_loop(cond, body, init_state)  # noqa
     info['agent/actor/update_iters'] = iters
+    new_lagrangian = self.lagrangian.apply(new_lagrangian_state.params)
+    info['agent/lagrangian'] = new_lagrangian
     return new_lagrangian_state, new_actor_state, new_lr_state, info
 
   def meta_loss(self, lagrangian_prior: hk.Params, policy_prior: hk.Params,
@@ -178,7 +182,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                             action, advantage, cost_advantage,
                                             constraint, old_pi_logprob)
     for i in range(self.config.task_batch_size):
-      self.pi_posterior[i] = jax.tree_util.tree_map(lambda node: node[i],
+      self.pi_posterior[i] = jax.tree_util.tree_map(lambda leaf: leaf[i],
                                                     pi_posteriors)
 
   @functools.partial(jax.jit, static_argnums=0)
