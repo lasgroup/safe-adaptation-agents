@@ -19,17 +19,6 @@ from safe_adaptation_gym import tasks as sagt
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
 
-def evaluate(agent: agents.Agent, env: VectorEnv,
-             tasks: Iterable[Tuple[str, sagt.Task]], test_driver: driver.Driver,
-             trials: int):
-  # Taking only the query set results as support set is less relevant for
-  # evaluation.
-  results = [
-      test_driver.run(agent, env, tasks, False)[1] for _ in range(trials)
-  ]
-  return results
-
-
 def evaluation_summary(
     runs: List[driver.IterationSummary]) -> [Dict, Dict, Dict, Dict]:
   reward_returns = defaultdict(float)
@@ -147,8 +136,7 @@ class Trainer:
       train_driver.run(agent, env, self.tasks(train=True), True)
       if epoch % config.eval_every == 0 and config.eval_trials:
         print('Evaluating...')
-        results = evaluate(agent, env, self.tasks(train=False), test_driver,
-                           config.eval_trials)
+        results = self.evaluate()
         summary, reward_returns, cost_returns, videos = evaluation_summary(
             results)
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
@@ -166,6 +154,16 @@ class Trainer:
     state_writer.close()
     logger.flush()
     return objective, constraint
+
+  def evaluate(self):
+    # Taking only the query set results as support set is less relevant for
+    # evaluation.
+    results = []
+    for _ in range(self.config.eval_trials):
+      results.append(
+          self.test_driver.run(self.agent, self.env, self.tasks(False),
+                               False)[1])
+    return results
 
   def get_env_random_state(self):
     rs = [

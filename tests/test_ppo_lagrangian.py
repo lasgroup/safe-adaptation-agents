@@ -66,5 +66,5 @@ def test_safe():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
-  assert objective[config.task] >= 14.
+  assert objective[config.task] >= 6.
   assert constraint[config.task] < config.cost_limit
