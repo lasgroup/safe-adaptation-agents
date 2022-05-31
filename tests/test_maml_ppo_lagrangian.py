@@ -9,9 +9,7 @@ from gym.envs.mujoco.mujoco_env import MujocoEnv
 from safe_adaptation_gym import benchmark
 
 from safe_adaptation_agents import agents
-from safe_adaptation_agents.agents.on_policy import maml_ppo_lagrangian
 from safe_adaptation_agents import config as options
-from safe_adaptation_agents import logging
 from safe_adaptation_agents.trainer import Trainer
 
 
@@ -42,12 +40,11 @@ class DummyBenchmark:
 # https://github.com/jonasrothfuss/ProMP/blob
 # /93ae339e23dfc6e1133f9538f2c7cc0ccee89d19/meta_policy_search/envs
 # /mujoco_envs/half_cheetah_rand_direc.py
-class HalfCheetahRandDirecEnv(MujocoEnv, gym.utils.EzPickle):
+class HalfCheetahRandDirecEnv(MujocoEnv):
 
   def __init__(self):
     self.set_task(1.)
     MujocoEnv.__init__(self, 'half_cheetah.xml', 5)
-    gym.utils.EzPickle.__init__(self)
 
   def set_task(self, task):
     """
@@ -150,13 +147,13 @@ def test_cheetah():
   config = options.load_config([
       '--configs', 'defaults', '--agent', 'maml_ppo_lagrangian',
       '--eval_trials', '0', '--epochs', '1000', '--log_dir',
-      'results/test_maml_ppo_half_cheetah', '--task_batch_size', '40', '--safe',
+      'results/test_maml_ppo_half_cheetah', '--task_batch_size', '20', '--safe',
       'False', '--actor.layers', '[64, 64]', '--critic.layers', '[64, 64]',
-      '--policy_inner_lr', '0.01', '--actor_opt.lr', '0.001', '--time_limit',
+      '--policy_inner_lr', '0.1', '--actor_opt.lr', '0.005', '--time_limit',
       '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
       '--train_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
       '--test_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
-      '--jit', 'True'
+      '--jit', 'True', '--target_kl', '1e-3'
   ])
   if not config.jit:
     from jax.config import config as jax_config

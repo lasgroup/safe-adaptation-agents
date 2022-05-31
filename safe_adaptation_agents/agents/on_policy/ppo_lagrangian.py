@@ -102,7 +102,7 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     info['agent/actor/update_iters'] = iters
     return new_actor_state, info
 
-  def policy_loss(self, params: hk.Params, *args) -> float:
+  def policy_loss(self, params: hk.Params, *args) -> jnp.ndarray:
     (observation, action, advantage, cost_advantage, lagrangian,
      old_pi_logprob) = args
     pi = self.actor.apply(params, observation)
