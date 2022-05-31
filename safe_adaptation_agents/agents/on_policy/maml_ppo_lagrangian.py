@@ -80,8 +80,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     query = self.query_buffer.dump()
     (self.lagrangian.state, self.actor.state, self.inner_lrs.state,
      info) = self.update_priors(self.lagrangian.state, self.actor.state,
-                                self.inner_lrs.state, support, query,
-                                self._cached_posteriors)
+                                self.inner_lrs.state, support, query)
     info['agent/lagrangian_lr'] = self.inner_lrs.params[0]
     info['agent/policy_lr'] = self.inner_lrs.params[1]
     for k, v in info.items():
@@ -118,7 +117,6 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
     def body(val):
       (iter_, lagrangian_state, actor_state, lr_state, _) = val
-      # TODO (yarden): check this.
       loss, grads = jax.value_and_grad(self.meta_loss, (0, 1, 2))(
           lagrangian_state.params, actor_state.params, lr_state.params, support,
           query, support_eval, query_eval, constraint, old_pi_support_logprob,
