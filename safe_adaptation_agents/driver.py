@@ -86,7 +86,7 @@ class Driver:
                action_shape: Tuple,
                task_batch_size: int,
                expose_task_id: bool = False,
-               on_episode_end: Optional[Callable[[str, EpisodeSummary],
+               on_episode_end: Optional[Callable[[EpisodeSummary, str, bool],
                                                  None]] = None,
                render_episodes: int = 0,
                render_mode: str = 'rgb_array'):
@@ -110,8 +110,8 @@ class Driver:
       print('Collecting support data...')
       for i, (task_name, task) in enumerate(adaptation_tasks):
         callback = partial(
-            self.episode_callback,
-            task_name=task_name) if self.episode_callback is not None else None
+            self.episode_callback, task_name=task_name,
+            adapt=True) if self.episode_callback is not None else None
         env.reset(options={'task': task})
         agent.observe_task_id(task_name if self.expose_task_id else None)
         self.adaptation_buffer.set_task(i)
@@ -134,8 +134,8 @@ class Driver:
       print('Collecting query data...')
       for task_name, task in query_tasks:
         callback = partial(
-            self.episode_callback,
-            task_name=task_name) if self.episode_callback is not None else None
+            self.episode_callback, task_name=task_name,
+            adapt=False) if self.episode_callback is not None else None
         env.reset(options={'task': task})
         agent.observe_task_id(task_name if self.expose_task_id else None)
         agent, query_episodes = interact(

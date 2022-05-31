@@ -24,7 +24,7 @@ class DummyBenchmark:
   def _sample_tasks(self):
     return self.rs.choice((
         -1.,
-        1,
+        1.,
     ), (self._batch_size,))
 
   @property
@@ -154,11 +154,12 @@ def test_cheetah():
       '--configs', 'defaults', '--agent', 'maml_ppo_lagrangian',
       '--eval_trials', '0', '--epochs', '1000', '--log_dir',
       'results/test_maml_ppo_half_cheetah', '--task_batch_size', '40', '--safe',
-      'False', '--actor.layers', '[64, 64]', '--policy_inner_lr', '0.1',
-      '--actor_opt.lr', '1e-3', '--time_limit', '100', '--num_trajectories',
-      '20', '--num_query_trajectories', '20', '--train_driver',
-      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--test_driver',
-      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}'
+      'False', '--actor.layers', '[64, 64]', '--critic.layers', '[64, 64]',
+      '--policy_inner_lr', '0.01', '--actor_opt.lr', '0.001', '--time_limit',
+      '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
+      '--train_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
+      '--test_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
+      '--jit', 'True'
   ])
   if not config.jit:
     from jax.config import config as jax_config

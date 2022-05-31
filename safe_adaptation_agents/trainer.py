@@ -55,7 +55,7 @@ def evaluation_summary(
 
 
 def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
-                   logger: logging.TrainingLogger, train: bool):
+                   logger: logging.TrainingLogger, train: bool, adapt: bool):
 
   def return_(arr):
     return np.asarray(arr).sum(0).mean()
@@ -65,9 +65,10 @@ def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
   print("\ntask: {} / reward return: {:.4f} / cost return: {:.4f}".format(
       task_name, episode_return, cost_return))
   if train:
+    adapt_str = 'adapt' if adapt else 'query'
     summary = {
-        'training/{}/episode_return'.format(task_name): episode_return,
-        'training/{}/episode_cost_return'.format(task_name): cost_return
+        f'training/{adapt_str}/{task_name}/episode_return': episode_return,
+        f'training/{adapt_str}/{task_name}/episode_cost_return': cost_return
     }
     logger.log_summary(summary)
     logger.step += np.asarray(episode['reward']).size

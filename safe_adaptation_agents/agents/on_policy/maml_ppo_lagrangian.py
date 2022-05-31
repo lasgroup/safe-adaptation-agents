@@ -234,10 +234,20 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       else:
         lagrangian = 0.
         lagrangian_posterior = lagrangian_prior
-      policy_grads = jax.grad(self.policy_loss)(policy_prior, observation,
-                                                action, advantage,
-                                                cost_advantage, lagrangian,
-                                                old_pi_logprob)
+
+      def reinforce_loss(policy_params):
+        pi = self.actor.apply(policy_params, observation)
+        log_prob = pi.log_prob(action)
+        ratio = jnp.exp(log_prob - old_pi_logprob)
+        surr_advantage = ratio * advantage
+        objective = (
+            surr_advantage + self.config.entropy_regularization * pi.entropy())
+        if self.safe:
+          objective -= lagrangian * ratio * cost_advantage
+          objective /= (1. + lagrangian)
+        return -objective.mean()
+
+      policy_grads = jax.grad(reinforce_loss)(policy_prior)
       policy_posterior = utils.gradient_descent(policy_grads, policy_prior,
                                                 pi_lr)
       return (lagrangian_posterior, policy_posterior), None
@@ -251,7 +261,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def adapt_critics_and_evaluate(self, observation: np.ndarray,
                                  reward: np.ndarray,
                                  cost: np.ndarray) -> Evaluation:
-    # Find parameters that fit well the critics for the new tasks.
+    # Find parameters that fit well the critics for each new tasks.
     return_, cost_return = self.returns(reward, cost)
     critic_states, _ = self.update_critic(self.critic.state,
                                           observation[:, :, :-1], return_)
