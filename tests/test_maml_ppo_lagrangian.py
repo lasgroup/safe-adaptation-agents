@@ -156,9 +156,9 @@ def test_cheetah():
       'results/test_maml_ppo_half_cheetah', '--task_batch_size', '40', '--safe',
       'False', '--actor.layers', '[64, 64]', '--policy_inner_lr', '0.1',
       '--actor_opt.lr', '1e-3', '--time_limit', '100', '--num_trajectories',
-      '20', '--num_query_trajectories', '1', '--train_driver',
-      '{\'adaptation_steps\': 2000, \'query_steps\': 100}', '--test_driver',
-      '{\'adaptation_steps\': 2000, \'query_steps\': 100}'
+      '20', '--num_query_trajectories', '20', '--train_driver',
+      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--test_driver',
+      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}'
   ])
   if not config.jit:
     from jax.config import config as jax_config
