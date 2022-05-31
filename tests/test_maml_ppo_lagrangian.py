@@ -108,9 +108,6 @@ class HalfCheetahRandDirecEnv(MujocoEnv, gym.utils.EzPickle):
     else:
       return ob, {}
 
-  def viewer_setup(self):
-    self.viewer.cam.distance = self.model.stat.extent * 0.5
-
 
 @pytest.mark.safe
 def test_safe():
@@ -147,7 +144,7 @@ def test_cheetah():
 
   def make_env(config):
     env = HalfCheetahRandDirecEnv()
-    env = gym.wrappers.TimeLimit(env, 100)
+    env = gym.wrappers.TimeLimit(env, config.time_limit)
     return env
 
   config = options.load_config([
