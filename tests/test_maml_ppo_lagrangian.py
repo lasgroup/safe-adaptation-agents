@@ -21,7 +21,7 @@ class DummyBenchmark:
 
   def _sample_tasks(self):
     return self.rs.choice((
-        -1.,
+        1.,
         1.,
     ), (self._batch_size,))
 
