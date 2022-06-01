@@ -11,7 +11,6 @@ import jax.nn as jnn
 import haiku as hk
 import optax
 
-from safe_adaptation_agents.agents.agent import Transition
 from safe_adaptation_agents.agents.on_policy import ppo_lagrangian, vpg
 from safe_adaptation_agents.agents.on_policy.safe_vpg import Evaluation
 from safe_adaptation_agents.logging import TrainingLogger
@@ -31,14 +30,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
           self).__init__(observation_space, action_space, config, logger, actor,
                          critic, safety_critic)
     num_steps = self.config.time_limit // self.config.action_repeat
-    self.buffer = etb.EpisodicTrajectoryBuffer(self.config.num_trajectories,
-                                               num_steps,
-                                               observation_space.shape,
-                                               action_space.shape,
-                                               self.config.task_batch_size)
-    self.query_buffer = etb.EpisodicTrajectoryBuffer(
-        self.config.num_query_trajectories, num_steps, observation_space.shape,
-        action_space.shape, self.config.task_batch_size)
+    self.buffer = etb.EpisodicTrajectoryBuffer(
+        self.config.num_trajectories + self.config.num_query_trajectories,
+        num_steps, observation_space.shape, action_space.shape,
+        self.config.task_batch_size)
     self.task_id = -1
     self.inner_lrs = utils.Learner(
         (self.config.lagrangian_inner_lr, self.config.policy_inner_lr),
@@ -48,7 +43,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
-    if train and self.buffer.full and self.query_buffer.full:
+    if train and self.buffer.full:
       assert adapt, (
           'Should train at the first step of adaptation (after filling up the '
           'buffer with adaptation and query data)')
@@ -59,22 +54,23 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     action = self.policy(observation, policy_params, next(self.rng_seq), train)
     return action
 
-  def observe(self, transition: Transition, adapt: bool):
-    if adapt:
-      self.buffer.add(transition)
-    else:
-      self.query_buffer.add(transition)
-    self.training_step += sum(transition.steps)
-
   def observe_task_id(self, task_id: Optional[str] = None):
     # self.task_id = (self.task_id + 1) % self.config.task_batch_size
     self.task_id = task_id
     self.buffer.set_task(self.task_id)
-    self.query_buffer.set_task(self.task_id)
 
   def train(self, trajectory_data: TrajectoryData):
-    support = trajectory_data
-    query = self.query_buffer.dump()
+    sum_trajectories = (
+        self.config.num_trajectories + self.config.num_query_trajectories)
+    assert sum_trajectories == self.buffer.observation.shape[1]
+    split = lambda x: np.split(
+        x,
+        (self.config.num_trajectories, sum_trajectories),
+        axis=1,
+    )
+    support, query, _ = zip(*map(split, trajectory_data))
+    support = TrajectoryData(*support)
+    query = TrajectoryData(*query)
     (self.lagrangian.state, self.actor.state, self.inner_lrs.state,
      info) = self.update_priors(self.lagrangian.state, self.actor.state,
                                 self.inner_lrs.state, support, query)
@@ -116,7 +112,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       # kl threshold to continue iterating
       return jax.lax.bitwise_not(
           jax.lax.bitwise_or(kl > self.config.kl_margin * self.config.target_kl,
-                             iter_ == 1))
+                             iter_ == self.config.pi_iters))
 
     def body(val):
       (iter_, lagrangian_state, actor_state, lr_state, _) = val
@@ -230,13 +226,12 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       def reinforce_loss(policy_params):
         pi = self.actor.apply(policy_params, observation)
         log_prob = pi.log_prob(action)
-        # ratio = jnp.exp(log_prob - old_pi_logprob)
-        surr_advantage = log_prob * advantage
+        ratio = jnp.exp(log_prob - old_pi_logprob)
+        surr_advantage = ratio * advantage
         objective = (
             surr_advantage + self.config.entropy_regularization * pi.entropy())
         if self.safe:
-          # objective -= lagrangian * ratio * cost_advantage
-          objective -= lagrangian * log_prob * cost_advantage
+          objective -= lagrangian * ratio * cost_advantage
           objective /= (1. + lagrangian)
         return -objective.mean()
 
@@ -269,11 +264,3 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     return self.evaluate_with_safety(critic_states.params,
                                      safety_critic_states.params, observation,
                                      reward, cost)
-
-  def policy_loss(self, params: hk.Params, *args):
-    observation, actions, advantage, *_ = args
-    pi = self.actor.apply(params, observation)
-    objective = (
-        pi.log_prob(actions) * advantage +
-        self.config.entropy_regularization * pi.entropy())
-    return -objective.mean()

@@ -33,7 +33,6 @@ class VanillaPolicyGrandients(Agent):
     self.buffer = EpisodicTrajectoryBuffer(self.config.num_trajectories,
                                            num_steps, observation_space.shape,
                                            action_space.shape)
-    self.buffer.set_task(0)
     self.actor = utils.Learner(
         actor, next(self.rng_seq), config.actor_opt,
         utils.get_mixed_precision_policy(config.precision),
