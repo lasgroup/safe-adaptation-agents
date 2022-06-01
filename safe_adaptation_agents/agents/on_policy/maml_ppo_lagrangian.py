@@ -167,16 +167,26 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     lagrangian_posterior, pi_posteriors = batched_adaptation_step(
         support.o[:, :, :-1], support.a, support_eval.advantage,
         support_eval.cost_advantage, constraint, old_pi_support_logprob)
+
     # vmap lagrangian and policy loss over the task axis.
-    loss = jax.vmap(self.policy_loss)
+    def policy_loss(params: hk.Params, observation, action, advantage,
+                    old_pi_logprob):
+      pi = self.actor.apply(params, observation)
+      log_prob = pi.log_prob(action)
+      ratio = jnp.exp(log_prob - old_pi_logprob)
+      surr_advantage = ratio * advantage
+      objective = (
+          surr_advantage + self.config.entropy_regularization * pi.entropy())
+      return -objective.mean()
+
+    loss = jax.vmap(policy_loss)
     if self.safe:
       lagrangian = jax.vmap(self.lagrangian.apply)
       lagrangian_posterior = jnn.softplus(lagrangian(lagrangian_posterior))
     else:
       lagrangian_posterior = jnp.zeros_like(constraint)
     return loss(pi_posteriors, query.o[:, :, :-1], query.a,
-                query_eval.advantage, query_eval.cost_advantage,
-                lagrangian_posterior, old_pi_query_logprob).mean()
+                query_eval.advantage, old_pi_query_logprob).mean()
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray):

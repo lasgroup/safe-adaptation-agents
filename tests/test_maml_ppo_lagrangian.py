@@ -149,7 +149,7 @@ def test_cheetah():
   config = options.load_config([
       '--configs', 'defaults', '--agent', 'maml_ppo_lagrangian',
       '--eval_trials', '0', '--epochs', '1000', '--log_dir',
-      'results/test_maml_ppo_half_cheetah', '--task_batch_size', '2', '--safe',
+      'results/test_maml_ppo_half_cheetah', '--task_batch_size', '20', '--safe',
       'False', '--actor.layers', '[64, 64]', '--critic.layers', '[64, 64]',
       '--policy_inner_lr', '0.1', '--actor_opt.lr', '3e-4', '--time_limit',
       '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
