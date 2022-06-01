@@ -1,6 +1,6 @@
 from typing import Tuple, Optional
 from types import SimpleNamespace
-import functools
+from functools import partial
 
 import numpy as np
 from gym.spaces import Space
@@ -19,9 +19,6 @@ from safe_adaptation_agents.utils import LearningState
 from safe_adaptation_agents import utils
 from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
-
-# Vmap over the task axis.
-discounted_cumsum = jax.vmap(vpg.discounted_cumsum, in_axes=[0, None])
 
 
 class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
@@ -47,8 +44,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         (self.config.lagrangian_inner_lr, self.config.policy_inner_lr),
         next(self.rng_seq), self.config.inner_lr_opt,
         utils.get_mixed_precision_policy(config.precision))
-    # Map task id to it's corresponding fine-tuned/adapted parameters.
-    self.pi_posterior = [None] * self.config.task_batch_size
+    self.pi_posterior = None
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -59,7 +55,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
     # Use the prior parameters on adaptation phase.
-    policy_params = self.actor.params if adapt else self.task_posterior_params
+    policy_params = self.actor.params if adapt else self.pi_posterior
     action = self.policy(observation, policy_params, next(self.rng_seq), train)
     return action
 
@@ -71,7 +67,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     self.training_step += sum(transition.steps)
 
   def observe_task_id(self, task_id: Optional[str] = None):
-    self.task_id = (self.task_id + 1) % self.config.task_batch_size
+    # self.task_id = (self.task_id + 1) % self.config.task_batch_size
+    self.task_id = task_id
     self.buffer.set_task(self.task_id)
     self.query_buffer.set_task(self.task_id)
 
@@ -86,20 +83,26 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     for k, v in info.items():
       self.logger[k] = v.mean()
 
+  @partial(jax.jit, static_argnums=0)
   def evaluate_support_and_query(
-      self, support: TrajectoryData,
+      self, critic_state: LearningState, safety_critic_state: LearningState,
+      support: TrajectoryData,
       query: TrajectoryData) -> [Evaluation, Evaluation]:
-    support_eval = self.adapt_critics_and_evaluate(support.o, support.r,
-                                                   support.c)
-    query_eval = self.adapt_critics_and_evaluate(query.o, query.r, query.c)
+    batched_adapt_critic_and_evaluate = jax.vmap(
+        partial(self.adapt_critics_and_evaluate, critic_state,
+                safety_critic_state))
+    support_eval = batched_adapt_critic_and_evaluate(support.o, support.r,
+                                                     support.c)
+    query_eval = batched_adapt_critic_and_evaluate(query.o, query.r, query.c)
     return support_eval, query_eval
 
-  @functools.partial(jax.jit, static_argnums=0)
+  @partial(jax.jit, static_argnums=0)
   def update_priors(self, lagrangian_state: LearningState,
                     actor_state: LearningState, inner_lr_state: LearningState,
                     support: TrajectoryData,
                     query: TrajectoryData) -> [LearningState, dict]:
-    support_eval, query_eval = self.evaluate_support_and_query(support, query)
+    support_eval, query_eval = self.evaluate_support_and_query(
+        self.critic.state, self.safety_critic.state, support, query)
     old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
     old_pi_support_logprob = old_pi_support.log_prob(support.a)
     old_pi_query = self.actor.apply(actor_state.params, query.o[:, :, :-1])
@@ -162,7 +165,9 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                 old_pi_support_logprob: jnp.ndarray,
                 old_pi_query_logprob: jnp.ndarray):
     lagrangian_lr, pi_lr = inner_lrs
-    lagrangian_posterior, pi_posteriors = self.adaptation_step(
+    adaptation_step = jax.vmap(self.task_adaptation,
+                               [None, None, None, None, 0, 0, 0, 0, 0, 0])
+    lagrangian_posterior, pi_posteriors = adaptation_step(
         lagrangian_prior, policy_prior, lagrangian_lr, pi_lr,
         support.o[:, :, :-1], support.a, support_eval.advantage,
         support_eval.cost_advantage, constraint, old_pi_support_logprob)
@@ -180,34 +185,21 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray):
     (advantage, return_, cost_advantage,
-     cost_return) = self.adapt_critics_and_evaluate(observation, reward, cost)
+     cost_return) = self.adapt_critics_and_evaluate(self.critic.state,
+                                                    self.safety_critic.state,
+                                                    observation, reward, cost)
     lagrangian_lr, pi_lr = self.inner_lrs.params
-    old_pi = self.actor.apply(self.actor.params, observation[:, :, :-1])
+    old_pi = self.actor.apply(self.actor.params, observation[:, :-1])
     old_pi_logprob = old_pi.log_prob(action)
-    constraint = cost.sum(2).mean(1)
-    _, pi_posteriors = self.adaptation_step(self.lagrangian.params,
+    constraint = cost.sum(1).mean()
+    _, pi_posteriors = self.task_adaptation(self.lagrangian.params,
                                             self.actor.params, lagrangian_lr,
-                                            pi_lr, observation[:, :, :-1],
-                                            action, advantage, cost_advantage,
+                                            pi_lr, observation[:, :-1], action,
+                                            advantage, cost_advantage,
                                             constraint, old_pi_logprob)
-    # Prepare per-task fine-tuned parameters.
-    for i in range(self.config.task_batch_size):
-      self.pi_posterior[i] = jax.tree_util.tree_map(lambda leaf: leaf[i],
-                                                    pi_posteriors)
+    self.pi_posterior = pi_posteriors
 
-  @functools.partial(jax.jit, static_argnums=0)
-  def adaptation_step(self, lagrangian_prior: hk.Params,
-                      policy_prior: hk.Params, lagrangian_lr: float,
-                      policy_lr: float, observation: np.ndarray,
-                      action: np.ndarray, advantage: np.ndarray,
-                      cost_advantage: np.ndarray, constraint: np.ndarray,
-                      old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
-    per_task_adaptation = jax.vmap(
-        functools.partial(self.task_adaptation, lagrangian_prior, policy_prior,
-                          lagrangian_lr, policy_lr))
-    return per_task_adaptation(observation, action, advantage, cost_advantage,
-                               constraint, old_pi_logprob)
-
+  @partial(jax.jit, static_argnums=0)
   def task_adaptation(self, lagrangian_prior: hk.Params,
                       policy_prior: hk.Params, lagrangian_lr: float,
                       pi_lr: float, observation: jnp.ndarray,
@@ -238,12 +230,13 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       def reinforce_loss(policy_params):
         pi = self.actor.apply(policy_params, observation)
         log_prob = pi.log_prob(action)
-        ratio = jnp.exp(log_prob - old_pi_logprob)
-        surr_advantage = ratio * advantage
+        # ratio = jnp.exp(log_prob - old_pi_logprob)
+        surr_advantage = log_prob * advantage
         objective = (
             surr_advantage + self.config.entropy_regularization * pi.entropy())
         if self.safe:
-          objective -= lagrangian * ratio * cost_advantage
+          # objective -= lagrangian * ratio * cost_advantage
+          objective -= lagrangian * log_prob * cost_advantage
           objective /= (1. + lagrangian)
         return -objective.mean()
 
@@ -258,16 +251,18 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                           jnp.arange(self.config.inner_steps))
     return lagrangian_posteriors, policy_posteriors
 
-  def adapt_critics_and_evaluate(self, observation: np.ndarray,
-                                 reward: np.ndarray,
+  @partial(jax.jit, static_argnums=0)
+  def adapt_critics_and_evaluate(self, critic_state: LearningState,
+                                 safety_critic_state: LearningState,
+                                 observation: np.ndarray, reward: np.ndarray,
                                  cost: np.ndarray) -> Evaluation:
-    # Find parameters that fit well the critics for each new tasks.
-    return_, cost_return = self.returns(reward, cost)
-    critic_states, _ = self.update_critic(self.critic.state,
-                                          observation[:, :, :-1], return_)
+    reward_return = vpg.discounted_cumsum(reward, self.config.discount)
+    cost_return = vpg.discounted_cumsum(cost, self.config.cost_discount)
+    critic_states, _ = self.update_critic(critic_state, observation[:, :-1],
+                                          reward_return)
     if self.safe:
       safety_critic_states, _ = self.update_safety_critic(
-          self.safety_critic.state, observation[:, :, :-1], cost_return)
+          safety_critic_state, observation[:, :-1], cost_return)
     else:
       safety_critic_states = critic_states
     # Evaluate with the task specific value functions.
@@ -275,39 +270,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                      safety_critic_states.params, observation,
                                      reward, cost)
 
-  @functools.partial(jax.jit, static_argnums=0)
-  def evaluate_with_safety(self, critic_params: hk.Params,
-                           safety_critic_params: hk.Params,
-                           observation: jnp.ndarray, reward: jnp.ndarray,
-                           cost: jnp.ndarray) -> Evaluation:
-    task_batched = jax.vmap(super(MamlPpoLagrangian, self).evaluate_with_safety)
-    return task_batched(critic_params, safety_critic_params, observation,
-                        reward, cost)
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def update_critic(self, state: LearningState, observation: jnp.ndarray,
-                    return_: jnp.ndarray) -> [LearningState, dict]:
-    partial = functools.partial(
-        super(MamlPpoLagrangian, self).update_critic, state)
-    # vmap over the task axis.
-    return jax.vmap(partial)(observation, return_)
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def update_safety_critic(self, state: LearningState, observation: jnp.ndarray,
-                           cost_return: jnp.ndarray) -> [LearningState, dict]:
-    partial = functools.partial(
-        super(MamlPpoLagrangian, self).update_safety_critic, state)
-    # vmap over the task axis.
-    return jax.vmap(partial)(observation, cost_return)
-
-  @functools.partial(jax.jit, static_argnums=0)
-  def returns(self, rewards: jnp.ndarray, costs: jnp.ndarray):
-    reward_return = discounted_cumsum(rewards, self.config.discount)
-    cost_return = discounted_cumsum(costs, self.config.cost_discount)
-    return reward_return, cost_return
-
-  @property
-  def task_posterior_params(self):
-    if None in self.pi_posterior:
-      return self.actor.params
-    return self.pi_posterior[self.task_id]
+  def policy_loss(self, params: hk.Params, *args):
+    observation, actions, advantage = args
+    pi = self.actor.apply(params, observation)
+    objective = (
+        pi.log_prob(actions) * advantage +
+        self.config.entropy_regularization * pi.entropy())
+    return -objective.mean()

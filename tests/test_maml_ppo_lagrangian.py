@@ -153,7 +153,7 @@ def test_cheetah():
       '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
       '--train_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
       '--test_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
-      '--jit', 'True', '--target_kl', '1e-3'
+      '--jit', 'True'
   ])
   if not config.jit:
     from jax.config import config as jax_config

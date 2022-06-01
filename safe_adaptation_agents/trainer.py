@@ -1,20 +1,16 @@
 import os
-from typing import Optional, List, Dict, Iterable, Tuple, Callable
-from types import SimpleNamespace
 from collections import defaultdict
 from functools import partial
 from itertools import repeat
+from types import SimpleNamespace
+from typing import Optional, List, Dict, Callable
 
 import cloudpickle
-
 import numpy as np
-
 from gym import Env
-
 from gym.spaces import Space
-
 from safe_adaptation_gym import benchmark
-from safe_adaptation_gym import tasks as sagt
+
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
 
@@ -129,16 +125,16 @@ class Trainer:
         action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
-        task_batch_size=config.task_batch_size,
-        on_episode_end=partial(on_episode_end, train=True, logger=logger))
+        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
+            episode, task_name, logger, True, adapt))
     test_driver = driver.Driver(
         **config.test_driver,
         time_limit=config.time_limit,
         action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
-        task_batch_size=config.task_batch_size,
-        on_episode_end=partial(on_episode_end, train=False, logger=logger),
+        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
+            episode, task_name, logger, False, adapt),
         render_episodes=config.render_episodes)
     return train_driver, test_driver
 

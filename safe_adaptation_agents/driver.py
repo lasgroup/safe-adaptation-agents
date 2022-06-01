@@ -1,5 +1,4 @@
 from functools import partial
-from itertools import tee
 
 from collections import defaultdict
 
@@ -24,7 +23,8 @@ def interact(agent: Agent,
              steps: int,
              train: bool,
              adaptation_buffer: Optional[etb.EpisodicTrajectoryBuffer] = None,
-             on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
+             on_episode_end: Optional[Callable[[EpisodeSummary, bool],
+                                               None]] = None,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
@@ -54,7 +54,7 @@ def interact(agent: Agent,
       observations = next_observations
       if transition.last:
         if on_episode_end:
-          on_episode_end(episodes[-1])
+          on_episode_end(episodes[-1], adapt)
         observations = environment.reset()
         episodes.append(defaultdict(list, {'observation': [observations]}))
       transition_steps = sum(transition.steps)
@@ -84,7 +84,6 @@ class Driver:
                action_repeat: int,
                observation_shape: Tuple,
                action_shape: Tuple,
-               task_batch_size: int,
                expose_task_id: bool = False,
                on_episode_end: Optional[Callable[[EpisodeSummary, str, bool],
                                                  None]] = None,
@@ -93,7 +92,7 @@ class Driver:
     num_steps = time_limit // action_repeat
     self.adaptation_buffer = etb.EpisodicTrajectoryBuffer(
         adaptation_steps // time_limit, num_steps, observation_shape,
-        action_shape, task_batch_size)
+        action_shape)
     self.adaptation_steps = adaptation_steps
     self.query_steps = query_steps
     self.episode_callback = on_episode_end
@@ -105,16 +104,14 @@ class Driver:
           tasks: Iterable[Tuple[str, sagt.Task]],
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
-    adaptation_tasks, query_tasks = tee(tasks)
-    if self.adaptation_steps > 0:
-      print('Collecting support data...')
-      for i, (task_name, task) in enumerate(adaptation_tasks):
-        callback = partial(
-            self.episode_callback, task_name=task_name,
-            adapt=True) if self.episode_callback is not None else None
+    for i, (task_name, task) in enumerate(tasks):
+      callback = lambda summary, adapt: self.episode_callback(
+          summary, task_name, adapt
+      ) if self.episode_callback is not None else None
+      if self.adaptation_steps > 0:
+        print('Collecting support data...')
         env.reset(options={'task': task})
-        agent.observe_task_id(task_name if self.expose_task_id else None)
-        self.adaptation_buffer.set_task(i)
+        agent.observe_task_id(i)
         agent, adaptation_episodes = interact(
             agent,
             env,
@@ -130,14 +127,8 @@ class Driver:
           'transition idx: {}'.format(self.adaptation_buffer.episode_id,
                                       self.adaptation_buffer.idx))
       agent.adapt(*self.adaptation_buffer.dump())
-    if self.query_steps > 0:
-      print('Collecting query data...')
-      for task_name, task in query_tasks:
-        callback = partial(
-            self.episode_callback, task_name=task_name,
-            adapt=False) if self.episode_callback is not None else None
-        env.reset(options={'task': task})
-        agent.observe_task_id(task_name if self.expose_task_id else None)
+      if self.query_steps > 0:
+        print('Collecting query data...')
         agent, query_episodes = interact(
             agent,
             env,
@@ -147,4 +138,4 @@ class Driver:
             render_episodes=self.render_episodes,
             render_mode=self.render_mode)
         iter_query_episodes[task_name] = query_episodes
-      return iter_adaptation_episodes, iter_query_episodes
+    return iter_adaptation_episodes, iter_query_episodes
