@@ -271,7 +271,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                      reward, cost)
 
   def policy_loss(self, params: hk.Params, *args):
-    observation, actions, advantage = args
+    observation, actions, advantage, *_ = args
     pi = self.actor.apply(params, observation)
     objective = (
         pi.log_prob(actions) * advantage +
