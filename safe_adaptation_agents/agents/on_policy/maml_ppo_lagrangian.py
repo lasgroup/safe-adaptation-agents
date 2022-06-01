@@ -161,10 +161,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                 old_pi_support_logprob: jnp.ndarray,
                 old_pi_query_logprob: jnp.ndarray):
     lagrangian_lr, pi_lr = inner_lrs
-    adaptation_step = jax.vmap(self.task_adaptation,
-                               [None, None, None, None, 0, 0, 0, 0, 0, 0])
-    lagrangian_posterior, pi_posteriors = adaptation_step(
-        lagrangian_prior, policy_prior, lagrangian_lr, pi_lr,
+    batched_adaptation_step = jax.vmap(
+        partial(self.task_adaptation, lagrangian_prior, policy_prior,
+                lagrangian_lr, pi_lr))
+    lagrangian_posterior, pi_posteriors = batched_adaptation_step(
         support.o[:, :, :-1], support.a, support_eval.advantage,
         support_eval.cost_advantage, constraint, old_pi_support_logprob)
     # vmap lagrangian and policy loss over the task axis.
