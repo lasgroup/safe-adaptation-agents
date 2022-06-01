@@ -103,7 +103,6 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     old_pi_support_logprob = old_pi_support.log_prob(support.a)
     old_pi_query = self.actor.apply(actor_state.params, query.o[:, :, :-1])
     old_pi_query_logprob = old_pi_query.log_prob(query.a)
-    constraint = support.c.sum(2).mean(1)
 
     def cond(val):
       iter_, *_, info = val
@@ -118,7 +117,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       (iter_, lagrangian_state, actor_state, lr_state, _) = val
       loss, grads = jax.value_and_grad(self.meta_loss, (0, 1, 2))(
           lagrangian_state.params, actor_state.params, lr_state.params, support,
-          query, support_eval, query_eval, constraint, old_pi_support_logprob,
+          query, support_eval, query_eval, old_pi_support_logprob,
           old_pi_query_logprob)
       lagrangian_grads, pi_grads, lr_grads = grads
       new_actor_state = self.actor.grad_step(pi_grads, actor_state)
@@ -157,27 +156,28 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def meta_loss(self, lagrangian_prior: hk.Params, policy_prior: hk.Params,
                 inner_lrs: Tuple[float, float], support: TrajectoryData,
                 query: TrajectoryData, support_eval: Evaluation,
-                query_eval: Evaluation, constraint: jnp.ndarray,
-                old_pi_support_logprob: jnp.ndarray,
+                query_eval: Evaluation, old_pi_support_logprob: jnp.ndarray,
                 old_pi_query_logprob: jnp.ndarray):
-    # TODO (yarden): debug what happens if we turn off task adaptation and apply only prior in __call__ -- should have similar performance as regular halfcheetah.
     lagrangian_lr, pi_lr = inner_lrs
-    batched_adaptation_step = jax.vmap(
-        partial(self.task_adaptation, lagrangian_prior, policy_prior,
-                lagrangian_lr, pi_lr))
-    lagrangian_posterior, pi_posteriors = batched_adaptation_step(
-        support.o[:, :, :-1], support.a, support_eval.advantage,
-        support_eval.cost_advantage, constraint, old_pi_support_logprob)
-    # vmap lagrangian and policy loss over the task axis.
-    loss = jax.vmap(self.policy_loss)
-    if self.safe:
-      lagrangian = jax.vmap(self.lagrangian.apply)
-      lagrangian_posterior = jnn.softplus(lagrangian(lagrangian_posterior))
-    else:
-      lagrangian_posterior = jnp.zeros_like(constraint)
-    return loss(pi_posteriors, query.o[:, :, :-1], query.a,
-                query_eval.advantage, query_eval.cost_advantage,
-                lagrangian_posterior, old_pi_query_logprob).mean()
+
+    def task_loss(support, query, support_eval, query_eval,
+                  old_pi_support_logprob, old_pi_query_logprob):
+      constraint = support.c.sum(1).mean()
+      lagrangian_posterior, pi_posterior = self.task_adaptation(
+          lagrangian_prior, policy_prior, lagrangian_lr, pi_lr,
+          support.o[:, :-1], support.a, support_eval.advantage,
+          support_eval.cost_advantage, constraint, old_pi_support_logprob)
+      if self.safe:
+        lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
+      else:
+        lagrangian = jnp.zeros_like(constraint)
+      return self.policy_loss(pi_posterior, query.o[:, :-1], query.a,
+                              query_eval.advantage, query_eval.cost_advantage,
+                              lagrangian, old_pi_query_logprob)
+
+    task_loss = jax.vmap(task_loss)
+    return task_loss(support, query, support_eval, query_eval,
+                     old_pi_support_logprob, old_pi_query_logprob).mean()
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray):
