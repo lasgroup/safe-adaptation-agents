@@ -64,12 +64,12 @@ domain_randomization:
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
-  vf_iters: 10
-  pi_iters: 80
+  vf_iters: 80
+  pi_iters: 20
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
-  lambda_: 0.97
+  lambda_: 1.0
   cost_discount: 0.99
   num_trajectories: 10
   num_query_trajectories: 10
