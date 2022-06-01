@@ -142,6 +142,8 @@ def test_cheetah():
   def make_env(config):
     env = HalfCheetahRandDirecEnv()
     env = gym.wrappers.TimeLimit(env, config.time_limit)
+    env = gym.wrappers.RescaleAction(env, -10.0, 10.0)
+    env = gym.wrappers.ClipAction(env)
     return env
 
   config = options.load_config([
