@@ -116,7 +116,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       # kl threshold to continue iterating
       return jax.lax.bitwise_not(
           jax.lax.bitwise_or(kl > self.config.kl_margin * self.config.target_kl,
-                             iter_ == self.config.pi_iters))
+                             iter_ == 1))
 
     def body(val):
       (iter_, lagrangian_state, actor_state, lr_state, _) = val
