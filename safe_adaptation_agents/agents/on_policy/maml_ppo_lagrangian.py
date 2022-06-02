@@ -185,14 +185,14 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
      old_pi_logprob) = args
     pi = self.actor.apply(params, observation)
     log_prob = pi.log_prob(action)
-    if False:
-      ratio = jnp.exp(log_prob - old_pi_logprob)
+    ratio = jnp.exp(log_prob - old_pi_logprob)
+    if True:
       min_adv = jnp.where(advantage > 0.,
                           (1. + self.config.clip_ratio) * advantage,
                           (1. - self.config.clip_ratio) * advantage)
       surr_advantage = jnp.minimum(ratio * advantage, min_adv)
     else:
-      surr_advantage = log_prob * advantage
+      surr_advantage = ratio * advantage
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())
     return -objective.mean()
@@ -228,8 +228,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     def reinforce_loss(policy_params):
       pi = self.actor.apply(policy_params, observation)
       log_prob = pi.log_prob(action)
-      # ratio = jnp.exp(log_prob - old_pi_logprob)
-      ratio = log_prob
+      ratio = jnp.exp(log_prob - old_pi_logprob)
       surr_advantage = ratio * advantage
       objective = (
           surr_advantage + self.config.entropy_regularization * pi.entropy())
