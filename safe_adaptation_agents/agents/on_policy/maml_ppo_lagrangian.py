@@ -187,7 +187,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     log_prob = pi.log_prob(action)
     ratio = jnp.exp(log_prob - old_pi_logprob)
     if True:
-      min_adv = jnp.where(advantage > 0.,
+      min_adv = jnp.where(advantage >= 0.,
                           (1. + self.config.clip_ratio) * advantage,
                           (1. - self.config.clip_ratio) * advantage)
       surr_advantage = jnp.minimum(ratio * advantage, min_adv)
