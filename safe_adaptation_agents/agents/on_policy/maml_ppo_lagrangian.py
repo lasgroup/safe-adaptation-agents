@@ -40,7 +40,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         next(self.rng_seq), self.config.inner_lr_opt,
         utils.get_mixed_precision_policy(config.precision))
     self.pi_posterior = None
-    # Save a posterior of each task for the outer update step.
+    # Save a posterior of each task for the outer update steps. See ProMP,
+    # Rothfuss et al (2018) @ https://arxiv.org/abs/1810.06784
     self.pi_posteriors = [None] * self.config.task_batch_size
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
@@ -51,15 +52,13 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
           'buffer with adaptation and query data)')
       self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
-    # Use the prior parameters on adaptation phase.
-    # TODO *YARDEN*
+    # Use the prior parameters on only adaptation phase, otherwise use prior.
     policy_params = self.actor.params if adapt else self.pi_posterior
     action = self.policy(observation, policy_params, next(self.rng_seq), train)
     return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
-    # self.task_id = (self.task_id + 1) % self.config.task_batch_size
-    self.task_id = task_id
+    self.task_id = (self.task_id + 1) % self.config.task_batch_size
     self.buffer.set_task(self.task_id)
 
   def train(self, trajectory_data: TrajectoryData):
@@ -131,8 +130,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       new_actor_state = self.actor.grad_step(pi_grads, actor_state)
       new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
                                                        lagrangian_state)
-      # new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
-      new_lr_state = lr_state
+      new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
       new_pi = self.actor.apply(new_actor_state.params, support.o[:, :, :-1])
       kl_d = old_pi_support.kl_divergence(new_pi).mean()
       report = {
