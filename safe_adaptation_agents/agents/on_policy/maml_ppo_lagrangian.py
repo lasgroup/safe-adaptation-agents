@@ -124,8 +124,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
                                                        lagrangian_state)
       new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
-      new_pi = self.actor.apply(new_actor_state.params, query.o[:, :, :-1])
-      kl_d = old_pi_query.kl_divergence(new_pi).mean()
+      new_pi = self.actor.apply(new_actor_state.params, support.o[:, :, :-1])
+      kl_d = old_pi_support.kl_divergence(new_pi).mean()
       report = {
           'agent/actor/loss': loss,
           'agent/actor/entropy': new_pi.entropy().mean(),

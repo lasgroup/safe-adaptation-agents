@@ -43,7 +43,7 @@ class DummyBenchmark:
 class HalfCheetahRandDirecEnv(MujocoEnv):
 
   def __init__(self):
-    self.set_task(1.)
+    self.goal_direction = 1.
     MujocoEnv.__init__(self, 'half_cheetah.xml', 5)
 
   def set_task(self, task):
