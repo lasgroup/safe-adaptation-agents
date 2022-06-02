@@ -90,6 +90,10 @@ def gradient_descent(grads: Any, params: hk.Params, lr: float):
   return jax.tree_map(lambda p, g: p - lr * g, params, grads)
 
 
-def pytrees_stack(pytrees, axis=0):
+def pytrees_stack(pytrees: Any, axis=0):
   results = jax.tree_map(lambda *values: jnp.stack(values, axis=axis), *pytrees)
   return results
+
+
+def inv_softplus(x: Union[jnp.ndarray, float]):
+  return jnp.log(jnp.exp(x) - 1.0)

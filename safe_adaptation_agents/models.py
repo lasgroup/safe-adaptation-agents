@@ -11,6 +11,7 @@ import haiku as hk
 from tensorflow_probability.substrates import jax as tfp
 
 from safe_adaptation_agents import nets
+from safe_adaptation_agents import utils
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -51,7 +52,7 @@ class Actor(hk.Module):
       mu, stddev = x, hk.get_parameter('pi_stddev', (x.shape[-1],), x.dtype,
                                        hk.initializers.Constant(-0.5))
     if self._squash:
-      init_std = np.log(np.exp(5.0) - 1.0).astype(stddev.dtype)
+      init_std = utils.inv_softplus(5.)
       stddev = jnn.softplus(stddev + init_std) + self._min_stddev
       multivariate_normal_diag = tfd.Normal(5.0 * jnn.tanh(mu / 5.0), stddev)
       multivariate_normal_diag = tfd.TransformedDistribution(
