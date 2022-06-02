@@ -186,13 +186,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     pi = self.actor.apply(params, observation)
     log_prob = pi.log_prob(action)
     ratio = jnp.exp(log_prob - old_pi_logprob)
-    if True:
-      min_adv = jnp.where(advantage >= 0.,
-                          (1. + self.config.clip_ratio) * advantage,
-                          (1. - self.config.clip_ratio) * advantage)
-      surr_advantage = jnp.minimum(ratio * advantage, min_adv)
-    else:
-      surr_advantage = ratio * advantage
+    min_adv = jnp.where(advantage >= 0.,
+                        (1. + self.config.clip_ratio) * advantage,
+                        (1. - self.config.clip_ratio) * advantage)
+    surr_advantage = jnp.minimum(ratio * advantage, min_adv)
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())
     return -objective.mean()
