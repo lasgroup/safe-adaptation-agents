@@ -109,7 +109,6 @@ class Driver:
           summary, task_name, adapt
       ) if self.episode_callback is not None else None
       if self.adaptation_steps > 0:
-        print('Collecting support data...')
         env.reset(options={'task': task})
         agent.observe_task_id(task_name if self.expose_task_id else None)
         agent, adaptation_episodes = interact(
@@ -128,7 +127,6 @@ class Driver:
                                       self.adaptation_buffer.idx))
       agent.adapt(*self.adaptation_buffer.dump())
       if self.query_steps > 0:
-        print('Collecting query data...')
         agent, query_episodes = interact(
             agent,
             env,

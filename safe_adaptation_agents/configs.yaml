@@ -65,7 +65,7 @@ domain_randomization:
 maml_ppo_lagrangian:
   entropy_regularization: 0.
   vf_iters: 80
-  pi_iters: 5
+  pi_iters: 80
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
@@ -81,7 +81,7 @@ maml_ppo_lagrangian:
   target_kl: 0.01
   initial_lagrangian: 1.
   lagrangian_inner_lr: 0.1
-  policy_inner_lr: 0.01
+  policy_inner_lr: 0.1
   inner_lr_opt: {lr: 0.}
   inner_steps: 1
 
