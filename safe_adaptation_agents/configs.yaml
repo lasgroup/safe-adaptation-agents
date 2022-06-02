@@ -36,8 +36,8 @@ vanilla_policy_gradients:
   discount: 0.99
   lambda_: 0.97
   num_trajectories: 30
-  actor_opt: {lr: 0.01, eps: 1e-7, clip: 10}
-  critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
+  actor_opt: {lr: 0.01, eps: 1e-8}
+  critic_opt: {lr: 0.01, eps: 1e-8}
 
 ppo_lagrangian:
   entropy_regularization: 0.
@@ -65,7 +65,7 @@ domain_randomization:
 maml_ppo_lagrangian:
   entropy_regularization: 0.
   vf_iters: 80
-  pi_iters: 80
+  pi_iters: 5
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
@@ -73,9 +73,9 @@ maml_ppo_lagrangian:
   cost_discount: 0.99
   num_trajectories: 10
   num_query_trajectories: 10
-  actor_opt: {lr: 1e-3, eps: 1e-7, clip: 100}
-  critic_opt: {lr: 1e-3, eps: 1e-7, clip: 100}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-7, clip: 100}
+  actor_opt: {lr: 1e-3}
+  critic_opt: {lr: 1e-3}
+  lagrangian_opt: {lr: 5e-2}
   clip_ratio: 0.3
   kl_margin: 1.2
   target_kl: 0.01
