@@ -111,7 +111,7 @@ class Driver:
       if self.adaptation_steps > 0:
         print('Collecting support data...')
         env.reset(options={'task': task})
-        agent.observe_task_id(i)
+        agent.observe_task_id(task_name if self.expose_task_id else None)
         agent, adaptation_episodes = interact(
             agent,
             env,
