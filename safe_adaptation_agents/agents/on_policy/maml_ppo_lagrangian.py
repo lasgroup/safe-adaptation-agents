@@ -40,6 +40,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
         next(self.rng_seq), self.config.inner_lr_opt,
         utils.get_mixed_precision_policy(config.precision))
     self.pi_posterior = None
+    # Save a posterior of each task for the outer update step.
+    self.pi_posteriors = [None] * self.config.task_batch_size
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -74,7 +76,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     query = TrajectoryData(*query)
     (self.lagrangian.state, self.actor.state, self.inner_lrs.state,
      info) = self.update_priors(self.lagrangian.state, self.actor.state,
-                                self.inner_lrs.state, support, query)
+                                self.inner_lrs.state, support, query,
+                                utils.pytrees_stack(self.pi_posteriors))
     info['agent/lagrangian_lr'] = self.inner_lrs.params[0]
     info['agent/policy_lr'] = self.inner_lrs.params[1]
     for k, v in info.items():
@@ -96,14 +99,18 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   @partial(jax.jit, static_argnums=0)
   def update_priors(self, lagrangian_state: LearningState,
                     actor_state: LearningState, inner_lr_state: LearningState,
-                    support: TrajectoryData,
-                    query: TrajectoryData) -> [LearningState, dict]:
+                    support: TrajectoryData, query: TrajectoryData,
+                    pi_posteriors: hk.Params) -> [LearningState, dict]:
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
     old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
     old_pi_support_logprob = old_pi_support.log_prob(support.a)
-    old_pi_query = self.actor.apply(actor_state.params, query.o[:, :, :-1])
-    old_pi_query_logprob = old_pi_query.log_prob(query.a)
+
+    def old_posterior_pi_logprobs(params, o, a):
+      return self.actor.apply(params, o).log_prob(a)
+
+    old_pi_query_logprob = jax.vmap(old_posterior_pi_logprobs)(
+        pi_posteriors, query.o[:, :, :-1], query.a)
 
     def cond(val):
       iter_, *_, info = val
@@ -124,7 +131,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       new_actor_state = self.actor.grad_step(pi_grads, actor_state)
       new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
                                                        lagrangian_state)
-      new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
+      # new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
+      new_lr_state = lr_state
       new_pi = self.actor.apply(new_actor_state.params, support.o[:, :, :-1])
       kl_d = old_pi_support.kl_divergence(new_pi).mean()
       report = {
@@ -204,12 +212,13 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     old_pi = self.actor.apply(self.actor.params, observation[:, :-1])
     old_pi_logprob = old_pi.log_prob(action)
     constraint = cost.sum(1).mean()
-    _, pi_posteriors = self.task_adaptation(self.lagrangian.params,
-                                            self.actor.params, lagrangian_lr,
-                                            pi_lr, observation[:, :-1], action,
-                                            advantage, cost_advantage,
-                                            constraint, old_pi_logprob)
-    self.pi_posterior = pi_posteriors
+    _, pi_posterior = self.task_adaptation(self.lagrangian.params,
+                                           self.actor.params, lagrangian_lr,
+                                           pi_lr, observation[:, :-1], action,
+                                           advantage, cost_advantage,
+                                           constraint, old_pi_logprob)
+    self.pi_posterior = pi_posterior
+    self.pi_posteriors[self.task_id] = pi_posterior
 
   @partial(jax.jit, static_argnums=0)
   def task_adaptation(self, lagrangian_prior: hk.Params,

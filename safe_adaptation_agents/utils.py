@@ -88,3 +88,8 @@ def gradient_descent(grads: Any, params: hk.Params, lr: float):
   Performs one step of gradient decent.
   """
   return jax.tree_map(lambda p, g: p - lr * g, params, grads)
+
+
+def pytrees_stack(pytrees, axis=0):
+  results = jax.tree_map(lambda *values: jnp.stack(values, axis=axis), *pytrees)
+  return results
