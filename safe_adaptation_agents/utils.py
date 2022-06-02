@@ -24,7 +24,7 @@ class Learner:
     self.optimizer = optax.flatten(
         optax.chain(
             optax.clip_by_global_norm(optimizer_config.get('clip', 100)),
-            optax.scale_by_adam(eps=optimizer_config.get('eps', 1 - 8)),
+            optax.scale_by_adam(eps=optimizer_config.get('eps', 1e-8)),
             optax.scale(-optimizer_config.get('lr', 1e-3))))
     self.model = model
     if isinstance(model, (hk.Transformed, hk.MultiTransformed)):
