@@ -234,39 +234,32 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                       action: jnp.ndarray, advantage: jnp.ndarray,
                       cost_advantage: jnp.ndarray, constraint: jnp.ndarray,
                       old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
-    # Finds policy's and lagrangian's MAP paramters for a single task.
     lagrangian_lr, pi_lr = map(jnn.softplus, (lagrangian_lr, pi_lr))
-
-    def inner_grad_step(prior, _):
-      lagrangian_prior, pi_prior = prior
+    new_lagrangian, new_pi = lagrangian_prior, policy_prior
+    lagrangian_loss = lambda p: -self.lagrangian.apply(p) * (
+        constraint - self.config.cost_limit)[0]
+    for _ in range(self.config.inner_steps):
       if self.safe:
-        lagrangian_loss = lambda p: -self.lagrangian.apply(p) * (
-            constraint - self.config.cost_limit)[0]
-        lagrangian_grads = jax.grad(lagrangian_loss)(lagrangian_prior)
-        lagrangian_posterior = utils.gradient_descent(lagrangian_grads,
-                                                      lagrangian_prior,
-                                                      lagrangian_lr)
-        lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
+        # Fine tune the lagrangian for the given task.
+        lagrangian_grads = jax.grad(lagrangian_loss)(new_lagrangian)
+        new_lagrangian = utils.gradient_descent(lagrangian_grads,
+                                                new_lagrangian, lagrangian_lr)
+        lagrangian = jnn.softplus(self.lagrangian.apply(new_lagrangian))
       else:
         lagrangian = 0.
-        lagrangian_posterior = lagrangian_prior
+      # Use the newly-tuned lagrangian and task evaluation to fine-tune the
+      # policy.
       policy_grads = jax.grad(self.policy_loss)(
-          pi_prior,
+          new_pi,
           observation,
           action,
           advantage,
           cost_advantage,
           lagrangian,
           old_pi_logprob,
-          clip=False,
-      )
-      policy_posterior = utils.gradient_descent(policy_grads, pi_prior, pi_lr)
-      return (lagrangian_posterior, policy_posterior), None
-
-    posteriors, _ = jax.lax.scan(inner_grad_step,
-                                 (lagrangian_prior, policy_prior),
-                                 jnp.arange(self.config.inner_steps))
-    return posteriors
+          clip=False)
+      new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
+    return new_lagrangian, new_pi
 
   def policy_loss(self, params: hk.Params, *args, clip=True) -> jnp.ndarray:
     (
