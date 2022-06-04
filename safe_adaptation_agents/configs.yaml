@@ -1,6 +1,6 @@
 defaults:
   agent: vanilla_policy_gradients
-  safe: False
+  safe: True
   robot: point
   cost_limit: 25
   log_dir: results
@@ -13,18 +13,19 @@ defaults:
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 1
   render_episodes: 1
-  render_options: {height: 120, width: 160, camera_id: 'fixedfar'}
+  render_options: {camera_id: 'fixedfar'}
   render_mode: rgb_array
   jit: True
   precision: 32
-  parallel_envs: 5
+  parallel_envs: 10
+  task_batch_size: 8
 
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 30000, query_steps: 0}
   test_driver: {adaptation_steps: 0, query_steps: 10000}
   eval_trials: 1
-
+  task_batch_size: 1
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
@@ -35,8 +36,8 @@ vanilla_policy_gradients:
   discount: 0.99
   lambda_: 0.97
   num_trajectories: 30
-  actor_opt: {lr: 0.01, eps: 1e-7, clip: 10}
-  critic_opt: {lr: 0.01, eps: 1e-7, clip: 10}
+  actor_opt: {lr: 0.01, eps: 1e-8}
+  critic_opt: {lr: 0.01, eps: 1e-8}
 
 ppo_lagrangian:
   entropy_regularization: 0.
@@ -48,13 +49,18 @@ ppo_lagrangian:
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 30
-  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
-  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  actor_opt: {lr: 3e-4, eps: 1e-5}
+  critic_opt: {lr: 1e-3, eps: 1e-5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
+
+domain_randomization:
+  train_driver: {adaptation_steps: 10000, query_steps: 5000}
+  test_driver: {adaptation_steps: 10000, query_steps: 5000}
+  eval_trials: 1
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
@@ -63,17 +69,19 @@ maml_ppo_lagrangian:
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
-  lambda_: 0.97
+  lambda_: 1.0
   cost_discount: 0.99
-  num_trajectories: 30
-  query_num_trajectories: 15
-  policy_lr: 0.1
-  lagrangian_lr: 1e-3
-  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
-  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 1.}
+  num_trajectories: 10
+  num_query_trajectories: 10
+  actor_opt: {lr: 1e-3, eps: 1e-5}
+  critic_opt: {lr: 1e-3, eps: 1e-5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
   initial_lagrangian: 1.
+  lagrangian_inner_lr: 0.1
+  policy_inner_lr: 0.1
+  inner_lr_opt: {lr: 0.}
+  inner_steps: 1
 

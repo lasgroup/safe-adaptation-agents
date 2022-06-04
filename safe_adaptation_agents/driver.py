@@ -1,34 +1,39 @@
 from functools import partial
-from itertools import tee
 
 from collections import defaultdict
 
 from typing import (Callable, Optional, Dict, List, DefaultDict, Iterable,
                     Tuple)
 
-from gym.vector import VectorEnv
 import numpy as np
 from tqdm import tqdm
 
 from safe_adaptation_gym import tasks as sagt
 
+from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents.agents import Agent, Transition
+from safe_adaptation_agents.episodic_async_env import EpisodicAsync
 
 EpisodeSummary = Dict[str, List]
 IterationSummary = Dict[str, List[EpisodeSummary]]
 
 
 def interact(agent: Agent,
-             environment: VectorEnv,
+             environment: EpisodicAsync,
              steps: int,
              train: bool,
-             adapt: bool,
-             on_episode_end: Optional[Callable[[EpisodeSummary], None]] = None,
+             adaptation_buffer: Optional[etb.EpisodicTrajectoryBuffer] = None,
+             on_episode_end: Optional[Callable[[EpisodeSummary, bool],
+                                               None]] = None,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
   step = 0
   episodes = [defaultdict(list, {'observation': [observations]})]
+  adapt = adaptation_buffer is not None
+  # Discard transitions from environments such that episodes always finish
+  # after time_limit
+  discard = min(steps // environment.time_limit, environment.num_envs)
   with tqdm(total=steps) as pbar:
     while step < steps:
       if render_episodes:
@@ -37,14 +42,19 @@ def interact(agent: Agent,
       actions = agent(observations, train, adapt)
       next_observations, rewards, dones, infos = environment.step(actions)
       costs = np.array([info.get('cost', 0) for info in infos])
-      transition = Transition(observations, next_observations, actions, rewards,
-                              costs, dones, infos)
+      transition = Transition(
+          *map(lambda x: x[:discard], (observations, next_observations, actions,
+                                       rewards, costs, dones, infos)))
       episodes[-1] = _append(transition, episodes[-1])
-      agent.observe(transition, train, adapt)
+      if train:
+        agent.observe(transition, adapt)
+      # Append adaptation data if needed.
+      if adaptation_buffer is not None:
+        adaptation_buffer.add(transition)
       observations = next_observations
       if transition.last:
         if on_episode_end:
-          on_episode_end(episodes[-1])
+          on_episode_end(episodes[-1], adapt)
         observations = environment.reset()
         episodes.append(defaultdict(list, {'observation': [observations]}))
       transition_steps = sum(transition.steps)
@@ -70,11 +80,19 @@ class Driver:
   def __init__(self,
                adaptation_steps: int,
                query_steps: int,
+               time_limit: int,
+               action_repeat: int,
+               observation_shape: Tuple,
+               action_shape: Tuple,
                expose_task_id: bool = False,
-               on_episode_end: Optional[Callable[[str, EpisodeSummary],
+               on_episode_end: Optional[Callable[[EpisodeSummary, str, bool],
                                                  None]] = None,
                render_episodes: int = 0,
                render_mode: str = 'rgb_array'):
+    num_steps = time_limit // action_repeat
+    self.adaptation_buffer = etb.EpisodicTrajectoryBuffer(
+        adaptation_steps // time_limit, num_steps, observation_shape,
+        action_shape)
     self.adaptation_steps = adaptation_steps
     self.query_steps = query_steps
     self.episode_callback = on_episode_end
@@ -82,35 +100,40 @@ class Driver:
     self.render_mode = render_mode
     self.expose_task_id = expose_task_id
 
-  def run(self, agent: Agent, env: VectorEnv, tasks: Iterable[Tuple[str,
-                                                                    sagt.Task]],
+  def run(self, agent: Agent, env: EpisodicAsync,
+          tasks: Iterable[Tuple[str, sagt.Task]],
           train: bool) -> [IterationSummary, IterationSummary]:
     iter_adaptation_episodes, iter_query_episodes = {}, {}
-    adaptation_tasks, query_tasks = tee(tasks)
-    for task_name, task in adaptation_tasks:
-      env.reset(options={'task': task})
-      agent.observe_task_id(task_name if self.expose_task_id else None)
-      agent, adaptation_episodes = interact(
-          agent,
-          env,
-          self.adaptation_steps,
-          train=train,
-          adapt=True,
-          on_episode_end=partial(self.episode_callback, task_name=task_name),
-          render_episodes=self.render_episodes,
-          render_mode=self.render_mode)
-      iter_adaptation_episodes[task_name] = adaptation_episodes
-    for task_name, task in query_tasks:
-      env.reset(options={'task': task})
-      agent.observe_task_id(task_name if self.expose_task_id else None)
-      agent, query_episodes = interact(
-          agent,
-          env,
-          self.query_steps,
-          train=train,
-          adapt=False,
-          on_episode_end=partial(self.episode_callback, task_name=task_name),
-          render_episodes=self.render_episodes,
-          render_mode=self.render_mode)
-      iter_query_episodes[task_name] = query_episodes
+    for i, (task_name, task) in enumerate(tasks):
+      callback = lambda summary, adapt: self.episode_callback(
+          summary, task_name, adapt
+      ) if self.episode_callback is not None else None
+      if self.adaptation_steps > 0:
+        env.reset(options={'task': task})
+        agent.observe_task_id(task_name if self.expose_task_id else None)
+        agent, adaptation_episodes = interact(
+            agent,
+            env,
+            self.adaptation_steps,
+            train=train,
+            adaptation_buffer=self.adaptation_buffer,
+            on_episode_end=callback,
+            render_episodes=self.render_episodes,
+            render_mode=self.render_mode)
+        iter_adaptation_episodes[task_name] = adaptation_episodes
+      assert self.adaptation_buffer.full, (
+          'Adaptation buffer should be full at this point. Episode id: {}, '
+          'transition idx: {}'.format(self.adaptation_buffer.episode_id,
+                                      self.adaptation_buffer.idx))
+      agent.adapt(*self.adaptation_buffer.dump())
+      if self.query_steps > 0:
+        agent, query_episodes = interact(
+            agent,
+            env,
+            self.query_steps,
+            train=train,
+            on_episode_end=callback,
+            render_episodes=self.render_episodes,
+            render_mode=self.render_mode)
+        iter_query_episodes[task_name] = query_episodes
     return iter_adaptation_episodes, iter_query_episodes

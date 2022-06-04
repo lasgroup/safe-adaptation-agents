@@ -12,8 +12,8 @@ import haiku as hk
 
 from safe_adaptation_agents.agents import Agent, Transition
 from safe_adaptation_agents.logging import TrainingLogger
-from safe_adaptation_agents.agents.on_policy.trajectory_buffer import (
-    TrajectoryBuffer)
+from safe_adaptation_agents.episodic_trajectory_buffer import (
+    EpisodicTrajectoryBuffer, TrajectoryData)
 from safe_adaptation_agents import utils
 from safe_adaptation_agents.utils import LearningState
 
@@ -29,10 +29,10 @@ class VanillaPolicyGrandients(Agent):
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.rs = np.random.RandomState(config.seed)
     self.training_step = 0
-    self.buffer = TrajectoryBuffer(self.config.num_trajectories,
-                                   self.config.time_limit,
-                                   observation_space.shape, action_space.shape)
-    self.buffer.set_task(0)
+    num_steps = self.config.time_limit // self.config.action_repeat
+    self.buffer = EpisodicTrajectoryBuffer(self.config.num_trajectories,
+                                           num_steps, observation_space.shape,
+                                           action_space.shape)
     self.actor = utils.Learner(
         actor, next(self.rng_seq), config.actor_opt,
         utils.get_mixed_precision_policy(config.precision),
@@ -45,18 +45,21 @@ class VanillaPolicyGrandients(Agent):
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
     if self.time_to_update and train:
-      self.train(*self.buffer.dump())
+      self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
     action = self.policy(observation, self.actor.params, next(self.rng_seq),
                          train)
     return action
 
-  def observe(self, transition: Transition, train: bool, adapt: bool):
-    if train:
-      self.buffer.add(transition)
-      self.training_step += sum(transition.steps)
+  def observe(self, transition: Transition, adapt: bool):
+    self.buffer.add(transition)
+    self.training_step += sum(transition.steps)
 
   def observe_task_id(self, task_id: Optional[str] = None):
+    pass
+
+  def adapt(self, observation: np.ndarray, action: np.ndarray,
+            reward: np.ndarray, cost: np.ndarray):
     pass
 
   @functools.partial(jax.jit, static_argnums=(0, 4))
@@ -69,20 +72,21 @@ class VanillaPolicyGrandients(Agent):
     action = policy.sample(seed=key) if training else policy.mode()
     return action
 
-  def train(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, _, __):
-    advantage, return_ = self.evaluate(self.critic.params, observation, reward)
-    self.actor.state, actor_report = self.actor_update_step(
-        self.actor.state, observation[:, :-1], action, advantage)
+  def train(self, trajectory_data: TrajectoryData):
+    advantage, return_ = self.evaluate(self.critic.params, trajectory_data.o,
+                                       trajectory_data.r)
+    self.actor.state, actor_report = self.update_actor(
+        self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
+        advantage)
     (self.critic.state,
-     critic_report) = self.critic_update_step(self.critic.state,
-                                              observation[:, :-1], return_)
+     critic_report) = self.update_critic(self.critic.state,
+                                         trajectory_data.o[:, :-1], return_)
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
   @functools.partial(jax.jit, static_argnums=0)
-  def critic_update_step(self, state: LearningState, observation: jnp.ndarray,
-                         return_: jnp.ndarray) -> [LearningState, dict]:
+  def update_critic(self, state: LearningState, observation: jnp.ndarray,
+                    return_: jnp.ndarray) -> [LearningState, dict]:
 
     def update(critic_state: LearningState):
       loss, grads = jax.value_and_grad(self.critic_loss)(critic_state.params,
@@ -97,21 +101,18 @@ class VanillaPolicyGrandients(Agent):
                         jnp.arange(self.config.vf_iters))
 
   @functools.partial(jax.jit, static_argnums=0)
-  def actor_update_step(self, state: LearningState, *args,
-                        **kwargs) -> [LearningState, dict]:
+  def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, *_ = args
-    loss, grads = jax.value_and_grad(self.policy_loss)(state.params,
-                                                       *args, **kwargs)
+    loss, grads = jax.value_and_grad(self.policy_loss)(state.params, *args)
     new_actor_state = self.actor.grad_step(grads, state)
-    entropy = self.actor.apply(state.params,
-                               observation).entropy().mean()
+    entropy = self.actor.apply(state.params, observation).entropy().mean()
     return new_actor_state, {
         'agent/actor/loss': loss,
         'agent/actor/grad': optax.global_norm(grads),
         'agent/actor/entropy': entropy
     }
 
-  def policy_loss(self, params: hk.Params, *args, **kwargs):
+  def policy_loss(self, params: hk.Params, *args):
     observation, actions, advantage = args
     pi = self.actor.apply(params, observation)
     objective = (

@@ -41,7 +41,7 @@ class Agent(abc.ABC):
     """
 
   @abc.abstractmethod
-  def observe(self, transition: Transition, train: bool, adapt: bool):
+  def observe(self, transition: Transition, adapt: bool):
     """
     Observe a transition, update internal state as needed.
     """
@@ -51,6 +51,13 @@ class Agent(abc.ABC):
     """
     Lets the agent know that a new task was sampled, possibly giving it the
     task's id.
+    """
+
+  @abc.abstractmethod
+  def adapt(self, observation: np.ndarray, action: np.ndarray,
+            reward: np.ndarray, cost: np.ndarray):
+    """
+    Adapts to new tasks based on their trajectories.
     """
 
   def __getstate__(self):

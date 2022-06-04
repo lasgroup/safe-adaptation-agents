@@ -1,36 +1,46 @@
 from typing import Callable, Tuple, Union, Any, Dict, NamedTuple
 
 import haiku as hk
+import jax
 import jax.numpy as jnp
 import jmp
 import optax
+import chex
 
 PRNGKey = jnp.ndarray
 
 
 class LearningState(NamedTuple):
-  params: hk.Params
+  params: Union[hk.Params, chex.ArrayTree]
   opt_state: optax.OptState
 
 
 class Learner:
 
-  def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed],
-               seed: PRNGKey, optimizer_config: Dict, precision: jmp.Policy,
+  def __init__(self, model: Union[hk.Transformed, hk.MultiTransformed,
+                                  chex.ArrayTree], seed: PRNGKey,
+               optimizer_config: Dict, precision: jmp.Policy,
                *input_example: Any):
     self.optimizer = optax.flatten(
         optax.chain(
-            optax.clip_by_global_norm(optimizer_config['clip']),
-            optax.scale_by_adam(eps=optimizer_config['eps']),
-            optax.scale(-optimizer_config['lr'])))
+            optax.clip_by_global_norm(
+                optimizer_config.get('clip', float('inf'))),
+            optax.scale_by_adam(eps=optimizer_config.get('eps', 1e-8)),
+            optax.scale(-optimizer_config.get('lr', 1e-3))))
     self.model = model
-    self.params = self.model.init(seed, *input_example)
+    if isinstance(model, (hk.Transformed, hk.MultiTransformed)):
+      self.params = self.model.init(seed, *input_example)
+    else:
+      self.params = model
     self.opt_state = self.optimizer.init(self.params)
     self.precision = precision
 
   @property
   def apply(self) -> Union[Callable, Tuple[Callable]]:
-    return self.model.apply
+    if isinstance(self.model, (hk.Transformed, hk.MultiTransformed)):
+      return self.model.apply
+    else:
+      return lambda: self.model
 
   @property
   def state(self):
@@ -71,3 +81,19 @@ def discounted_cumsum(x: jnp.ndarray, discount: float) -> jnp.ndarray:
   scales = jnp.cumprod(jnp.ones_like(x) * discount) / discount
   # Flip scales since jnp.convolve flips it as default.
   return jnp.convolve(x, scales[::-1])[-x.shape[0]:]
+
+
+def gradient_descent(grads: Any, params: hk.Params, lr: float):
+  """
+  Performs one step of gradient decent.
+  """
+  return jax.tree_map(lambda p, g: p - lr * g, params, grads)
+
+
+def pytrees_stack(pytrees: Any, axis=0):
+  results = jax.tree_map(lambda *values: jnp.stack(values, axis=axis), *pytrees)
+  return results
+
+
+def inv_softplus(x: Union[jnp.ndarray, float]):
+  return jnp.log(jnp.exp(x) - 1.0)

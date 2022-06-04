@@ -8,7 +8,7 @@ required = [
     'moviepy'
 ]
 
-extras = {'dev': ['pytest>=4.4.0', 'Pillow', 'matplotlib']}
+extras = {'dev': ['pytest>=4.4.0', 'Pillow', 'matplotlib', 'mujoco-py']}
 
 setup(
     name='safe_adaptation_agents',

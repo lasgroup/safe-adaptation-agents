@@ -1,12 +1,18 @@
-from typing import Tuple
-from dataclasses import dataclass
+from typing import Tuple, NamedTuple
 
 import numpy as np
 
 from safe_adaptation_agents.agents import Transition
 
 
-class TrajectoryBuffer:
+class TrajectoryData(NamedTuple):
+  o: np.ndarray
+  a: np.ndarray
+  r: np.ndarray
+  c: np.ndarray
+
+
+class EpisodicTrajectoryBuffer:
 
   def __init__(self,
                batch_size: int,
@@ -19,29 +25,28 @@ class TrajectoryBuffer:
     self.task_id = 0
     self._full = False
     self.observation = np.zeros(
-      (
-        n_tasks,
-        batch_size,
-        max_length + 1,
-      ) + observation_shape,
-      dtype=np.float32)
+        (
+            n_tasks,
+            batch_size,
+            max_length + 1,
+        ) + observation_shape,
+        dtype=np.float32)
     self.action = np.zeros(
-      (
+        (
+            n_tasks,
+            batch_size,
+            max_length,
+        ) + action_shape, dtype=np.float32)
+    self.reward = np.zeros((
         n_tasks,
         batch_size,
         max_length,
-      ) + action_shape, dtype=np.float32)
-    self.reward = np.zeros((
-      n_tasks,
-      batch_size,
-      max_length,
     ), dtype=np.float32)
     self.cost = np.zeros((
-      n_tasks,
-      batch_size,
-      max_length,
+        n_tasks,
+        batch_size,
+        max_length,
     ), dtype=np.float32)
-    self.running_cost = RunningAverage(np.zeros((n_tasks,), dtype=np.float32))
 
   def set_task(self, task_id: int):
     """
@@ -68,22 +73,15 @@ class TrajectoryBuffer:
     if transition.last:
       self.observation[self.task_id, episode_slice, self.idx +
                        1] = transition.next_observation[:batch_size].copy()
-      # Following https://github.com/openai/safety-starter-agents/blob
-      # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/run_agent.py
-      # #L274 but making the computation task-wise.
-      episodic_cost_average = self.cost[self.task_id].sum(1).mean()
-      self.running_cost.update(episodic_cost_average, self.task_id)
       if self.episode_id + batch_size == self.observation.shape[
-        1] and self.task_id + 1 == self.observation.shape[0]:
+          1] and self.task_id + 1 == self.observation.shape[0]:
         self._full = True
+      else:
+        self.idx = -1
       self.episode_id += batch_size
-      assert self.idx + 1 == self.reward.shape[
-        2], 'Supports only episodic setting.'
-      self.idx = -1
     self.idx += 1
 
-  def dump(
-      self, ) -> [np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+  def dump(self) -> TrajectoryData:
     """
     Returns all trajectories from all tasks (with shape [N_tasks, K_episodes,
     T_steps, ...]).
@@ -92,33 +90,15 @@ class TrajectoryBuffer:
     a = self.action
     r = self.reward
     c = self.cost
-    rc = self.running_cost.value
     # Reset the on-policy running cost.
     self.idx = 0
     self.episode_id = 0
     self.task_id = 0
     self._full = False
-    self.running_cost.reset()
     if self.observation.shape[0] == 1:
-      o, a, r, c, rc = map(lambda x: x.squeeze(0), (o, a, r, c, rc))
-    return o, a, r, c, rc
+      o, a, r, c = map(lambda x: x.squeeze(0), (o, a, r, c))
+    return TrajectoryData(o, a, r, c)
 
   @property
   def full(self):
     return self._full
-
-
-@dataclass
-class RunningAverage:
-  value: np.ndarray
-  n: int = 0
-
-  def update(self, new_val, at=None):
-    if at is None:
-      self.value = (self.value * self.n + new_val) / (self.n + 1.)
-    else:
-      self.value[at] = (self.value[at] * self.n + new_val) / (self.n + 1.)
-
-  def reset(self):
-    self.value = np.zeros_like(self.value)
-    self.n = 0

@@ -41,17 +41,20 @@ def test_safe():
 
   def make_env(config):
     import safe_adaptation_gym
-    from gym.wrappers import TimeLimit
-    env = safe_adaptation_gym.make(config.robot, config.task)
-    env = TimeLimit(env, config.time_limit)
+    env = safe_adaptation_gym.make(
+        config.robot,
+        config.task,
+        config={
+            'obstacles_size_noise_scale': 0.,
+            'robot_ctrl_range_scale': 0.
+        })
     return env
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'ppo_lagrangian',
-      '--num_trajectories', '30', '--time_limit', '1000', '--vf_iters', '80',
-      '--pi_iters', '80', '--eval_trials', '1', '--render_episodes', '0',
-      '--train_driver.adaptation_steps', '30000', '--epochs', '334', '--safe',
-      'True', '--log_dir', 'results/test_ppo_lagrangian_safe'
+      '--num_trajectories', '30', '--eval_trials', '1', '--render_episodes',
+      '0', '--train_driver.adaptation_steps', '30000', '--epochs', '334',
+      '--safe', 'True', '--log_dir', 'results/test_ppo_lagrangian_safe'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -61,5 +64,5 @@ def test_safe():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
-  assert objective[config.task] >= 14.
+  assert objective[config.task] >= 6.
   assert constraint[config.task] < config.cost_limit

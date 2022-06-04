@@ -1,32 +1,17 @@
 import os
-from typing import Optional, List, Dict, Iterable, Tuple, Callable
-from types import SimpleNamespace
 from collections import defaultdict
 from functools import partial
+from itertools import repeat
+from types import SimpleNamespace
+from typing import Optional, List, Dict, Callable
 
 import cloudpickle
-
 import numpy as np
-
-from gym.vector import VectorEnv
 from gym import Env
-
 from gym.spaces import Space
-
 from safe_adaptation_gym import benchmark
-from safe_adaptation_gym import tasks as sagt
+
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
-
-
-def evaluate(agent: agents.Agent, env: VectorEnv,
-             tasks: Iterable[Tuple[str, sagt.Task]], test_driver: driver.Driver,
-             trials: int):
-  # Taking only the query set results as support set is less relevant for
-  # evaluation.
-  results = [
-      test_driver.run(agent, env, tasks, False)[1] for _ in range(trials)
-  ]
-  return results
 
 
 def evaluation_summary(
@@ -56,11 +41,17 @@ def evaluation_summary(
       if i == 0:
         if frames := task[0].get('frames', []):
           task_vids[task_name] = frames
+  task_average_reward_return = np.asarray(reward_returns.values()).mean()
+  task_average_cost_retrun = np.asarray(cost_returns.values()).mean()
+  summary['evaluation/average_reward_return'] = task_average_reward_return
+  summary['evaluation/average_cost_return'] = task_average_cost_retrun
+  reward_returns['average'] = task_average_reward_return
+  cost_returns['average'] = task_average_reward_return
   return summary, reward_returns, cost_returns, task_vids
 
 
 def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
-                   logger: logging.TrainingLogger, train: bool):
+                   logger: logging.TrainingLogger, train: bool, adapt: bool):
 
   def return_(arr):
     return np.asarray(arr).sum(0).mean()
@@ -70,9 +61,10 @@ def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
   print("\ntask: {} / reward return: {:.4f} / cost return: {:.4f}".format(
       task_name, episode_return, cost_return))
   if train:
+    adapt_str = 'adapt' if adapt else 'query'
     summary = {
-        'training/{}/episode_return'.format(task_name): episode_return,
-        'training/{}/episode_cost_return'.format(task_name): cost_return
+        f'training/{adapt_str}/{task_name}/episode_return': episode_return,
+        f'training/{adapt_str}/{task_name}/episode_cost_return': cost_return
     }
     logger.log_summary(summary)
     logger.step += np.asarray(episode['reward']).size
@@ -87,7 +79,7 @@ class Trainer:
                    [SimpleNamespace, Space, Space, logging.TrainingLogger],
                    agents.Agent]] = None,
                agent: Optional[agents.Agent] = None,
-               task_generator: Optional[benchmark.Benchmark] = None,
+               task_sampler: Optional[benchmark.Benchmark] = None,
                start_epoch: int = 0,
                seeds: Optional[List[int]] = None):
     self.config = config
@@ -96,7 +88,7 @@ class Trainer:
     self.make_agent = make_agent
     self.agent = agent
     self.make_env = make_env
-    self.tasks_gen = task_generator
+    self.tasks_sampler = task_sampler
     self.epoch = start_epoch
     self.seeds = seeds
     self.logger = None
@@ -107,11 +99,13 @@ class Trainer:
     self.state_writer = logging.StateWriter(self.config.log_dir)
     self.logger = logging.TrainingLogger(self.config.log_dir)
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
-                                                self.config.parallel_envs)
+                                                self.config.parallel_envs,
+                                                self.config.time_limit)
+    _, task = next(self.tasks())
     if self.seeds is not None:
-      self.env.reset(seed=self.seeds)
+      self.env.reset(seed=self.seeds, options={'task': task})
     else:
-      self.env.reset(seed=self.config.seed)
+      self.env.reset(seed=self.config.seed, options={'task': task})
     if self.make_agent is not None:
       self.agent = self.make_agent(self.config, self.env.observation_space,
                                    self.env.action_space, self.logger)
@@ -119,26 +113,42 @@ class Trainer:
 
   def __exit__(self, exc_type, exc_val, exc_tb):
     self.state_writer.close()
-    self.logger.flush()
+    self.logger.close()
+
+  def make_drivers(self):
+    env = self.env
+    config = self.config
+    logger = self.logger
+    train_driver = driver.Driver(
+        **config.train_driver,
+        time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
+        observation_shape=env.observation_space.shape,
+        action_shape=env.action_space.shape,
+        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
+            episode, task_name, logger, True, adapt))
+    test_driver = driver.Driver(
+        **config.test_driver,
+        time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
+        observation_shape=env.observation_space.shape,
+        action_shape=env.action_space.shape,
+        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
+            episode, task_name, logger, False, adapt),
+        render_episodes=config.render_episodes)
+    return train_driver, test_driver
 
   def train(self, epochs: Optional[int] = None) -> [float, float]:
     config, agent, env = self.config, self.agent, self.env
     epoch, logger, state_writer = self.epoch, self.logger, self.state_writer
-    train_driver = driver.Driver(
-        **config.train_driver,
-        on_episode_end=partial(on_episode_end, train=True, logger=logger))
-    test_driver = driver.Driver(
-        **config.test_driver,
-        on_episode_end=partial(on_episode_end, train=False, logger=logger),
-        render_episodes=config.render_episodes)
     objective, constraint = defaultdict(float), defaultdict(float)
+    train_driver, test_driver = self.make_drivers()
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
       train_driver.run(agent, env, self.tasks(train=True), True)
       if epoch % config.eval_every == 0 and config.eval_trials:
         print('Evaluating...')
-        results = evaluate(agent, env, self.tasks(train=False), test_driver,
-                           config.eval_trials)
+        results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
             results)
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
@@ -151,11 +161,19 @@ class Trainer:
               np.asarray(video).transpose([1, 0, 2, 3, 4])[:1],
               task_name + '_video',
               step=epoch)
-      self.epoch = epoch
+      self.epoch = epoch + 1
       state_writer.write(self.state)
-    state_writer.close()
     logger.flush()
     return objective, constraint
+
+  def evaluate(self, test_driver: driver.Driver):
+    # Taking only the query set results as support set is less relevant for
+    # evaluation.
+    results = []
+    for _ in range(self.config.eval_trials):
+      results.append(
+          test_driver.run(self.agent, self.env, self.tasks(False), False)[1])
+    return results
 
   def get_env_random_state(self):
     rs = [
@@ -171,23 +189,25 @@ class Trainer:
     return rs
 
   def tasks(self, train=True):
-    if self.tasks_gen is None:
-      return [(self.config.task, benchmark.TASKS[self.config.task]())]
+    if self.tasks_sampler is None:
+      return repeat((self.config.task, benchmark.TASKS[self.config.task]()),
+                    self.config.task_batch_size)
     if train:
-      return self.tasks_gen.train_tasks
+      return self.tasks_sampler.train_tasks
     else:
-      return self.tasks_gen.test_tasks
+      return self.tasks_sampler.test_tasks
 
   @classmethod
   def from_pickle(cls, config: SimpleNamespace):
     with open(os.path.join(config.log_dir, 'state.pkl'), 'rb') as f:
-      make_env, env_rs, agent, epoch, task_gen = cloudpickle.load(f).values()
-    print('Resuming experiment from {}'.format(config.log_dir))
+      make_env, env_rs, agent, epoch, task_sampler = cloudpickle.load(
+          f).values()
+    print('Resuming experiment from: {}...'.format(config.log_dir))
     assert agent.config == config, 'Loaded different hyperparameters.'
     return cls(
         config=agent.config,
         make_env=make_env,
-        task_generator=task_gen,
+        task_sampler=task_sampler,
         start_epoch=epoch,
         seeds=env_rs,
         agent=agent)
@@ -199,5 +219,5 @@ class Trainer:
         'env_rs': self.get_env_random_state(),
         'agent': self.agent,
         'epoch': self.epoch,
-        'task_gen': self.tasks_gen
+        'task_sampler': self.tasks_sampler
     }
