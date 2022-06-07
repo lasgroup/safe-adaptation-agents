@@ -41,8 +41,8 @@ def evaluation_summary(
       if i == 0:
         if frames := task[0].get('frames', []):
           task_vids[task_name] = frames
-  task_average_reward_return = np.asarray(reward_returns.values()).mean()
-  task_average_cost_retrun = np.asarray(cost_returns.values()).mean()
+  task_average_reward_return = np.asarray(list(reward_returns.values())).mean()
+  task_average_cost_retrun = np.asarray(list(cost_returns.values())).mean()
   summary['evaluation/average_reward_return'] = task_average_reward_return
   summary['evaluation/average_cost_return'] = task_average_cost_retrun
   reward_returns['average'] = task_average_reward_return
