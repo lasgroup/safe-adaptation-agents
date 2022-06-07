@@ -270,29 +270,6 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
     return new_lagrangian, new_pi
 
-  def policy_loss(self, params: hk.Params, *args, clip=True) -> jnp.ndarray:
-    (
-        observation,
-        action,
-        advantage,
-        cost_advantage,
-        lagrangian,
-        old_pi_logprob,
-    ) = args
-    pi = self.actor.apply(params, observation)
-    log_prob = pi.log_prob(action)
-    ratio = jnp.exp(log_prob - old_pi_logprob)
-    if clip:
-      min_adv = jnp.where(advantage >= 0.,
-                          (1. + self.config.clip_ratio) * advantage,
-                          (1. - self.config.clip_ratio) * advantage)
-      surr_advantage = jnp.minimum(ratio * advantage, min_adv)
-    else:
-      surr_advantage = ratio * advantage
-    objective = (
-        surr_advantage + self.config.entropy_regularization * pi.entropy())
-    return -objective.mean()
-
   @partial(jax.jit, static_argnums=0)
   def adapt_critics_and_evaluate(self, critic_state: LearningState,
                                  safety_critic_state: LearningState,

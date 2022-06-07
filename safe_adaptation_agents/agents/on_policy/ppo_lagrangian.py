@@ -32,12 +32,14 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
         utils.get_mixed_precision_policy(config.precision))
 
   def train(self, trajectory_data: TrajectoryData):
-    (advantage, return_, cost_advantage,
-     cost_return) = self.evaluate_with_safety(self.critic.params,
-                                              self.safety_critic.params,
-                                              trajectory_data.o,
-                                              trajectory_data.r,
-                                              trajectory_data.c)
+    (
+        advantage,
+        return_,
+        cost_advantage,
+        cost_return,
+    ) = self.evaluate_with_safety(self.critic.params, self.safety_critic.params,
+                                  trajectory_data.o, trajectory_data.r,
+                                  trajectory_data.c)
     if self.safe:
       constraint = trajectory_data.c.sum(1).mean()
       self.lagrangian.state, lagrangian_report = self.lagrangian_update_step(
@@ -80,7 +82,7 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
                             cost_advantage, lagrangian, old_pi_logprob)
       new_actor_state = self.actor.grad_step(grads, actor_state)
       # TODO (yarden): shouldn't this be new_actor_state.params?
-      pi = self.actor.apply(actor_state.params, observation)
+      pi = self.actor.apply(new_actor_state.params, observation)
       kl_d = old_pi.kl_divergence(pi).mean()
       return iter_ + 1, new_actor_state, {
           'agent/actor/loss': loss,
@@ -102,16 +104,25 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
     info['agent/actor/update_iters'] = iters
     return new_actor_state, info
 
-  def policy_loss(self, params: hk.Params, *args) -> jnp.ndarray:
-    (observation, action, advantage, cost_advantage, lagrangian,
-     old_pi_logprob) = args
+  def policy_loss(self, params: hk.Params, *args, clip=True) -> jnp.ndarray:
+    (
+        observation,
+        action,
+        advantage,
+        cost_advantage,
+        lagrangian,
+        old_pi_logprob,
+    ) = args
     pi = self.actor.apply(params, observation)
     log_prob = pi.log_prob(action)
     ratio = jnp.exp(log_prob - old_pi_logprob)
-    min_adv = jnp.where(advantage > 0.,
-                        (1. + self.config.clip_ratio) * advantage,
-                        (1. - self.config.clip_ratio) * advantage)
-    surr_advantage = jnp.minimum(ratio * advantage, min_adv)
+    if clip:
+      min_adv = jnp.where(advantage >= 0.,
+                          (1. + self.config.clip_ratio) * advantage,
+                          (1. - self.config.clip_ratio) * advantage)
+      surr_advantage = jnp.minimum(ratio * advantage, min_adv)
+    else:
+      surr_advantage = ratio * advantage
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())
     if self.safe:
