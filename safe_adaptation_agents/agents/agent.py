@@ -55,7 +55,7 @@ class Agent(abc.ABC):
 
   @abc.abstractmethod
   def adapt(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
+            reward: np.ndarray, cost: np.ndarray, train: bool):
     """
     Adapts to new tasks based on their trajectories.
     """

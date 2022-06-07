@@ -216,7 +216,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     return losses.mean(), kls.mean()
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
+            reward: np.ndarray, cost: np.ndarray, train: bool):
     # Evaluate the policy given the recent data.
     eval_ = self.adapt_critics_and_evaluate(self.critic.state,
                                             self.safety_critic.state,
@@ -232,9 +232,11 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                                            eval_.advantage,
                                            eval_.cost_advantage, constraint,
                                            old_pi_logprob)
-    # Keep the posterior's MAP for later use.
+    # Keep the posterior's MAP to the query data set.
     self.pi_posterior = pi_posterior
-    self.pi_posteriors[self.task_id] = pi_posterior
+    # Keep this posterior for later use as part of training.
+    if train:
+      self.pi_posteriors[self.task_id] = pi_posterior
 
   @partial(jax.jit, static_argnums=0)
   def task_adaptation(self, lagrangian_prior: hk.Params,

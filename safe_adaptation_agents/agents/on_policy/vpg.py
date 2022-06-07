@@ -59,7 +59,7 @@ class VanillaPolicyGrandients(Agent):
     pass
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
-            reward: np.ndarray, cost: np.ndarray):
+            reward: np.ndarray, cost: np.ndarray, train: bool):
     pass
 
   @functools.partial(jax.jit, static_argnums=(0, 4))
