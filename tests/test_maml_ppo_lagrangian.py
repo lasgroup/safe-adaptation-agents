@@ -118,14 +118,15 @@ def test_cheetah():
 
   config = options.load_config([
       '--configs', 'defaults', '--agent', 'maml_ppo_lagrangian',
-      '--eval_trials', '0', '--epochs', '1000', '--log_dir',
-      'results/test_maml_ppo_half_cheetah-fu', '--task_batch_size', '20', '--safe',
-      'False', '--actor.layers', '[64, 64]', '--critic.layers', '[64, 64]',
-      '--policy_inner_lr', '0.1', '--actor_opt.lr', '0.001', '--time_limit',
-      '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
-      '--train_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
-      '--test_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
-      '--jit', 'True', '--target_kl', '0.0075', '--clip_ratio', '0.3', '--lambda_', '0.95'
+      '--eval_trials', '1', '--epochs', '1000', '--render_episodes', '0',
+      '--log_dir', 'results/test_maml_ppo_half_cheetah', '--task_batch_size',
+      '40', '--safe', 'False', '--actor.layers', '[64, 64]', '--critic.layers',
+      '[64, 64]', '--policy_inner_lr', '0.1', '--actor_opt.lr', '0.001',
+      '--time_limit', '100', '--num_trajectories', '20',
+      '--num_query_trajectories', '20', '--train_driver',
+      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--test_driver',
+      '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--jit', 'True',
+      '--target_kl', '0.0075', '--clip_ratio', '0.3', '--lambda_', '0.95'
   ])
   if not config.jit:
     from jax.config import config as jax_config
