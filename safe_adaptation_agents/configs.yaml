@@ -58,8 +58,8 @@ ppo_lagrangian:
   initial_lagrangian: 1.
 
 domain_randomization:
-  train_driver: {adaptation_steps: 10000, query_steps: 5000}
-  test_driver: {adaptation_steps: 10000, query_steps: 5000}
+  train_driver: {adaptation_steps: 10000, query_steps: 10000}
+  test_driver: {adaptation_steps: 10000, query_steps: 10000}
   eval_trials: 1
 
 maml_ppo_lagrangian:
