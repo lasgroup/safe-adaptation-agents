@@ -106,36 +106,6 @@ class HalfCheetahRandDirecEnv(MujocoEnv):
       return ob, {}
 
 
-@pytest.mark.safe
-def test_safe():
-
-  def make_env(config):
-    import safe_adaptation_gym
-    env = safe_adaptation_gym.make(config.robot)
-    return env
-
-  config = options.load_config([
-      '--configs', 'defaults', 'domain_randomization', '--agent',
-      'maml_ppo_lagrangian', '--eval_trials', '0', '--epochs', '334', '--safe',
-      'True', '--log_dir', 'results/test_ppo_lagrangian_safe',
-      '--task_batch_size', '2'
-  ])
-  if not config.jit:
-    from jax.config import config as jax_config
-    jax_config.update('jax_disable_jit', True)
-  path = os.path.join(config.log_dir, 'state.pkl')
-  task_sampler = benchmark.make(
-      'domain_randomization', batch_size=config.task_batch_size)
-  with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config,
-      make_agent=agents.make,
-      make_env=lambda: make_env(config),
-      task_sampler=task_sampler) as trainer:
-    objective, constraint = trainer.train()
-  assert np.asarray(objective.values()).mean() > 5.
-  assert all(value < config.cost_limit for value in constraint.values())
-
-
 @pytest.mark.not_safe
 def test_cheetah():
 
@@ -155,7 +125,7 @@ def test_cheetah():
       '100', '--num_trajectories', '20', '--num_query_trajectories', '20',
       '--train_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
       '--test_driver', '{\'adaptation_steps\': 2000, \'query_steps\': 2000}',
-      '--eval_trials', '1'
+      '--eval_trials', '1', '--render_episodes', '0'
   ])
   if not config.jit:
     from jax.config import config as jax_config

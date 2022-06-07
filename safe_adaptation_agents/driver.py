@@ -53,6 +53,7 @@ def interact(agent: Agent,
         adaptation_buffer.add(transition)
       observations = next_observations
       if transition.last:
+        render_episodes = max(render_episodes - 1, 0)
         if on_episode_end:
           on_episode_end(episodes[-1], adapt)
         observations = environment.reset()
