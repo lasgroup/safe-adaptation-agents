@@ -122,11 +122,11 @@ class Driver:
             render_episodes=self.render_episodes,
             render_mode=self.render_mode)
         iter_adaptation_episodes[task_name] = adaptation_episodes
-      assert self.adaptation_buffer.full, (
-          'Adaptation buffer should be full at this point. Episode id: {}, '
-          'transition idx: {}'.format(self.adaptation_buffer.episode_id,
-                                      self.adaptation_buffer.idx))
-      agent.adapt(*self.adaptation_buffer.dump(), train)
+        assert self.adaptation_buffer.full, (
+            'Adaptation buffer should be full at this point. Episode id: {}, '
+            'transition idx: {}'.format(self.adaptation_buffer.episode_id,
+                                        self.adaptation_buffer.idx))
+        agent.adapt(*self.adaptation_buffer.dump(), train)
       if self.query_steps > 0:
         agent, query_episodes = interact(
             agent,
