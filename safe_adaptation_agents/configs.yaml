@@ -26,6 +26,7 @@ no_adaptation:
   test_driver: {adaptation_steps: 0, query_steps: 10000}
   eval_trials: 1
   task_batch_size: 1
+  epochs: 334
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
@@ -49,9 +50,9 @@ ppo_lagrangian:
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 30
-  actor_opt: {lr: 3e-4, eps: 1e-5}
-  critic_opt: {lr: 1e-3, eps: 1e-5}
-  lagrangian_opt: {lr: 5e-2, eps: 1e-5}
+  actor_opt: {lr: 3e-4, eps: 1e-5, clip: 0.5}
+  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
+  lagrangian_opt: {lr: 5e-2, eps: 1e-5, clip: 0.5}
   clip_ratio: 0.2
   kl_margin: 1.2
   target_kl: 0.01
