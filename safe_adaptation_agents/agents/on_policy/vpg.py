@@ -52,6 +52,7 @@ class VanillaPolicyGrandients(Agent):
     return action
 
   def observe(self, transition: Transition, adapt: bool):
+    # TODO (yarden): can remove the adapt in observe
     self.buffer.add(transition)
     self.training_step += sum(transition.steps)
 

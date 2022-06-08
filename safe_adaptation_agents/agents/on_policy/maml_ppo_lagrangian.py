@@ -57,7 +57,19 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       self.logger.log_metrics(self.training_step)
     # Use the prior parameters on only adaptation phase, otherwise use prior.
     policy_params = self.actor.params if adapt else self.pi_posterior
-    action = self.policy(observation, policy_params, next(self.rng_seq), train)
+    action = self.policy(observation, policy_params, next(self.rng_seq), train,
+                         adapt)
+    return action
+
+  @partial(jax.jit, static_argnums=(0, 4))
+  def policy(self, observation: jnp.ndarray, params: hk.Params,
+             key: jnp.ndarray, train: bool, adapt: bool) -> jnp.ndarray:
+    policy = self.actor.apply(params, observation)
+    # Take the mode on query episodes in which we evaluate the agent.
+    if not adapt and not train:
+      action = policy.mode()
+    else:
+      action = policy.sample(seed=key)
     return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
