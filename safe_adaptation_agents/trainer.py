@@ -1,6 +1,5 @@
 import os
 from collections import defaultdict
-from functools import partial
 from itertools import repeat
 from types import SimpleNamespace
 from typing import Optional, List, Dict, Callable
@@ -14,8 +13,8 @@ from safe_adaptation_gym import benchmark
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
 
-def evaluation_summary(
-    runs: List[driver.IterationSummary]) -> [Dict, Dict, Dict, Dict]:
+def evaluation_summary(runs: List[driver.IterationSummary],
+                       prefix: str = 'evaluation') -> [Dict, Dict, Dict, Dict]:
   reward_returns = defaultdict(float)
   cost_returns = defaultdict(float)
   summary = defaultdict(float)
@@ -34,17 +33,17 @@ def evaluation_summary(
       reward_returns[task_name] = average(reward_returns[task_name],
                                           reward_return, i)
       cost_returns[task_name] = average(cost_returns[task_name], cost_return, i)
-      reward_id = 'evaluation/{}/reward_return'.format(task_name)
-      cost_id = 'evaluation/{}/cost_return'.format(task_name)
+      reward_id = f'{prefix}/{task_name}/reward_return'
+      cost_id = f'{prefix}/{task_name}/cost_return'
       summary[reward_id] = reward_returns[task_name]
       summary[cost_id] = cost_returns[task_name]
       if i == 0:
         if frames := task[0].get('frames', []):
-          task_vids[task_name] = frames
+          task_vids[f'{prefix}/{task_name}'] = frames
   task_average_reward_return = np.asarray(list(reward_returns.values())).mean()
   task_average_cost_retrun = np.asarray(list(cost_returns.values())).mean()
-  summary['evaluation/average_reward_return'] = task_average_reward_return
-  summary['evaluation/average_cost_return'] = task_average_cost_retrun
+  summary[f'{prefix}/average_reward_return'] = task_average_reward_return
+  summary[f'{prefix}/average_cost_return'] = task_average_cost_retrun
   reward_returns['average'] = task_average_reward_return
   cost_returns['average'] = task_average_reward_return
   return summary, reward_returns, cost_returns, task_vids
@@ -68,6 +67,14 @@ def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
     }
     logger.log_summary(summary)
     logger.step += np.asarray(episode['reward']).size
+
+
+def log_videos(logger: logging.TrainingLogger, videos: Dict, epoch: int):
+  for task_name, video in videos.items():
+    logger.log_video(
+        np.asarray(video).transpose([1, 0, 2, 3, 4])[:1],
+        task_name + '_video',
+        step=epoch)
 
 
 class Trainer:
@@ -145,7 +152,9 @@ class Trainer:
     train_driver, test_driver = self.make_drivers()
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
-      train_driver.run(agent, env, self.tasks(train=True), True)
+      _, results = train_driver.run(agent, env, self.tasks(train=True), True)
+      summary, *_ = evaluation_summary([results], 'on_policy_evaluation')
+      logger.log_summary(summary, epoch)
       if epoch % config.eval_every == 0 and config.eval_trials:
         print('Evaluating...')
         results = self.evaluate(test_driver)
@@ -156,11 +165,7 @@ class Trainer:
           objective[task_name] = max(objective[task_name], reward)
           constraint[task_name] = min(constraint[task_name], cost)
         logger.log_summary(summary, epoch)
-        for task_name, video in videos.items():
-          logger.log_video(
-              np.asarray(video).transpose([1, 0, 2, 3, 4])[:1],
-              task_name + '_video',
-              step=epoch)
+        log_videos(logger, videos, epochs)
       self.epoch = epoch + 1
       state_writer.write(self.state)
     logger.flush()

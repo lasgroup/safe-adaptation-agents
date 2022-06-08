@@ -126,7 +126,7 @@ class Driver:
           'Adaptation buffer should be full at this point. Episode id: {}, '
           'transition idx: {}'.format(self.adaptation_buffer.episode_id,
                                       self.adaptation_buffer.idx))
-      agent.adapt(*self.adaptation_buffer.dump())
+      agent.adapt(*self.adaptation_buffer.dump(), train)
       if self.query_steps > 0:
         agent, query_episodes = interact(
             agent,
