@@ -58,6 +58,9 @@ ppo_lagrangian:
   target_kl: 0.01
   initial_lagrangian: 1.
 
+cpo:
+  target_kl: 0.01
+
 domain_randomization:
   train_driver: {adaptation_steps: 10000, query_steps: 10000}
   test_driver: {adaptation_steps: 10000, query_steps: 10000}

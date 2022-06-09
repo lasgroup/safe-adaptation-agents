@@ -1,7 +1,6 @@
 from typing import Sequence, Optional, Callable, Union
 
 import jax.random
-import numpy as np
 
 import jax.numpy as jnp
 import jax.nn as jnn
