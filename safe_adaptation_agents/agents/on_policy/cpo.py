@@ -74,10 +74,12 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
   ) -> [jnp.ndarray, Callable, jnp.ndarray, jnp.ndarray, int]:
     # Implementation of CPO step direction is based on the implementation @
     # https://github.com/openai/safety-starter-agents
-    out, jac = value_and_jacrev(self.policy_loss)(pi_params, observation,
-                                                  action, advantage,
-                                                  cost_advantage,
-                                                  old_pi_logprob)
+    # Take gradients of the objective and surrogate cost w.r.t. pi_params.
+    jac = jax.jacobian(self.policy_loss)(pi_params, observation, action,
+                                         advantage, cost_advantage,
+                                         old_pi_logprob)
+    out = self.policy_loss(pi_params, observation, action, advantage,
+                           cost_advantage, old_pi_logprob)
     old_pi_loss, surrogate_cost_old = out
     g, b = jac
     g, unravel_grads = jax.flatten_util.ravel_pytree(g)
@@ -228,22 +230,9 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())
     surrogate_cost = ratio * cost_advantage
-    return jnp.stack([-objective.mean(), surrogate_cost.mean()])
+    return -objective.mean(), surrogate_cost.mean()
 
 
 # https://jax.readthedocs.io/en/latest/notebooks/autodiff_cookbook.html
 def hvp(f, primals, tangents):
   return jax.jvp(jax.grad(f), primals, tangents)[1]
-
-
-# https://github.com/google/jax/discussions/9743
-def value_and_jacrev(fun: Callable):
-
-  def value_and_jacrev_fun(x):
-    y, pullback = jax.vjp(fun, x)
-    y: jnp.ndarray  # y should be an array
-    assert y.ndim == 1
-    jac = jax.vmap(pullback)(jnp.eye(y.shape[0], dtype=y.dtype))[0]
-    return y, jac
-
-  return value_and_jacrev_fun
