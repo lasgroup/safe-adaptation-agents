@@ -141,6 +141,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
                                                        lagrangian_state)
       new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
+      # TODO (yarden): maybe should be actor state!
       new_pi = self.actor.apply(new_actor_state.params, support.o[:, :, :-1])
       report = {
           'agent/actor/loss': loss,
