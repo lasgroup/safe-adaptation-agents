@@ -42,12 +42,13 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
         old_pi_loss,
         old_surrogate_cost,
         optim_case,
+        c,
     ) = self.step_direction(state.params, old_pi, observation, action,
                             advantage, cost_advantage, old_pi_logprob,
                             constraint)
     new_params, info = self.backtracking(direction, old_pi_loss,
                                          old_surrogate_cost, state.params,
-                                         unravel_params)
+                                         observation, c, old_pi)
     return new_params, info
 
   def step_direction(
@@ -104,9 +105,12 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
           lambda: 0)
       return optim_case, w, r, s, A, B
 
-    optim_case, w, r, s, A, B = jax.lax.cond(
-        jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo_case(),
-        cpo_case())
+    if self.config.safe:
+      optim_case, w, r, s, A, B = jax.lax.cond(
+          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo_case(),
+          cpo_case())
+    else:
+      optim_case, w, r, s, A, B = trpo_case()
 
     def no_recovery():
 
@@ -140,7 +144,14 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     lam, nu = jax.lax.cond(optim_case == 0, recovery(), no_recovery())
     direction = jax.lax.cond(optim_case > 0, lambda: (v + nu * w) /
                              (lam + 1e-8), lambda: nu * w)
-    return direction, unravel_grads, old_pi_loss, surrogate_cost_old, optim_case, c
+    return (
+        direction,
+        unravel_grads,
+        old_pi_loss,
+        surrogate_cost_old,
+        optim_case,
+        c,
+    )
 
   def backtracking(self, direction: jnp.ndarray, old_pi_loss: jnp.ndarray,
                    old_surrogate_cost: jnp.ndarray, old_params: hk.Params,
@@ -163,7 +174,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
           jax.lax.bitwise_or(performance_cond, iters_cond))
 
     def body(val):
-      iter_, actor_state, _ = val
+      iter_, *_ = val
       step_size = self.config.backtrack_coefficient**iter_
       p, unravel_params = jax.tree_util.ravel_pytree(old_params)
       new_params = unravel_params(p - step_size * direction)
@@ -177,9 +188,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
           'agent/actor/new_surrogate_cost': new_surrogate_cost
       }
 
-    init_state = (0, state, {
-        'agent/actor/loss': 0.,
-        'agent/actor/grad': 0.,
+    init_state = (0, old_params, {
         'agent/actor/entropy': 0.,
         'agent/actor/delta_kl': 0.,
         'agent/actor/new_pi_loss': 0.,
@@ -187,6 +196,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     })
     iters, new_actor_params, info = jax.lax.while_loop(cond, body,
                                                        init_state)  # noqa
+    # If used all backtracking iterations, fall back to the old policy.
     new_actor_params = jax.lax.cond(iters == self.config.backtrack_iters,
                                     lambda: old_params,
                                     lambda: new_actor_params)
