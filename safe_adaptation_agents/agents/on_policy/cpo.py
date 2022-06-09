@@ -29,7 +29,23 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                               actor, critic, safety_critic)
 
   def train(self, trajectory_data):
-    pass
+    eval_ = self.evaluate_with_safety(self.critic.params,
+                                      self.safety_critic.params,
+                                      trajectory_data.o, trajectory_data.r,
+                                      trajectory_data.c)
+    constraint = trajectory_data.c.sum(1).mean()
+    self.actor.state, actor_report = self.update_actor(
+        self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
+        eval_.advantage, eval_.cost_advantage, constraint)
+    self.critic.state, critic_report = self.update_critic(
+        self.critic.state, trajectory_data.o[:, :-1], eval_.return_)
+    if self.safe:
+      self.safety_critic.state, safety_report = self.update_safety_critic(
+          self.safety_critic.state, trajectory_data.o[:, :-1],
+          eval_.cost_return)
+      critic_report.update(safety_report)
+    for k, v in {**actor_report, **critic_report}.items():
+      self.logger[k] = v.mean()
 
   @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
