@@ -82,7 +82,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                            cost_advantage, old_pi_logprob)
     old_pi_loss, surrogate_cost_old = out
     g, b = jac
-    g, unravel_grads = jax.flatten_util.ravel_pytree(g)
+    g, unravel_tree = jax.flatten_util.ravel_pytree(g)
     b, _ = jax.flatten_util.ravel_pytree(b)
     # https://github.com/openai/safety-starter-agents/blob
     # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
@@ -92,11 +92,13 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     # implemented outside to save computation time, but here the code is
     # clearer and closer to the actual math.
     def d_kl_hvp(x):
-      return hvp(
-          lambda pi_params: old_pi.kl_divergence(
-              self.actor(pi_params, observation)).mean(), pi_params, x)
+      d_kl = (lambda p: old_pi.kl_divergence(
+          self.actor.apply(unravel_tree(p), observation)).mean())
+      # Ravel the params so every computation from now on is made on actual
+      # vectors.
+      return hvp(d_kl, (jax.flatten_util.ravel_pytree(pi_params)[0],), (x,))
 
-    v = sparse.linalg.cg(d_kl_hvp, g)
+    v = sparse.linalg.cg(d_kl_hvp, g, maxiter=10)[0]
     approx_g = d_kl_hvp(v)
     q = jnp.dot(v, approx_g)
 
@@ -106,7 +108,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
       return optim_case, w, r, s, A, B
 
     def cpo_case():
-      w = sparse.linalg.cg(d_kl_hvp, b)
+      w = sparse.linalg.cg(d_kl_hvp, b, maxiter=10)
       r = jnp.dot(w, approx_g)
       s = jnp.dot(w, d_kl_hvp(w))
       A = q - r**2 / s
@@ -139,16 +141,16 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
       def non_feasible_cases():
         LA, LB = [0, r / c], [r / c, np.inf]
-        LA, LB = jax.lax.cond(c < 0, lambda: LA, LB, lambda: LB, LA)
-        proj = lambda x, L: jnp.max(L[0], jnp.min(L[1], x))
-        lam_a = proj(jnp.sqrt(A / B), LA)
+        LA, LB = jax.lax.cond(c < 0, lambda: (LA, LB), lambda: (LB, LA))
+        proj = lambda x, L: jnp.maximum(L[0], jnp.minimum(L[1], x))
+        lam_a = proj(jnp.sqrt(A / (B + 1e-8)), LA)
         lam_b = proj(jnp.sqrt(q / (2 * self.config.target_kl)), LB)
         f_a = lambda lam: -0.5 * (A / (lam + 1e-8) + B * lam) - r * c / (
             s + 1e-8)
         f_b = lambda lam: -0.5 * (
             q / (lam + 1e-8) + 2 * self.config.target_kl * lam)
         lam = jnp.where(f_a(lam_a) >= f_b(lam_b), lam_a, lam_b)
-        nu = jnp.max(0, lam * c - r) / (s + 1e-8)
+        nu = jnp.maximum(0, lam * c - r) / (s + 1e-8)
         return lam, nu
 
       return jax.lax.cond(optim_case > 2, feasible_cases(),
@@ -164,7 +166,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                              (lam + 1e-8), lambda: nu * w)
     return (
         direction,
-        unravel_grads,
+        unravel_tree,
         old_pi_loss,
         surrogate_cost_old,
         optim_case,
@@ -184,7 +186,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
       optim_case = info['agent/actor/optim_case']
       loss_cond = jax.lax.cond(optim_case > 1,
                                lambda: new_pi_loss <= old_pi_loss, lambda: True)
-      cost_cond = new_surrogate_cost - old_surrogate_cost <= jnp.max(-c, 0)
+      cost_cond = new_surrogate_cost - old_surrogate_cost <= jnp.maximum(-c, 0)
       kl_cond = kl <= self.config.target_kl
       iters_cond = iter_ == self.config.backtrack_iters
       performance_cond = loss_cond & cost_cond & kl_cond
@@ -212,8 +214,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
         'agent/actor/new_pi_loss': 0.,
         'agent/actor/new_surrogate_cost': 0.
     })
-    iters, new_actor_params, info = jax.lax.while_loop(cond, body,
-                                                       init_state)  # noqa
+    iters, new_actor_params, info = jax.lax.while_loop(cond, body, init_state)
     # If used all backtracking iterations, fall back to the old policy.
     new_actor_params = jax.lax.cond(iters == self.config.backtrack_iters,
                                     lambda: old_params,
