@@ -103,7 +103,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     q = jnp.dot(v, approx_g)
 
     def trpo_case():
-      w, r, s, A, B = 0, 0, 0, 0, 0
+      w, r, s, A, B = 0., 0., 0., 0., 0.
       optim_case = 4
       return optim_case, w, r, s, A, B
 
@@ -148,7 +148,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
         f_a = lambda lam: -0.5 * (A / (lam + 1e-8) + B * lam) - r * c / (
             s + 1e-8)
         f_b = lambda lam: -0.5 * (
-            q / (lam + 1e-8) + 2 * self.config.target_kl * lam)
+            q / (lam + 1e-8) + 2. * self.config.target_kl * lam)
         lam = jnp.where(f_a(lam_a) >= f_b(lam_b), lam_a, lam_b)
         nu = jnp.maximum(0, lam * c - r) / (s + 1e-8)
         return lam, nu
@@ -157,7 +157,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                           non_feasible_cases())
 
     def recovery():
-      lam = 0
+      lam = 0.
       nu = jnp.sqrt(2. * self.config.target_kl / (s + 1e-8))
       return lam, nu
 
