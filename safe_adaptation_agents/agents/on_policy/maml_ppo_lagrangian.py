@@ -260,8 +260,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                       old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
     lagrangian_lr, pi_lr = map(jnn.softplus, (lagrangian_lr, pi_lr))
     new_lagrangian, new_pi = lagrangian_prior, policy_prior
-    lagrangian_loss = lambda p: -self.lagrangian.apply(p) * (
-        constraint - self.config.cost_limit)[0]
+    lagrangian_loss = lambda p: (-self.lagrangian.apply(p) *
+                                 (constraint - self.config.cost_limit))[0]
     for _ in range(self.config.inner_steps):
       if self.safe:
         # Fine tune the lagrangian for the given task.
