@@ -65,7 +65,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
   def policy(self, observation: jnp.ndarray, params: hk.Params,
              key: jnp.ndarray, train: bool, adapt: bool) -> jnp.ndarray:
     policy = self.actor.apply(params, observation)
-    # Take the mode on query episodes in which we evaluate the agent.
+    # Take the mode only on query episodes in which we evaluate the agent.
     if not adapt and not train:
       action = policy.mode()
     else:
