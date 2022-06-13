@@ -54,24 +54,24 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     old_pi_logprob = old_pi.log_prob(action)
     (
         direction,
-        unravel_params,
         old_pi_loss,
-        old_surrogate_cost,
+        surrogate_cost_old,
         optim_case,
         c,
     ) = self.step_direction(state.params, old_pi, observation, action,
                             advantage, cost_advantage, old_pi_logprob,
                             constraint)
     new_params, info = self.backtracking(direction, old_pi_loss,
-                                         old_surrogate_cost, state.params,
-                                         observation, c, old_pi)
+                                         surrogate_cost_old, optim_case, c,
+                                         state.params, observation, action,
+                                         advantage, cost_advantage,
+                                         old_pi_logprob, old_pi)
     return new_params, info
 
-  def step_direction(
-      self, pi_params: hk.Params, old_pi, observation: jnp.ndarray,
-      action: jnp.ndarray, advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
-      old_pi_logprob: jnp.ndarray, constraint: jnp.ndarray
-  ) -> [jnp.ndarray, Callable, jnp.ndarray, jnp.ndarray, int]:
+  def step_direction(self, pi_params: hk.Params, old_pi,
+                     observation: jnp.ndarray, action: jnp.ndarray,
+                     advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
+                     old_pi_logprob: jnp.ndarray, constraint: jnp.ndarray):
     # Implementation of CPO step direction is based on the implementation @
     # https://github.com/openai/safety-starter-agents
     # Take gradients of the objective and surrogate cost w.r.t. pi_params.
@@ -127,8 +127,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     if self.config.safe:
       optim_case, w, r, s, A, B = jax.lax.cond(
-          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo_case(),
-          cpo_case())
+          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo_case,
+          cpo_case)
     else:
       optim_case, w, r, s, A, B = trpo_case()
 
@@ -140,7 +140,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
         return lam, nu
 
       def non_feasible_cases():
-        LA, LB = [0, r / c], [r / c, np.inf]
+        LA, LB = [0., r / c], [r / c, np.inf]
         LA, LB = jax.lax.cond(c < 0, lambda: (LA, LB), lambda: (LB, LA))
         proj = lambda x, L: jnp.maximum(L[0], jnp.minimum(L[1], x))
         lam_a = proj(jnp.sqrt(A / (B + 1e-8)), LA)
@@ -153,20 +153,18 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
         nu = jnp.maximum(0, lam * c - r) / (s + 1e-8)
         return lam, nu
 
-      return jax.lax.cond(optim_case > 2, feasible_cases(),
-                          non_feasible_cases())
+      return jax.lax.cond(optim_case > 2, feasible_cases, non_feasible_cases)
 
     def recovery():
       lam = 0.
       nu = jnp.sqrt(2. * self.config.target_kl / (s + 1e-8))
       return lam, nu
 
-    lam, nu = jax.lax.cond(optim_case == 0, recovery(), no_recovery())
+    lam, nu = jax.lax.cond(optim_case == 0, recovery, no_recovery)
     direction = jax.lax.cond(optim_case > 0, lambda: (v + nu * w) /
                              (lam + 1e-8), lambda: nu * w)
     return (
         direction,
-        unravel_tree,
         old_pi_loss,
         surrogate_cost_old,
         optim_case,
@@ -174,16 +172,17 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     )
 
   def backtracking(self, direction: jnp.ndarray, old_pi_loss: jnp.ndarray,
-                   old_surrogate_cost: jnp.ndarray, old_params: hk.Params,
-                   observation: jnp.ndarray, c: jnp.ndarray,
-                   old_pi: tfd.Distribution):
+                   old_surrogate_cost: jnp.ndarray, optim_case: int,
+                   c: jnp.ndarray, old_params: hk.Params,
+                   observation: jnp.ndarray, action: jnp.ndarray,
+                   advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
+                   old_pi_logprob: jnp.ndarray, old_pi: tfd.Distribution):
 
     def cond(val):
       iter_, _, info = val
       kl = info['agent/actor/delta_kl']
       new_pi_loss = info['agent/actor/new_pi_loss']
       new_surrogate_cost = info['agent/actor/new_surrogate_cost']
-      optim_case = info['agent/actor/optim_case']
       loss_cond = jax.lax.cond(optim_case > 1,
                                lambda: new_pi_loss <= old_pi_loss, lambda: True)
       cost_cond = new_surrogate_cost - old_surrogate_cost <= jnp.maximum(-c, 0)
@@ -195,12 +194,14 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     def body(val):
       iter_, *_ = val
-      step_size = self.config.backtrack_coefficient**iter_
-      p, unravel_params = jax.tree_util.ravel_pytree(old_params)
+      step_size = self.config.backtrack_coeff**iter_
+      p, unravel_params = jax.flatten_util.ravel_pytree(old_params)
       new_params = unravel_params(p - step_size * direction)
       pi = self.actor.apply(new_params, observation)
       kl_d = old_pi.kl_divergence(pi).mean()
-      new_pi_loss, new_surrogate_cost = self.policy_loss(new_params)
+      new_pi_loss, new_surrogate_cost = self.policy_loss(
+          new_params, observation, action, advantage, cost_advantage,
+          old_pi_logprob)
       return iter_ + 1, new_params, {
           'agent/actor/entropy': pi.entropy().mean(),
           'agent/actor/delta_kl': kl_d,
@@ -220,7 +221,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                     lambda: old_params,
                                     lambda: new_actor_params)
     info['agent/actor/update_iters'] = iters
-    return new_actor_params, info
+    info['agent/actor/optim_case'] = optim_case
+    return LearningState(new_actor_params, self.actor.state.opt_state), info
 
   def policy_loss(self, params: hk.Params, *args):
     observation, action, advantage, cost_advantage, old_pi_logprob = args
