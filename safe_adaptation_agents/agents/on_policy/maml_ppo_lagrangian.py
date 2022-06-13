@@ -219,7 +219,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       # outside but computing it here makes the code clearer.
       pi = self.actor.apply(pi_posterior, query.o[:, :-1])
       old_pi = self.actor.apply(old_pi_posterior, query.o[:, :-1])
-      kl = old_pi.kl_divergence(pi)
+      kl = pi.kl_divergence(old_pi)
       return loss, kl.mean()
 
     task_loss = jax.vmap(task_loss)

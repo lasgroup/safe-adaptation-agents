@@ -82,7 +82,7 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
                             cost_advantage, lagrangian, old_pi_logprob)
       new_actor_state = self.actor.grad_step(grads, actor_state)
       pi = self.actor.apply(actor_state.params, observation)
-      kl_d = old_pi.kl_divergence(pi).mean()
+      kl_d = pi.kl_divergence(old_pi).mean()
       return iter_ + 1, new_actor_state, {
           'agent/actor/loss': loss,
           'agent/actor/grad': optax.global_norm(grads),
