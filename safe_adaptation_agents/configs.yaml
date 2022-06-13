@@ -61,8 +61,8 @@ domain_randomization:
   train_driver: {adaptation_steps: 10000, query_steps: 10000}
   test_driver: {adaptation_steps: 10000, query_steps: 10000}
   eval_trials: 1
-  task_batch_size: 8
-  epochs: 1250
+  task_batch_size: 10
+  epochs: 1000
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
