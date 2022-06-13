@@ -21,7 +21,7 @@ def test_not_safe():
       '--eval_trials', '0', '--train_driver.adaptation_steps', '45000',
       '--render_episodes', '0', '--test_driver.adaptation_steps', '1500',
       '--lambda_', '0.95', '--epochs', '50', '--safe', 'False', '--log_dir',
-      'results/test_cpo_not_safe', '--jit', 'False'
+      'results/test_cpo_not_safe', '--jit', 'True'
   ])
   if not config.jit:
     from jax.config import config as jax_config

@@ -103,7 +103,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     q = jnp.dot(v, approx_g)
 
     def trpo_case():
-      w, r, s, A, B = 0., 0., 0., 0., 0.
+      w, r, s, A, B = jnp.zeros_like(v), 0., 0., 0., 0.
       optim_case = 4
       return optim_case, w, r, s, A, B
 
