@@ -61,7 +61,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                          adapt)
     return action
 
-  @partial(jax.jit, static_argnums=(0, 4))
+  @partial(jax.jit, static_argnums=(0, 4, 5))
   def policy(self, observation: jnp.ndarray, params: hk.Params,
              key: jnp.ndarray, train: bool, adapt: bool) -> jnp.ndarray:
     policy = self.actor.apply(params, observation)
