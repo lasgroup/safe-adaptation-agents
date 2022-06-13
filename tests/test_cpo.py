@@ -21,7 +21,7 @@ def test_not_safe():
       '--eval_trials', '0', '--train_driver.adaptation_steps', '45000',
       '--render_episodes', '0', '--test_driver.adaptation_steps', '1500',
       '--lambda_', '0.95', '--epochs', '50', '--safe', 'False', '--log_dir',
-      'results/test_cpo_not_safe', '--jit', 'True'
+      'results/test_cpo_not_safe'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -31,7 +31,7 @@ def test_not_safe():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
-  assert objective[config.task] > 185.
+  assert objective[config.task] > 115.
   assert constraint[config.task] == 0.
 
 
@@ -51,7 +51,7 @@ def test_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
-      '--num_trajectories', '30', '--eval_trials', '1', '--render_episodes',
+      '--num_trajectories', '30', '--eval_trials', '0', '--render_episodes',
       '0', '--train_driver.adaptation_steps', '30000', '--epochs', '334',
       '--safe', 'True', '--log_dir', 'results/test_cpo_safe'
   ])

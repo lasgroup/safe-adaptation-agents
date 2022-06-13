@@ -102,12 +102,12 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     approx_g = d_kl_hvp(v)
     q = jnp.dot(v, approx_g)
 
-    def trpo_case():
+    def trpo():
       w, r, s, A, B = jnp.zeros_like(v), 0., 0., 0., 0.
       optim_case = 4
       return optim_case, w, r, s, A, B
 
-    def cpo_case():
+    def cpo():
       w = sparse.linalg.cg(d_kl_hvp, b, maxiter=10)[0]
       r = jnp.dot(w, approx_g)
       s = jnp.dot(w, d_kl_hvp(w))
@@ -127,10 +127,10 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     if self.config.safe:
       optim_case, w, r, s, A, B = jax.lax.cond(
-          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo_case,
-          cpo_case)
+          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo,
+          cpo)
     else:
-      optim_case, w, r, s, A, B = trpo_case()
+      optim_case, w, r, s, A, B = trpo()
 
     def no_recovery():
 
