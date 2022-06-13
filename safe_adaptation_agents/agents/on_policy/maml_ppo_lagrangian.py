@@ -218,6 +218,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       # outside but computing it here makes the code clearer.
       pi = self.actor.apply(pi_posterior, query.o[:, :-1])
       old_pi = self.actor.apply(old_pi_posterior, query.o[:, :-1])
+      # TODO (yarden): this could be actually not the reverse kl-divergence
       kl = old_pi.kl_divergence(pi)
       return loss, kl.mean()
 

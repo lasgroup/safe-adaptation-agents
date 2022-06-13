@@ -47,7 +47,6 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
-  @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, action, advantage, cost_advantage, constraint = args
     old_pi = self.actor.apply(state.params, observation)
@@ -68,6 +67,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                          old_pi_logprob, old_pi)
     return new_params, info
 
+  @partial(jax.jit, static_argnums=0)
   def step_direction(self, pi_params: hk.Params, old_pi,
                      observation: jnp.ndarray, action: jnp.ndarray,
                      advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
@@ -92,8 +92,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     # implemented outside to save computation time, but here the code is
     # clearer and closer to the actual math.
     def d_kl_hvp(x):
-      d_kl = (lambda p: old_pi.kl_divergence(
-          self.actor.apply(unravel_tree(p), observation)).mean())
+      d_kl = (lambda p: self.actor.apply(unravel_tree(p), observation).
+              kl_divergence(old_pi).mean())
       # Ravel the params so every computation from now on is made on actual
       # vectors.
       return hvp(d_kl, (jax.flatten_util.ravel_pytree(pi_params)[0],), (x,))
@@ -108,7 +108,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
       return optim_case, w, r, s, A, B
 
     def cpo_case():
-      w = sparse.linalg.cg(d_kl_hvp, b, maxiter=10)
+      w = sparse.linalg.cg(d_kl_hvp, b, maxiter=10)[0]
       r = jnp.dot(w, approx_g)
       s = jnp.dot(w, d_kl_hvp(w))
       A = q - r**2 / s
@@ -183,14 +183,17 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
       kl = info['agent/actor/delta_kl']
       new_pi_loss = info['agent/actor/new_pi_loss']
       new_surrogate_cost = info['agent/actor/new_surrogate_cost']
-      loss_cond = jax.lax.cond(optim_case > 1,
-                               lambda: new_pi_loss <= old_pi_loss, lambda: True)
-      cost_cond = new_surrogate_cost - old_surrogate_cost <= jnp.maximum(-c, 0)
+      loss_improve = jax.lax.cond(optim_case > 1,
+                                  lambda: new_pi_loss <= old_pi_loss,
+                                  lambda: True)
+      if self.safe:
+        cost_improve = (
+            new_surrogate_cost - old_surrogate_cost <= jnp.maximum(-c, 0))
+      else:
+        cost_improve = True
       kl_cond = kl <= self.config.target_kl
-      iters_cond = iter_ == self.config.backtrack_iters
-      performance_cond = loss_cond & cost_cond & kl_cond
-      return jax.lax.bitwise_not(
-          jax.lax.bitwise_or(performance_cond, iters_cond))
+      improve = loss_improve & cost_improve & kl_cond
+      return (~improve) & (iter_ < self.config.backtrack_iters)
 
     def body(val):
       iter_, *_ = val
@@ -198,7 +201,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
       p, unravel_params = jax.flatten_util.ravel_pytree(old_params)
       new_params = unravel_params(p - step_size * direction)
       pi = self.actor.apply(new_params, observation)
-      kl_d = old_pi.kl_divergence(pi).mean()
+      kl_d = pi.kl_divergence(old_pi).mean()
       new_pi_loss, new_surrogate_cost = self.policy_loss(
           new_params, observation, action, advantage, cost_advantage,
           old_pi_logprob)
@@ -211,16 +214,16 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     init_state = (0, old_params, {
         'agent/actor/entropy': 0.,
-        'agent/actor/delta_kl': 0.,
-        'agent/actor/new_pi_loss': 0.,
-        'agent/actor/new_surrogate_cost': 0.
+        'agent/actor/delta_kl': self.config.target_kl + 1e-8,
+        'agent/actor/new_pi_loss': old_pi_loss + 1e-8,
+        'agent/actor/new_surrogate_cost': old_surrogate_cost - 1e-8
     })
     iters, new_actor_params, info = jax.lax.while_loop(cond, body, init_state)
     # If used all backtracking iterations, fall back to the old policy.
     new_actor_params = jax.lax.cond(iters == self.config.backtrack_iters,
                                     lambda: old_params,
                                     lambda: new_actor_params)
-    info['agent/actor/update_iters'] = iters
+    info['agent/actor/line_search_step'] = iters
     info['agent/actor/optim_case'] = optim_case
     return LearningState(new_actor_params, self.actor.state.opt_state), info
 

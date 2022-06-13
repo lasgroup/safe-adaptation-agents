@@ -17,7 +17,7 @@ def test_not_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
-      '--num_trajectories', '300', '--time_limit', '150', '--vf_iters', '80',
+      '--num_trajectories', '300', '--time_limit', '150', '--vf_iters', '10',
       '--eval_trials', '0', '--train_driver.adaptation_steps', '45000',
       '--render_episodes', '0', '--test_driver.adaptation_steps', '1500',
       '--lambda_', '0.95', '--epochs', '50', '--safe', 'False', '--log_dir',
