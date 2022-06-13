@@ -71,7 +71,7 @@ maml_ppo_lagrangian:
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
   discount: 0.99
-  lambda_: 1.0
+  lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 10
   num_query_trajectories: 10
