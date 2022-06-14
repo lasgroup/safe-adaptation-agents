@@ -51,7 +51,7 @@ def test_safe():
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
-      '--num_trajectories', '30', '--eval_trials', '0', '--render_episodes',
+      '--num_trajectories', '30', '--eval_trials', '1', '--render_episodes',
       '0', '--train_driver.adaptation_steps', '30000', '--epochs', '334',
       '--safe', 'True', '--log_dir', 'results/test_cpo_safe'
   ])
@@ -63,5 +63,5 @@ def test_safe():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
-  assert objective[config.task] >= 6.
+  assert objective[config.task] >= 7.
   assert constraint[config.task] < config.cost_limit
