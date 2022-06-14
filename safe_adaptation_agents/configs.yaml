@@ -18,6 +18,7 @@ defaults:
   jit: True
   precision: 32
   parallel_envs: 10
+  task_batch_size: 10
 
 no_adaptation:
   task: go_to_goal
