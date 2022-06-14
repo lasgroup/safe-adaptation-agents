@@ -91,7 +91,7 @@ maml_ppo_lagrangian:
   cost_discount: 0.99
   num_trajectories: 10
   num_query_trajectories: 10
-  actor_opt: {lr: 1e-3, eps: 1e-5}
+  actor_opt: {lr: 3e-4, eps: 1e-5}
   critic_opt: {lr: 1e-3, eps: 1e-5}
   lagrangian_opt: {lr: 5e-2, eps: 1e-5}
   clip_ratio: 0.2
