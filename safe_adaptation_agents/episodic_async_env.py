@@ -32,16 +32,18 @@ class Protocol(Enum):
 # OpenAI gym's AsynVectorEnv fails to render nicely together with dm-control.
 # (The main issue is with creating a dm-control
 # https://github.com/openai/gym/blob/9a5db3b77a0c880ffed96ece1ab76eeff92c85e1
-# /gym/vector/async_vector_env.py#L127 which loads all the rendering handler
+# /gym/vector/async_vector_env.py#L127 which loads all the rendering handlers
 # in the main process.)
 class EpisodicAsync(VectorEnv):
 
   def __init__(self,
                ctor: Callable[[], Env],
                vector_size: int = 1,
-               time_limit: int = 1000):
+               time_limit: int = 1000,
+               max_parallel_render_envs: int = 5):
     self.env_fn = cloudpickle.dumps(ctor)
     self.time_limit = time_limit
+    self.max_parallel_render_envs = max_parallel_render_envs
     if vector_size < 1:
       self._env = TimeLimit(ctor(), time_limit)
       self.observation_space = self._env.observation_space
@@ -97,9 +99,10 @@ class EpisodicAsync(VectorEnv):
     for process in self.processes:
       process.join()
 
-  def _receive(self):
+  def _receive(self, parents=None):
     payloads = []
-    for parent in self.parents:
+    parents = parents or self.parents
+    for parent in parents:
       try:
         message, payload = parent.recv()
       except ConnectionResetError:
@@ -112,7 +115,7 @@ class EpisodicAsync(VectorEnv):
         payloads.append(payload)
       else:
         raise KeyError(f'Received message of unexpected type {message}')
-    assert len(payloads) == len(self.parents)
+    assert len(payloads) == len(parents)
     return payloads
 
   def step_async(self, actions):
@@ -136,8 +139,19 @@ class EpisodicAsync(VectorEnv):
     return self._receive()
 
   def render(self, mode="human"):
-    self.call_async('render', mode)
-    return np.asarray(self.call_wait())
+    name = 'render'
+    args = (mode,)
+    kwargs = dict()
+    if self._env is not None:
+      return functools.partial(getattr(self._env, name), *args, **kwargs)
+    payload = name, args, kwargs
+    results = []
+    num_groups = min(self.max_parallel_render_envs, self.num_envs)
+    for parent_group in grouper(self.parents, num_groups):
+      for parent in parent_group:
+        parent.send((Protocol.CALL, payload))
+      results += self._receive(parent_group)
+    return np.asarray(results)
 
   def reset(self,
             seed: Optional[Union[int, List[int]]] = None,
@@ -205,3 +219,18 @@ def _worker(ctor, conn, time_limit):
   finally:
     env.close()  # noqa
     conn.close()
+
+
+# https://docs.python.org/3/library/itertools.html#itertools-recipes
+def grouper(iterable, n, *, incomplete='ignore'):
+  """Collect data into non-overlapping fixed-length chunks or blocks"""
+  # grouper('ABCDEFG', 3, fillvalue='x') --> ABC DEF Gxx
+  # grouper('ABCDEFG', 3, incomplete='strict') --> ABC DEF ValueError
+  # grouper('ABCDEFG', 3, incomplete='ignore') --> ABC DEF
+  args = [iter(iterable)] * n
+  if incomplete == 'strict':
+    return zip(*args, strict=True)
+  if incomplete == 'ignore':
+    return zip(*args)
+  else:
+    raise ValueError('Expected strict or ignore')
