@@ -40,7 +40,7 @@ class EpisodicAsync(VectorEnv):
                ctor: Callable[[], Env],
                vector_size: int = 1,
                time_limit: int = 1000,
-               max_parallel_render_envs: int = 5):
+               max_parallel_render_envs: int = 10):
     self.env_fn = cloudpickle.dumps(ctor)
     self.time_limit = time_limit
     self.max_parallel_render_envs = max_parallel_render_envs
