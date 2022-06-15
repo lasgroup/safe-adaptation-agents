@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from typing import Callable
 from functools import partial
 
 import numpy as np
@@ -15,6 +14,7 @@ from tensorflow_probability.substrates import jax as tfp
 from safe_adaptation_agents.agents.on_policy import safe_vpg
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
+from safe_adaptation_agents import utils
 
 tfd = tfp.distributions
 
@@ -27,6 +27,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                safety_critic: hk.Transformed):
     super(Cpo, self).__init__(observation_space, action_space, config, logger,
                               actor, critic, safety_critic)
+    self.margin = 0.
 
   def train(self, trajectory_data):
     eval_ = self.evaluate_with_safety(self.critic.params,
@@ -51,13 +52,19 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     observation, action, advantage, cost_advantage, constraint = args
     old_pi = self.actor.apply(state.params, observation)
     old_pi_logprob = old_pi.log_prob(action)
+    # https://github.com/openai/safety-starter-agents/blob
+    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
+    c = (constraint - self.config.cost_limit)
+    self.margin = max(0, self.margin + self.config.margin_lr * c)
+    c += self.margin
+    c /= (self.config.time_limit + 1e-8)
     (
         direction,
         old_pi_loss,
         surrogate_cost_old,
         optim_case,
         c,
-    ) = self.step_direction(state.params, old_pi, observation, action,
+    ) = self.step_direction(state.params, old_pi, c, observation, action,
                             advantage, cost_advantage, old_pi_logprob,
                             constraint)
     new_params, info = self.backtracking(direction, old_pi_loss,
@@ -68,10 +75,11 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     return new_params, info
 
   @partial(jax.jit, static_argnums=0)
-  def step_direction(self, pi_params: hk.Params, old_pi,
-                     observation: jnp.ndarray, action: jnp.ndarray,
-                     advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
-                     old_pi_logprob: jnp.ndarray, constraint: jnp.ndarray):
+  def step_direction(self, pi_params: hk.Params, old_pi: tfd.Distribution,
+                     c: jnp.ndarray, observation: jnp.ndarray,
+                     action: jnp.ndarray, advantage: jnp.ndarray,
+                     cost_advantage: jnp.ndarray, old_pi_logprob: jnp.ndarray,
+                     constraint: jnp.ndarray):
     # Implementation of CPO step direction is based on the implementation @
     # https://github.com/openai/safety-starter-agents
     # Take gradients of the objective and surrogate cost w.r.t. pi_params.
@@ -84,9 +92,6 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     g, b = jac
     g, unravel_tree = jax.flatten_util.ravel_pytree(g)
     b, _ = jax.flatten_util.ravel_pytree(b)
-    # https://github.com/openai/safety-starter-agents/blob
-    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
-    c = (constraint - self.config.cost_limit) / (self.config.time_limit + 1e-8)
 
     # Computing grad d_kl w.r.t pi_params (inside hvp) could have been
     # implemented outside to save computation time, but here the code is
@@ -127,8 +132,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     if self.config.safe:
       optim_case, w, r, s, A, B = jax.lax.cond(
-          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo,
-          cpo)
+          jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo, cpo)
     else:
       optim_case, w, r, s, A, B = trpo()
 
