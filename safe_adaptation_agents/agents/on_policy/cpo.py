@@ -72,6 +72,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                          state.params, observation, action,
                                          advantage, cost_advantage,
                                          old_pi_logprob, old_pi)
+    info['agent/margin'] = self.margin
     return new_params, info
 
   @partial(jax.jit, static_argnums=0)
