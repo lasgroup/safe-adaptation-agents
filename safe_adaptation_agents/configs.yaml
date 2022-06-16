@@ -13,7 +13,7 @@ defaults:
   test_driver: {adaptation_steps: 5000, query_steps: 2000}
   action_repeat: 1
   render_episodes: 1
-  render_options: {camera_id: 'fixedfar', height: 120, width: 160}
+  render_options: {camera_id: 'fixedfar'}
   render_mode: rgb_array
   jit: True
   precision: 32
