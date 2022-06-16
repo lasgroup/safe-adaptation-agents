@@ -134,13 +134,19 @@ class MamlCpo(cpo.Cpo):
     pass
 
   @partial(jax.jit, static_argnums=0)
-  def task_adaptation(self, lagrangian_prior: hk.Params,
-                      policy_prior: hk.Params, lagrangian_lr: float,
-                      pi_lr: float, observation: jnp.ndarray,
-                      action: jnp.ndarray, advantage: jnp.ndarray,
-                      cost_advantage: jnp.ndarray, constraint: jnp.ndarray,
+  def task_adaptation(self, policy_prior: hk.Params, pi_lr: float,
+                      observation: jnp.ndarray, action: jnp.ndarray,
+                      advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
+                      constraint: jnp.ndarray,
                       old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
-    pass
+    pi_lr = jnn.softplus(pi_lr)
+    new_pi = policy_prior
+    for _ in range(self.config.inner_steps):
+      policy_grads = jax.grad(self.policy_loss)(new_pi, observation, action,
+                                                advantage, cost_advantage,
+                                                old_pi_logprob)
+      new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
+    return new_pi
 
   @partial(jax.jit, static_argnums=0)
   def adapt_critics_and_evaluate(self, critic_state: LearningState,
