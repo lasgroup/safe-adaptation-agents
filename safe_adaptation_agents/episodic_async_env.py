@@ -144,7 +144,7 @@ class EpisodicAsync(VectorEnv):
       return functools.partial(getattr(self._env, name), *args, **kwargs)
     payload = name, args, kwargs
     self.parents[0].send((Protocol.CALL, payload))
-    return np.asarray(self._receive(self.parents[:1]))[None]
+    return np.asarray(self._receive(self.parents[:1]))
 
   def reset(self,
             seed: Optional[Union[int, List[int]]] = None,
