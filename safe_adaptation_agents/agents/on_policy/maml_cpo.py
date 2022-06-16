@@ -142,9 +142,10 @@ class MamlCpo(cpo.Cpo):
     pi_lr = jnn.softplus(pi_lr)
     new_pi = policy_prior
     for _ in range(self.config.inner_steps):
-      policy_grads = jax.grad(self.policy_loss)(new_pi, observation, action,
-                                                advantage, cost_advantage,
-                                                old_pi_logprob)
+      policy_grads = jax.grad(
+          self.policy_loss,
+          has_aux=True)(new_pi, observation, action, advantage, cost_advantage,
+                        old_pi_logprob)
       new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
     return new_pi
 
