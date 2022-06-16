@@ -97,9 +97,10 @@ class EpisodicAsync(VectorEnv):
     for process in self.processes:
       process.join()
 
-  def _receive(self):
+  def _receive(self, parents=None):
     payloads = []
-    for parent in self.parents:
+    parents = parents or self.parents
+    for parent in parents:
       try:
         message, payload = parent.recv()
       except ConnectionResetError:
@@ -112,7 +113,7 @@ class EpisodicAsync(VectorEnv):
         payloads.append(payload)
       else:
         raise KeyError(f'Received message of unexpected type {message}')
-    assert len(payloads) == len(self.parents)
+    assert len(payloads) == len(parents)
     return payloads
 
   def step_async(self, actions):
@@ -136,8 +137,14 @@ class EpisodicAsync(VectorEnv):
     return self._receive()
 
   def render(self, mode="human"):
-    self.call_async('render', mode)
-    return np.asarray(self.call_wait())
+    name = 'render'
+    args = (mode,)
+    kwargs = dict()
+    if self._env is not None:
+      return functools.partial(getattr(self._env, name), *args, **kwargs)
+    payload = name, args, kwargs
+    self.parents[0].send((Protocol.CALL, payload))
+    return np.asarray(self._receive(self.parents[:1]))[None]
 
   def reset(self,
             seed: Optional[Union[int, List[int]]] = None,
