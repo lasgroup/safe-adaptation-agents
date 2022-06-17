@@ -85,7 +85,7 @@ def discounted_cumsum(x: jnp.ndarray, discount: float) -> jnp.ndarray:
 
 def gradient_descent(grads: Any, params: hk.Params, lr: float):
   """
-  Performs one step of gradient decent.
+  Performs one step of gradient descent.
   """
   return jax.tree_map(lambda p, g: p - lr * g, params, grads)
 
