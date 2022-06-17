@@ -91,7 +91,7 @@ class Trainer:
                seeds: Optional[List[int]] = None):
     self.config = config
     assert not (agent is not None and make_agent is not None), (
-        'agent and make_agent parameters are mutually exclusice.')
+        'agent and make_agent parameters are mutually exclusive.')
     self.make_agent = make_agent
     self.agent = agent
     self.make_env = make_env
