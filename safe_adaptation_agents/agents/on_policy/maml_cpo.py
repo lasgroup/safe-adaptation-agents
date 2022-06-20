@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Optional
 from types import SimpleNamespace
 from functools import partial
 
@@ -9,10 +9,10 @@ import jax
 import jax.numpy as jnp
 import jax.nn as jnn
 import haiku as hk
-import optax
 
 from safe_adaptation_agents.agents.on_policy import cpo, vpg
-from safe_adaptation_agents.agents.on_policy.safe_vpg import Evaluation
+from safe_adaptation_agents.agents.on_policy.safe_vpg import (
+    Evaluation, SafeVanillaPolicyGradients)
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
 from safe_adaptation_agents import utils
@@ -121,31 +121,62 @@ class MamlCpo(cpo.Cpo):
     query_eval = batched_adapt_critic_and_evaluate(query.o, query.r, query.c)
     return support_eval, query_eval
 
-  def meta_loss(self, policy_prior: hk.Params, inner_lr: float,
+  def meta_loss(self, policy_prior: hk.Params, inner_lr: jnp.ndarray,
                 support: TrajectoryData, query: TrajectoryData,
                 support_eval: Evaluation, query_eval: Evaluation,
-                old_pi_support_logprob: jnp.ndarray,
                 old_pi_query_logprob: jnp.ndarray,
                 old_pi_posteriors: hk.Params):
-    pass
+
+    def task_loss(support, query, support_eval, query_eval,
+                  old_pi_query_logprob, old_pi_posterior):
+      pi_posterior = self.task_adaptation(policy_prior, inner_lr,
+                                          support.o[:, :-1], support.a,
+                                          support_eval.advantage)
+      loss, surrogate_cost = self.policy_loss(pi_posterior, query.o[:, :-1],
+                                              query.a, query_eval.advantage,
+                                              query_eval.cost_advantage,
+                                              old_pi_query_logprob)
+      # Compute the KL-divs of the new posterior. We could compute old_pi
+      # outside but computing it here makes the code clearer.
+      pi = self.actor.apply(pi_posterior, query.o[:, :-1])
+      old_pi = self.actor.apply(old_pi_posterior, query.o[:, :-1])
+      kl = pi.kl_divergence(old_pi)
+      return loss, surrogate_cost, kl.mean()
+
+    task_loss = jax.vmap(task_loss)
+    losses, surrogate_costs, kls = task_loss(support, query, support_eval,
+                                             query_eval, old_pi_query_logprob,
+                                             old_pi_posteriors)
+    return losses.mean(), surrogate_costs.mean(), kls.mean()
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
-    pass
+    # Evaluate the policy given the recent data.
+    eval_ = self.adapt_critics_and_evaluate(self.critic.state,
+                                            self.safety_critic.state,
+                                            observation, reward, cost)
+    # Adapt the policy to get a MAP of the policy's poterior.
+    _, pi_posterior = self.task_adaptation(self.actor.params,
+                                           self.inner_lr.params,
+                                           observation[:, :-1], action,
+                                           eval_.advantage)
+    # Keep the posterior's MAP to the query data set.
+    self.pi_posterior = pi_posterior
+    # Keep this posterior for later use as part of training.
+    if train:
+      self.pi_posteriors[self.task_id] = pi_posterior
 
   @partial(jax.jit, static_argnums=0)
-  def task_adaptation(self, policy_prior: hk.Params, pi_lr: float,
+  def task_adaptation(self, policy_prior: hk.Params, pi_lr: jnp.ndarray,
                       observation: jnp.ndarray, action: jnp.ndarray,
-                      advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
-                      constraint: jnp.ndarray,
-                      old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
+                      advantage: jnp.ndarray) -> [hk.Params, hk.Params]:
     pi_lr = jnn.softplus(pi_lr)
     new_pi = policy_prior
+    loss = partial(vpg.VanillaPolicyGrandients.policy_loss, self)
     for _ in range(self.config.inner_steps):
-      policy_grads = jax.grad(
-          self.policy_loss,
-          has_aux=True)(new_pi, observation, action, advantage, cost_advantage,
-                        old_pi_logprob)
+      # Shamelessly ignore safety and use only the objective to
+      # adapt the policy.
+      policy_grads = jax.grad(loss)(new_pi, observation, action, advantage)
       new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
     return new_pi
 
