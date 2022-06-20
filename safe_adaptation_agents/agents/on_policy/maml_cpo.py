@@ -9,10 +9,10 @@ import jax
 import jax.numpy as jnp
 import jax.nn as jnn
 import haiku as hk
+import optax
 
 from safe_adaptation_agents.agents.on_policy import cpo, vpg
-from safe_adaptation_agents.agents.on_policy.safe_vpg import (
-    Evaluation, SafeVanillaPolicyGradients)
+from safe_adaptation_agents.agents.on_policy.safe_vpg import Evaluation
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
 from safe_adaptation_agents import utils
