@@ -65,5 +65,5 @@ def load_config(args: Optional[List[AnyStr]] = None):
   # Add arguments from the defaults to create the default parameters namespace.
   for key, value in sorted(defaults.items(), key=lambda x: x[0]):
     parser.add_argument(f'--{key}', type=yaml.safe_load, default=value)
-  # Parse the remaining arguments into the parameters namespace.
+  # Parse the remaining arguments into the parameters' namespace.
   return validate_config(parser.parse_args(remaining))
