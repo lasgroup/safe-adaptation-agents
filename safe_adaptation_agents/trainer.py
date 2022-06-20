@@ -155,7 +155,7 @@ class Trainer:
       _, results = train_driver.run(agent, env, self.tasks(train=True), True)
       summary, *_ = evaluation_summary([results], 'on_policy_evaluation')
       logger.log_summary(summary, epoch)
-      if epoch % config.eval_every == 0 and config.eval_trials:
+      if config.eval_trials and epoch % config.eval_every == 0:
         print('Evaluating...')
         results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
