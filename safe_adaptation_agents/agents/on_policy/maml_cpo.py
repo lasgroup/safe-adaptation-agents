@@ -34,10 +34,6 @@ class MamlCpo(cpo.Cpo):
         num_steps, observation_space.shape, action_space.shape,
         self.config.task_batch_size)
     self.task_id = -1
-    self.inner_lr = utils.Learner(
-        utils.inv_softplus(self.config.policy_inner_lr), next(self.rng_seq),
-        self.config.inner_lr_opt,
-        utils.get_mixed_precision_policy(config.precision))
     # The adapted/fine-tuned policy parameters for the last seen task.
     self.pi_posterior = None
     # Save a posterior of each task for the outer update steps. See ProMP,
@@ -87,22 +83,52 @@ class MamlCpo(cpo.Cpo):
     query = TrajectoryData(*query)
     (
         self.actor.state,
-        self.inner_lr.state,
         info,
-    ) = self.update_priors(self.actor.state, self.inner_lr.state, support,
-                           query, utils.pytrees_stack(self.pi_posteriors))
-    info['agent/policy_lr'] = jnn.softplus(self.inner_lr.params)
+    ) = self.update_priors(self.actor.state, support, query,
+                           utils.pytrees_stack(self.pi_posteriors))
     for k, v in info.items():
       self.logger[k] = v.mean()
 
   @partial(jax.jit, static_argnums=0)
-  def update_priors(self, actor_state: LearningState,
-                    inner_lr_state: LearningState, support: TrajectoryData,
+  def update_priors(self, actor_state: LearningState, support: TrajectoryData,
                     query: TrajectoryData,
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
-    pass
+    c = (0. - self.config.cost_limit)
+    old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
+    old_pi_support_logprob = old_pi_support.log_prob(support.a)
+    losses = lambda p: (
+        self.meta_loss(p, support, query, support_eval, query_eval,
+                       old_pi_support_logprob, old_pi_posteriors))[:2]
+    jac = jax.jacobian(losses)(actor_state.params)
+    old_pi_loss, old_surrogate_cost, _ = self.meta_loss(
+        actor_state.params, support, query, support_eval, query_eval,
+        old_pi_support_logprob, old_pi_posteriors)
+    g, b = jac
+    p, _ = jax.flatten_util.ravel_pytree(actor_state.params)
+
+    def d_kl_hvp(x):
+      d_kl = lambda p: (
+          self.meta_loss(p, support, query, support_eval, query_eval,
+                         old_pi_support_logprob, old_pi_posteriors))[-1]
+      return cpo.hvp(d_kl, (p,), (x,))
+
+    direction, optim_case = cpo.step_direction(g, b, c, d_kl_hvp,
+                                               self.config.target_kl,
+                                               self.config.safe)
+
+    def evaluate_policy(params):
+      return self.meta_loss(params, support, query, support_eval, query_eval,
+                            old_pi_support_logprob, old_pi_posteriors)
+
+    new_params, info = cpo.backtracking(direction, evaluate_policy, old_pi_loss,
+                                        old_surrogate_cost, optim_case, c,
+                                        actor_state.params, self.config.safe,
+                                        self.config.backtrack_iters,
+                                        self.config.backtrack_coeff,
+                                        self.config.target_kl)
+    return LearningState(new_params, self.actor.opt_state), info
 
   @partial(jax.jit, static_argnums=0)
   def evaluate_support_and_query(
@@ -121,17 +147,15 @@ class MamlCpo(cpo.Cpo):
     query_eval = batched_adapt_critic_and_evaluate(query.o, query.r, query.c)
     return support_eval, query_eval
 
-  def meta_loss(self, policy_prior: hk.Params, inner_lr: jnp.ndarray,
-                support: TrajectoryData, query: TrajectoryData,
-                support_eval: Evaluation, query_eval: Evaluation,
-                old_pi_query_logprob: jnp.ndarray,
+  def meta_loss(self, policy_prior: hk.Params, support: TrajectoryData,
+                query: TrajectoryData, support_eval: Evaluation,
+                query_eval: Evaluation, old_pi_query_logprob: jnp.ndarray,
                 old_pi_posteriors: hk.Params):
 
     def task_loss(support, query, support_eval, query_eval,
                   old_pi_query_logprob, old_pi_posterior):
-      pi_posterior = self.task_adaptation(policy_prior, inner_lr,
-                                          support.o[:, :-1], support.a,
-                                          support_eval.advantage)
+      pi_posterior = self.task_adaptation(policy_prior, support.o[:, :-1],
+                                          support.a, support_eval.advantage)
       loss, surrogate_cost = self.policy_loss(pi_posterior, query.o[:, :-1],
                                               query.a, query_eval.advantage,
                                               query_eval.cost_advantage,
@@ -140,8 +164,8 @@ class MamlCpo(cpo.Cpo):
       # outside but computing it here makes the code clearer.
       pi = self.actor.apply(pi_posterior, query.o[:, :-1])
       old_pi = self.actor.apply(old_pi_posterior, query.o[:, :-1])
-      kl = pi.kl_divergence(old_pi)
-      return loss, surrogate_cost, kl.mean()
+      kl = pi.kl_divergence(old_pi).mean()
+      return loss, surrogate_cost, kl
 
     task_loss = jax.vmap(task_loss)
     losses, surrogate_costs, kls = task_loss(support, query, support_eval,
@@ -157,7 +181,6 @@ class MamlCpo(cpo.Cpo):
                                             observation, reward, cost)
     # Adapt the policy to get a MAP of the policy's poterior.
     _, pi_posterior = self.task_adaptation(self.actor.params,
-                                           self.inner_lr.params,
                                            observation[:, :-1], action,
                                            eval_.advantage)
     # Keep the posterior's MAP to the query data set.

@@ -59,7 +59,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     self.margin = max(0, self.margin + self.config.margin_lr * c)
     c += self.margin
     c /= (self.config.time_limit + 1e-8)
-    g, b, old_pi_loss, old_surrogate_cost = self._objective_and_constraint_grads(
+    g, b, old_pi_loss, old_surrogate_cost = self._cpo_grads(
         state.params, observation, action, advantage, cost_advantage,
         old_pi_logprob)
     p, unravel_tree = jax.flatten_util.ravel_pytree(state.params)
@@ -93,9 +93,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     return LearningState(new_params, self.actor.opt_state), info
 
   @partial(jax.jit, static_argnums=0)
-  def _objective_and_constraint_grads(self, pi_params, observation, action,
-                                      advantage, cost_advantage,
-                                      old_pi_logprob):
+  def _cpo_grads(self, pi_params, observation, action, advantage,
+                 cost_advantage, old_pi_logprob):
     # Take gradients of the objective and surrogate cost w.r.t. pi_params.
     jac = jax.jacobian(self.policy_loss)(pi_params, observation, action,
                                          advantage, cost_advantage,
