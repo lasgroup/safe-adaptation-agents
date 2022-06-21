@@ -172,7 +172,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     ) = jax.lax.while_loop(cond, body, init_state)  # noqa
     info['agent/actor/update_iters'] = iters
     new_lagrangian = self.lagrangian.apply(new_lagrangian_state.params)
-    info['agent/lagrangian'] = new_lagrangian
+    info['agent/lagrangian_prior'] = jnn.softplus(new_lagrangian)
     return new_lagrangian_state, new_actor_state, new_lr_state, info
 
   @partial(jax.jit, static_argnums=0)
