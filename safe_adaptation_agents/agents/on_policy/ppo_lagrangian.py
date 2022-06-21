@@ -135,7 +135,10 @@ class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):
   @functools.partial(jax.jit, static_argnums=0)
   def lagrangian_update_step(self, lagrangian: LearningState,
                              constraint: jnp.ndarray) -> [LearningState, dict]:
-
+    # Lagrangian doesn't go through a softplus here (as par with
+    # https://github.com/openai/safety-starter-agents/blob
+    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/run_agent.py#L149
+    # ). This is to have gradients even if the actual lagrangian is very small.
     def loss(params):
       return -(self.lagrangian.apply(params) *
                (constraint - self.config.cost_limit))[0]

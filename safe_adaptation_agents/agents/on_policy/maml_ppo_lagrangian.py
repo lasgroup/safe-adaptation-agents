@@ -260,6 +260,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                       old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
     lagrangian_lr, pi_lr = map(jnn.softplus, (lagrangian_lr, pi_lr))
     new_lagrangian, new_pi = lagrangian_prior, policy_prior
+    # Lagrangian doesn't go through a softplus here (as par with
+    # https://github.com/openai/safety-starter-agents/blob
+    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/run_agent.py#L149
+    # ). This is to have gradients even if the actual lagrangian is very small.
     lagrangian_loss = lambda p: (-self.lagrangian.apply(p) *
                                  (constraint - self.config.cost_limit))[0]
     for _ in range(self.config.inner_steps):
