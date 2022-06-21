@@ -251,6 +251,14 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     if train:
       self.pi_posteriors[self.task_id] = pi_posterior
 
+  def adapt_lagrangian(self):
+    pass
+
+  def adapt_policy(self):
+    pass
+
+  def task_adaptation(self):
+
   @partial(jax.jit, static_argnums=0)
   def task_adaptation(self, lagrangian_prior: hk.Params,
                       policy_prior: hk.Params, lagrangian_lr: float,
