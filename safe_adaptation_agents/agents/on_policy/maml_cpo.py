@@ -107,12 +107,12 @@ class MamlCpo(cpo.Cpo):
                        old_pi_support_logprob, old_pi_posteriors))[:2]
     jac = jax.jacobian(losses)(actor_state.params)
     g, b = jac
-    p, _ = jax.flatten_util.ravel_pytree(actor_state.params)
+    p, unravel_tree = jax.flatten_util.ravel_pytree(actor_state.params)
 
     def d_kl_hvp(x):
-      d_kl = lambda p: (
-          self.meta_loss(p, support, query, support_eval, query_eval,
-                         old_pi_support_logprob, old_pi_posteriors))[-1]
+      d_kl = lambda p: (self.meta_loss(
+          unravel_tree(p), support, query, support_eval, query_eval,
+          old_pi_support_logprob, old_pi_posteriors))[-1]
       return cpo.hvp(d_kl, (p,), (x,))
 
     direction, optim_case = cpo.step_direction(g, b, c, d_kl_hvp,
