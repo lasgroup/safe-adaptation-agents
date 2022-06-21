@@ -81,30 +81,31 @@ class MamlCpo(cpo.Cpo):
     support, query, _ = zip(*map(split, trajectory_data))
     support = TrajectoryData(*support)
     query = TrajectoryData(*query)
+    constraint = query.c.sum(1).mean()
+    c = (constraint - self.config.cost_limit)
+    self.margin = max(0, self.margin + self.config.margin_lr * c)
+    c += self.margin
+    c /= (self.config.time_limit + 1e-8)
     (
         self.actor.state,
         info,
-    ) = self.update_priors(self.actor.state, support, query,
+    ) = self.update_priors(self.actor.state, support, query, c,
                            utils.pytrees_stack(self.pi_posteriors))
     for k, v in info.items():
       self.logger[k] = v.mean()
 
   @partial(jax.jit, static_argnums=0)
   def update_priors(self, actor_state: LearningState, support: TrajectoryData,
-                    query: TrajectoryData,
+                    query: TrajectoryData, c: jnp.ndarray,
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
-    c = (0. - self.config.cost_limit)
     old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
     old_pi_support_logprob = old_pi_support.log_prob(support.a)
     losses = lambda p: (
         self.meta_loss(p, support, query, support_eval, query_eval,
                        old_pi_support_logprob, old_pi_posteriors))[:2]
     jac = jax.jacobian(losses)(actor_state.params)
-    old_pi_loss, old_surrogate_cost, _ = self.meta_loss(
-        actor_state.params, support, query, support_eval, query_eval,
-        old_pi_support_logprob, old_pi_posteriors)
     g, b = jac
     p, _ = jax.flatten_util.ravel_pytree(actor_state.params)
 
@@ -122,6 +123,10 @@ class MamlCpo(cpo.Cpo):
       return self.meta_loss(params, support, query, support_eval, query_eval,
                             old_pi_support_logprob, old_pi_posteriors)
 
+    old_pi_loss, old_surrogate_cost, _ = self.meta_loss(
+        actor_state.params, support, query, support_eval, query_eval,
+        old_pi_support_logprob, old_pi_posteriors)
+
     new_params, info = cpo.backtracking(direction, evaluate_policy, old_pi_loss,
                                         old_surrogate_cost, optim_case, c,
                                         actor_state.params, self.config.safe,
@@ -135,7 +140,6 @@ class MamlCpo(cpo.Cpo):
       self, critic_state: LearningState, safety_critic_state: LearningState,
       support: TrajectoryData,
       query: TrajectoryData) -> [Evaluation, Evaluation]:
-    # Fit a critic for each task, evaluate the policy's performance with it.
     batched_adapt_critic_and_evaluate = jax.vmap(
         partial(
             self.adapt_critics_and_evaluate,
@@ -160,8 +164,6 @@ class MamlCpo(cpo.Cpo):
                                               query.a, query_eval.advantage,
                                               query_eval.cost_advantage,
                                               old_pi_query_logprob)
-      # Compute the KL-divs of the new posterior. We could compute old_pi
-      # outside but computing it here makes the code clearer.
       pi = self.actor.apply(pi_posterior, query.o[:, :-1])
       old_pi = self.actor.apply(old_pi_posterior, query.o[:, :-1])
       kl = pi.kl_divergence(old_pi).mean()
@@ -180,9 +182,8 @@ class MamlCpo(cpo.Cpo):
                                             self.safety_critic.state,
                                             observation, reward, cost)
     # Adapt the policy to get a MAP of the policy's poterior.
-    _, pi_posterior = self.task_adaptation(self.actor.params,
-                                           observation[:, :-1], action,
-                                           eval_.advantage)
+    pi_posterior = self.task_adaptation(self.actor.params, observation[:, :-1],
+                                        action, eval_.advantage)
     # Keep the posterior's MAP to the query data set.
     self.pi_posterior = pi_posterior
     # Keep this posterior for later use as part of training.
@@ -190,17 +191,17 @@ class MamlCpo(cpo.Cpo):
       self.pi_posteriors[self.task_id] = pi_posterior
 
   @partial(jax.jit, static_argnums=0)
-  def task_adaptation(self, policy_prior: hk.Params, pi_lr: jnp.ndarray,
-                      observation: jnp.ndarray, action: jnp.ndarray,
+  def task_adaptation(self, policy_prior: hk.Params, observation: jnp.ndarray,
+                      action: jnp.ndarray,
                       advantage: jnp.ndarray) -> [hk.Params, hk.Params]:
-    pi_lr = jnn.softplus(pi_lr)
     new_pi = policy_prior
     loss = partial(vpg.VanillaPolicyGrandients.policy_loss, self)
     for _ in range(self.config.inner_steps):
       # Shamelessly ignore safety and use only the objective to
       # adapt the policy.
       policy_grads = jax.grad(loss)(new_pi, observation, action, advantage)
-      new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
+      new_pi = utils.gradient_descent(policy_grads, new_pi,
+                                      self.config.policy_inner_lr)
     return new_pi
 
   @partial(jax.jit, static_argnums=0)

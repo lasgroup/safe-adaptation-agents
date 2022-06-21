@@ -59,5 +59,16 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     return maml_ppo_lagrangian.MamlPpoLagrangian(observation_space,
                                                  action_space, config, logger,
                                                  actor, critic, safety_critic)
+  elif config.agent == 'maml_cpo':
+    from safe_adaptation_agents.agents.on_policy import maml_cpo
+    actor = hk.without_apply_rng(
+        hk.transform(lambda x: models.Actor(
+            **config.actor, output_size=action_space.shape)(x)))
+    critic = hk.without_apply_rng(
+        hk.transform(lambda x: models.DenseDecoder(
+            **config.critic, output_size=(1,))(x)))
+    safety_critic = deepcopy(critic)
+    return maml_cpo.MamlCpo(observation_space, action_space, config, logger,
+                            actor, critic, safety_critic)
   else:
     raise ValueError('Could not find the requested agent.')
