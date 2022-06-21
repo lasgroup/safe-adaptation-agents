@@ -117,7 +117,8 @@ class MamlCpo(cpo.Cpo):
 
     direction, optim_case = cpo.step_direction(g, b, c, d_kl_hvp,
                                                self.config.target_kl,
-                                               self.config.safe)
+                                               self.config.safe,
+                                               self.config.damping_coeff)
 
     def evaluate_policy(params):
       return self.meta_loss(params, support, query, support_eval, query_eval,
