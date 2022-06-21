@@ -73,7 +73,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     direction, optim_case = step_direction(g, b, c, d_kl_hvp,
                                            self.config.target_kl,
-                                           self.config.safe)
+                                           self.config.safe,
+                                           self.config.damping_coeff)
 
     def evaluate_policy(params):
       new_pi_loss, new_surrogate_cost = self.policy_loss(
@@ -117,14 +118,20 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     return -objective.mean(), surrogate_cost.mean()
 
 
-def step_direction(g: chex.ArrayTree, b: chex.ArrayTree, c: jnp.ndarray,
-                   d_kl_hvp: Callable, target_kl: float, safe: bool):
+def step_direction(g: chex.ArrayTree,
+                   b: chex.ArrayTree,
+                   c: jnp.ndarray,
+                   d_kl_hvp: Callable,
+                   target_kl: float,
+                   safe: bool,
+                   damping_coeff: float = 0.):
   # Implementation of CPO step direction is based on the implementation @
   # https://github.com/openai/safety-starter-agents
   # Take gradients of the objective and surrogate cost w.r.t. pi_params.
   g, unravel_tree = jax.flatten_util.ravel_pytree(g)
   b, _ = jax.flatten_util.ravel_pytree(b)
-
+  # Add damping to hvp, as in TRPO
+  d_kl_hvp = lambda v: d_kl_hvp(v) + damping_coeff * v
   v = sparse.linalg.cg(d_kl_hvp, g, maxiter=10)[0]
   approx_g = d_kl_hvp(v)
   q = jnp.dot(v, approx_g)
