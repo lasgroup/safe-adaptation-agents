@@ -107,12 +107,10 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                     support: TrajectoryData, query: TrajectoryData,
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
     if self.config.safe:
-      lagrangian_meta_loss = jax.value_and_grad(
-          self.lagrangian_meta_loss, (0, 1), has_aux=True)
-      (lagrangian_loss,
-       lagrangians), grads = lagrangian_meta_loss(actor_state.params,
-                                                  inner_lr_state.params,
-                                                  support, query)
+      (lagrangian_loss, lagrangians), grads = jax.value_and_grad(
+          self.lagrangian_meta_loss, (0, 1),
+          has_aux=True)(lagrangian_state.params, inner_lr_state.params, support,
+                        query)
       lagrangian_grads, lr_grads = grads
       new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
                                                        lagrangian_state)
@@ -207,6 +205,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
       lagrangian_posterior = self.adapt_lagrangian(prior, learning_rate,
                                                    support_constraint)
       loss = self.lagrangian_loss(lagrangian_posterior, query_constraint)
+      lagrangian_posterior = self.lagrangian.apply(lagrangian_posterior)
+      lagrangian_posterior = jnn.softplus(lagrangian_posterior)
       return loss, lagrangian_posterior
 
     task_loss = jax.vmap(task_loss)
