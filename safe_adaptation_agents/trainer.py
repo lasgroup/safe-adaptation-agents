@@ -104,7 +104,6 @@ class Trainer:
 
   def __enter__(self):
     self.state_writer = logging.StateWriter(self.config.log_dir)
-    self.logger = logging.TrainingLogger(self.config.log_dir)
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs,
                                                 self.config.time_limit)
@@ -114,8 +113,11 @@ class Trainer:
     else:
       self.env.reset(seed=self.config.seed, options={'task': task})
     if self.make_agent is not None:
+      self.logger = logging.TrainingLogger(self.config.log_dir)
       self.agent = self.make_agent(self.config, self.env.observation_space,
                                    self.env.action_space, self.logger)
+    else:
+      self.logger = self.agent.logger
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
