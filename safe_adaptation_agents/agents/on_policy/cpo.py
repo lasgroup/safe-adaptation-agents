@@ -130,10 +130,10 @@ def step_direction(g: chex.ArrayTree,
   # Take gradients of the objective and surrogate cost w.r.t. pi_params.
   g, unravel_tree = jax.flatten_util.ravel_pytree(g)
   b, _ = jax.flatten_util.ravel_pytree(b)
-  # Add damping to hvp, as in TRPO
-  d_kl_hvp = lambda v: d_kl_hvp(v) + damping_coeff * v
-  v = sparse.linalg.cg(d_kl_hvp, g, maxiter=10)[0]
-  approx_g = d_kl_hvp(v)
+  # Add damping to hvp, as in TRPO.
+  damped_d_kl_hvp = lambda v: d_kl_hvp(v) + damping_coeff * v
+  v = sparse.linalg.cg(damped_d_kl_hvp, g, maxiter=10)[0]
+  approx_g = damped_d_kl_hvp(v)
   q = jnp.dot(v, approx_g)
 
   def trpo():
@@ -142,9 +142,9 @@ def step_direction(g: chex.ArrayTree,
     return optim_case, w, r, s, A, B
 
   def cpo():
-    w = sparse.linalg.cg(d_kl_hvp, b, maxiter=10)[0]
+    w = sparse.linalg.cg(damped_d_kl_hvp, b, maxiter=10)[0]
     r = jnp.dot(w, approx_g)
-    s = jnp.dot(w, d_kl_hvp(w))
+    s = jnp.dot(w, damped_d_kl_hvp(w))
     A = q - r**2 / s
     B = 2. * target_kl - c**2 / s
     optim_case = jax.lax.cond(
