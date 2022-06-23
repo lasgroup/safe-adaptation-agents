@@ -81,11 +81,14 @@ class MamlCpo(cpo.Cpo):
     support, query, _ = zip(*map(split, trajectory_data))
     support = TrajectoryData(*support)
     query = TrajectoryData(*query)
-    constraint = query.c.sum(1).mean()
-    c = (constraint - self.config.cost_limit)
-    self.margin = max(0, self.margin + self.config.margin_lr * c)
-    c += self.margin
-    c /= (self.config.time_limit + 1e-8)
+    if self.config.safe:
+      constraint = query.c.sum(1).mean()
+      c = (constraint - self.config.cost_limit)
+      self.margin = max(0, self.margin + self.config.margin_lr * c)
+      c += self.margin
+      c /= (self.config.time_limit + 1e-8)
+    else:
+      c = jnp.zeros(())
     (
         self.actor.state,
         info,
