@@ -153,8 +153,9 @@ class Trainer:
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
       _, results = train_driver.run(agent, env, self.tasks(train=True), True)
-      summary, *_ = evaluation_summary([results], 'on_policy_evaluation')
-      logger.log_summary(summary, epoch)
+      if results:
+        summary, *_ = evaluation_summary([results], 'on_policy_evaluation')
+        logger.log_summary(summary, epoch)
       if config.eval_trials and epoch % config.eval_every == 0:
         print('Evaluating...')
         results = self.evaluate(test_driver)
