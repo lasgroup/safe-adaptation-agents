@@ -103,11 +103,13 @@ class MamlCpo(cpo.Cpo):
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
-    old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
-    old_pi_support_logprob = old_pi_support.log_prob(support.a)
-    losses = lambda p: (
-        self.meta_loss(p, support, query, support_eval, query_eval,
-                       old_pi_support_logprob, old_pi_posteriors))[:2]
+    old_posterior_pi_logprobs = (
+        lambda params, o, a: self.actor.apply(params, o).log_prob(a))
+    old_pi_query_logprob = jax.vmap(old_posterior_pi_logprobs)(
+        old_pi_posteriors, query.o[:, :, :-1], query.a)
+    losses = lambda p: (self.
+                        meta_loss(p, support, query, support_eval, query_eval,
+                                  old_pi_query_logprob, old_pi_posteriors))[:2]
     jac = jax.jacobian(losses)(actor_state.params)
     g, b = jac
     p, unravel_tree = jax.flatten_util.ravel_pytree(actor_state.params)
@@ -115,7 +117,7 @@ class MamlCpo(cpo.Cpo):
     def d_kl_hvp(x):
       d_kl = lambda p: (self.meta_loss(
           unravel_tree(p), support, query, support_eval, query_eval,
-          old_pi_support_logprob, old_pi_posteriors))[-1]
+          old_pi_query_logprob, old_pi_posteriors))[-1]
       return cpo.hvp(d_kl, (p,), (x,))
 
     direction, optim_case = cpo.step_direction(g, b, c, d_kl_hvp,
@@ -125,11 +127,11 @@ class MamlCpo(cpo.Cpo):
 
     def evaluate_policy(params):
       return self.meta_loss(params, support, query, support_eval, query_eval,
-                            old_pi_support_logprob, old_pi_posteriors)
+                            old_pi_query_logprob, old_pi_posteriors)
 
     old_pi_loss, old_surrogate_cost, _ = self.meta_loss(
         actor_state.params, support, query, support_eval, query_eval,
-        old_pi_support_logprob, old_pi_posteriors)
+        old_pi_query_logprob, old_pi_posteriors)
 
     new_params, info = cpo.backtracking(direction, evaluate_policy, old_pi_loss,
                                         old_surrogate_cost, optim_case, c,
