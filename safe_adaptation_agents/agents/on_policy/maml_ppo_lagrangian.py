@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Optional
 from types import SimpleNamespace
 from functools import partial
 
@@ -106,8 +106,24 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
                     actor_state: LearningState, inner_lr_state: LearningState,
                     support: TrajectoryData, query: TrajectoryData,
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
+    # We first update the lagrangian and compute the lagrangian posteriors
+    # per task. This is then used to update the policy in `policy_loss`.
+    if self.config.safe:
+      (lagrangian_loss, lagrangians), grads = jax.value_and_grad(
+          self.lagrangian_meta_loss, (0, 1),
+          has_aux=True)(lagrangian_state.params, inner_lr_state.params, support,
+                        query)
+      lagrangian_grads, lr_grads = grads
+      new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
+                                                       lagrangian_state)
+      inner_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
+    else:
+      lagrangians = jnp.zeros((support.o.shape[0],))
+      new_lagrangian_state = lagrangian_state
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
+    # Compute the logprobs of the prior (on the support set) and the
+    # posterior (on the query set). These used downstream by `policy_loss`
     old_pi_support = self.actor.apply(actor_state.params, support.o[:, :, :-1])
     old_pi_support_logprob = old_pi_support.log_prob(support.a)
     old_posterior_pi_logprobs = (
@@ -129,50 +145,43 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
           ))
 
     def body(val):
-      (iter_, lagrangian_state, actor_state, lr_state, _) = val
+      (iter_, actor_state, lr_state, _) = val
       (loss, kl_d), grads = jax.value_and_grad(
-          self.meta_loss, (0, 1, 2),
-          has_aux=True)(lagrangian_state.params, actor_state.params,
-                        lr_state.params, support, query, support_eval,
-                        query_eval, old_pi_support_logprob,
-                        old_pi_query_logprob, old_pi_posteriors)
-      lagrangian_grads, pi_grads, lr_grads = grads
+          self.policy_meta_loss, (0, 1),
+          has_aux=True)(actor_state.params, lr_state.params, lagrangians,
+                        support, query, support_eval, query_eval,
+                        old_pi_support_logprob, old_pi_query_logprob,
+                        old_pi_posteriors)
+      # Note that `lr_grads` here are actually 0. for the lagrangian inner
+      # learning rate since `policy_meta_loss` is not a function of it.
+      pi_grads, lr_grads = grads
       new_actor_state = self.actor.grad_step(pi_grads, actor_state)
-      new_lagrangian_state = self.lagrangian.grad_step(lagrangian_grads,
-                                                       lagrangian_state)
       new_lr_state = self.inner_lrs.grad_step(lr_grads, inner_lr_state)
-      # TODO (yarden): maybe should be actor state!
       new_pi = self.actor.apply(new_actor_state.params, support.o[:, :, :-1])
       report = {
           'agent/actor/loss': loss,
           'agent/actor/entropy': new_pi.entropy().mean(),
           'agent/actor/delta_kl': kl_d,
-          'agent/actor/lagrangian_grads': optax.global_norm(lagrangian_grads),
-          'agent/actor/pi_grads': optax.global_norm(pi_grads),
-          'agent/actor/lr_grads': optax.global_norm(lr_grads)
+          'agent/actor/pi_grads': optax.global_norm(pi_grads)
       }
-      out = (iter_ + 1, new_lagrangian_state, new_actor_state, new_lr_state,
-             report)
+      out = (iter_ + 1, new_actor_state, new_lr_state, report)
       return out
 
-    init_state = (0, lagrangian_state, actor_state, inner_lr_state, {
+    init_state = (0, actor_state, inner_lr_state, {
         'agent/actor/loss': 0.,
         'agent/actor/entropy': 0.,
         'agent/actor/delta_kl': 0.,
-        'agent/actor/lagrangian_grads': 0.,
-        'agent/actor/pi_grads': 0.,
-        'agent/actor/lr_grads': 0.
+        'agent/actor/pi_grads': 0.
     })
     (
         iters,
-        new_lagrangian_state,
         new_actor_state,
         new_lr_state,
         info,
     ) = jax.lax.while_loop(cond, body, init_state)  # noqa
-    info['agent/actor/update_iters'] = iters
     new_lagrangian = self.lagrangian.apply(new_lagrangian_state.params)
     info['agent/lagrangian_prior'] = jnn.softplus(new_lagrangian)
+    info['agent/actor/update_iters'] = iters
     return new_lagrangian_state, new_actor_state, new_lr_state, info
 
   @partial(jax.jit, static_argnums=0)
@@ -192,26 +201,41 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     query_eval = batched_adapt_critic_and_evaluate(query.o, query.r, query.c)
     return support_eval, query_eval
 
-  def meta_loss(self, lagrangian_prior: hk.Params, policy_prior: hk.Params,
-                inner_lrs: Tuple[float, float], support: TrajectoryData,
-                query: TrajectoryData, support_eval: Evaluation,
-                query_eval: Evaluation, old_pi_support_logprob: jnp.ndarray,
-                old_pi_query_logprob: jnp.ndarray,
-                old_pi_posteriors: hk.Params):
-    lagrangian_lr, pi_lr = inner_lrs
+  def lagrangian_meta_loss(self, prior: hk.Params, learning_rates: hk.Params,
+                           support: TrajectoryData, query: TrajectoryData):
+    learning_rate, _ = learning_rates
+    support_constraints = support.c.sum(2).mean(1)
+    query_constraints = query.c.sum(2).mean(1)
+
+    def task_loss(support_constraint, query_constraint):
+      lagrangian_posterior = self.adapt_lagrangian(prior, learning_rate,
+                                                   support_constraint)
+      loss = self.lagrangian_loss(lagrangian_posterior, query_constraint)
+      lagrangian_posterior = self.lagrangian.apply(lagrangian_posterior)
+      lagrangian_posterior = jnn.softplus(lagrangian_posterior)
+      return loss, lagrangian_posterior
+
+    task_loss = jax.vmap(task_loss)
+    losses, lagrangians = task_loss(support_constraints, query_constraints)
+    return losses.mean(), lagrangians
+
+  def policy_meta_loss(self, prior: hk.Params, learning_rates: hk.Params,
+                       lagrangians: jnp.ndarray, support: TrajectoryData,
+                       query: TrajectoryData, support_eval: Evaluation,
+                       query_eval: Evaluation,
+                       old_pi_support_logprob: jnp.ndarray,
+                       old_pi_query_logprob: jnp.ndarray,
+                       old_pi_posteriors: hk.Params):
+    _, learning_rate = learning_rates
 
     def task_loss(support, query, support_eval, query_eval,
-                  old_pi_support_logprob, old_pi_query_logprob,
+                  old_pi_support_logprob, lagrangian, old_pi_query_logprob,
                   old_pi_posterior):
-      constraint = support.c.sum(1).mean()
-      lagrangian_posterior, pi_posterior = self.task_adaptation(
-          lagrangian_prior, policy_prior, lagrangian_lr, pi_lr,
-          support.o[:, :-1], support.a, support_eval.advantage,
-          support_eval.cost_advantage, constraint, old_pi_support_logprob)
-      if self.safe:
-        lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
-      else:
-        lagrangian = jnp.zeros_like(constraint)
+      pi_posterior = self.adapt_policy(prior, learning_rate, lagrangian,
+                                       support.o[:, :-1], support.a,
+                                       support_eval.advantage,
+                                       support_eval.cost_advantage,
+                                       old_pi_support_logprob)
       loss = self.policy_loss(pi_posterior, query.o[:, :-1], query.a,
                               query_eval.advantage, query_eval.cost_advantage,
                               lagrangian, old_pi_query_logprob)
@@ -224,8 +248,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
     task_loss = jax.vmap(task_loss)
     losses, kls = task_loss(support, query, support_eval, query_eval,
-                            old_pi_support_logprob, old_pi_query_logprob,
-                            old_pi_posteriors)
+                            old_pi_support_logprob, lagrangians,
+                            old_pi_query_logprob, old_pi_posteriors)
     return losses.mean(), kls.mean()
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
@@ -238,13 +262,12 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     old_pi = self.actor.apply(self.actor.params, observation[:, :-1])
     old_pi_logprob = old_pi.log_prob(action)
     constraint = cost.sum(1).mean()
-    # Adapt the policy to get a MAP of the policy's poterior.
-    _, pi_posterior = self.task_adaptation(self.lagrangian.params,
-                                           self.actor.params, lagrangian_lr,
-                                           pi_lr, observation[:, :-1], action,
-                                           eval_.advantage,
-                                           eval_.cost_advantage, constraint,
-                                           old_pi_logprob)
+    # Adapt the lagrangian and policy to get a MAP of the policy's poterior.
+    pi_posterior = self.task_adaptation(self.lagrangian.params,
+                                        self.actor.params, lagrangian_lr, pi_lr,
+                                        observation[:, :-1], action,
+                                        eval_.advantage, eval_.cost_advantage,
+                                        constraint, old_pi_logprob)
     # Keep the posterior's MAP to the query data set.
     self.pi_posterior = pi_posterior
     # Keep this posterior for later use as part of training.
@@ -253,31 +276,40 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
 
   @partial(jax.jit, static_argnums=0)
   def task_adaptation(self, lagrangian_prior: hk.Params,
-                      policy_prior: hk.Params, lagrangian_lr: float,
-                      pi_lr: float, observation: jnp.ndarray,
+                      policy_prior: hk.Params, lagrangian_lr: jnp.ndarray,
+                      pi_lr: jnp.ndarray, observation: jnp.ndarray,
                       action: jnp.ndarray, advantage: jnp.ndarray,
                       cost_advantage: jnp.ndarray, constraint: jnp.ndarray,
-                      old_pi_logprob: np.ndarray) -> [hk.Params, hk.Params]:
-    lagrangian_lr, pi_lr = map(jnn.softplus, (lagrangian_lr, pi_lr))
-    new_lagrangian, new_pi = lagrangian_prior, policy_prior
-    # Lagrangian doesn't go through a softplus here (as par with
-    # https://github.com/openai/safety-starter-agents/blob
-    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/run_agent.py#L149
-    # ). This is to have gradients even if the actual lagrangian is very small.
-    lagrangian_loss = lambda p: (-self.lagrangian.apply(p) *
-                                 (constraint - self.config.cost_limit))[0]
+                      old_pi_logprob: np.ndarray) -> [hk.Params]:
+    if self.config.safe:
+      lagrangian_posterior = self.adapt_lagrangian(lagrangian_prior,
+                                                   lagrangian_lr, constraint)
+      lagrangian = jnn.softplus(self.lagrangian.apply(lagrangian_posterior))
+    else:
+      lagrangian = 0.
+    policy_posterior = self.adapt_policy(policy_prior, pi_lr, lagrangian,
+                                         observation, action, advantage,
+                                         cost_advantage, old_pi_logprob)
+    return policy_posterior
+
+  def adapt_lagrangian(self, prior: hk.Params, learning_rate: jnp.ndarray,
+                       costraint: jnp.ndarray):
+    learning_rate = jnn.softplus(learning_rate)
+    new_lagrangian = prior
     for _ in range(self.config.inner_steps):
-      if self.safe:
-        # Fine tune the lagrangian for the given task.
-        lagrangian_grads = jax.grad(lagrangian_loss)(new_lagrangian)
-        new_lagrangian = utils.gradient_descent(lagrangian_grads,
-                                                new_lagrangian, lagrangian_lr)
-        lagrangian = jnn.softplus(self.lagrangian.apply(new_lagrangian))
-      else:
-        lagrangian = 0.
-      # Use the newly-tuned lagrangian and task evaluation to fine-tune the
-      # policy.
-      policy_grads = jax.grad(self.policy_loss)(
+      grads = jax.grad(self.lagrangian_loss)(prior, costraint)
+      new_lagrangian = utils.gradient_descent(grads, new_lagrangian,
+                                              learning_rate)
+    return new_lagrangian
+
+  def adapt_policy(self, prior: hk.Params, learning_rate: jnp.ndarray,
+                   lagrangian: jnp.ndarray, observation: jnp.ndarray,
+                   action: jnp.ndarray, advantage: jnp.ndarray,
+                   cost_advantage: jnp.ndarray, old_pi_logprob: jnp.ndarray):
+    learning_rate = jnn.softplus(learning_rate)
+    new_pi = prior
+    for _ in range(self.config.inner_steps):
+      grads = jax.grad(self.policy_loss)(
           new_pi,
           observation,
           action,
@@ -286,8 +318,8 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
           lagrangian,
           old_pi_logprob,
           clip=False)
-      new_pi = utils.gradient_descent(policy_grads, new_pi, pi_lr)
-    return new_lagrangian, new_pi
+      new_pi = utils.gradient_descent(grads, new_pi, learning_rate)
+    return new_pi
 
   @partial(jax.jit, static_argnums=0)
   def adapt_critics_and_evaluate(self, critic_state: LearningState,
