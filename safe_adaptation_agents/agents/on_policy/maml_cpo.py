@@ -103,11 +103,13 @@ class MamlCpo(cpo.Cpo):
                     old_pi_posteriors: hk.Params) -> [LearningState, dict]:
     support_eval, query_eval = self.evaluate_support_and_query(
         self.critic.state, self.safety_critic.state, support, query)
-    old_posterior_pi_logprobs = (
+    old_posterior_pi_logprobs_fn = (
         lambda params, o, a: self.actor.apply(params, o).log_prob(a))
-    old_pi_query_logprob = jax.vmap(old_posterior_pi_logprobs)(
+    old_pi_query_logprob = jax.vmap(old_posterior_pi_logprobs_fn)(
         old_pi_posteriors, query.o[:, :, :-1], query.a)
 
+    # Split the outputs of `meta_loss` depending on the needed grad/jacobian
+    # downstream.
     def losses(params, slice):
       return self.meta_loss(params, support, query, support_eval, query_eval,
                             old_pi_query_logprob, old_pi_posteriors)[slice]
@@ -117,7 +119,7 @@ class MamlCpo(cpo.Cpo):
     p, unravel_tree = jax.flatten_util.ravel_pytree(actor_state.params)
 
     def d_kl_hvp(x):
-      d_kl = partial(losses, slice=-1)
+      d_kl = lambda p: losses(unravel_tree(p), -1)
       return cpo.hvp(d_kl, (p,), (x,))
 
     direction, optim_case = cpo.step_direction(g, b, c, d_kl_hvp,
