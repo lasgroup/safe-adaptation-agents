@@ -13,7 +13,6 @@ def test_discounted_cumsum():
   assert jnp.isclose(y, y_hat).all()
 
 
-
 def discount_cumsum(x, discount):
   """
   magic from rllab for computing discounted cumulative sums of vectors.
@@ -29,8 +28,7 @@ def discount_cumsum(x, discount):
        x1 + discount * x2,
        x2]
   """
-  return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[
-         ::-1]
+  return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 
 def test_td_lambda():
