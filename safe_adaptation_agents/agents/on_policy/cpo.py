@@ -94,8 +94,9 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     return LearningState(new_params, self.actor.opt_state), info
 
   @partial(jax.jit, static_argnums=0)
-  def _cpo_grads(self, pi_params, observation, action, advantage,
-                 cost_advantage, old_pi_logprob):
+  def _cpo_grads(self, pi_params: hk.Params, observation: jnp.ndarray,
+                 action: jnp.ndarray, advantage: jnp.ndarray,
+                 cost_advantage: jnp.ndarray, old_pi_logprob: jnp.ndarray):
     # Take gradients of the objective and surrogate cost w.r.t. pi_params.
     jac = jax.jacobian(self.policy_loss)(pi_params, observation, action,
                                          advantage, cost_advantage,
