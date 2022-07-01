@@ -1,4 +1,4 @@
-from typing import Optional, NamedTuple
+from typing import Optional, NamedTuple, Sequence
 from types import SimpleNamespace
 from functools import partial
 
@@ -9,6 +9,8 @@ from gym.spaces import Space
 import jax.numpy as jnp
 import haiku as hk
 
+from tensorflow_probability.substrates import jax as tfp
+
 from safe_adaptation_agents import models
 from safe_adaptation_agents import nets
 from safe_adaptation_agents.agents import Transition
@@ -17,7 +19,10 @@ from safe_adaptation_agents.agents.on_policy import safe_vpg
 from safe_adaptation_agents.agents.on_policy import vpg
 from safe_adaptation_agents.agents.on_policy import cpo
 from safe_adaptation_agents import utils
+from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
+
+tfd = tfp.distributions
 
 
 def _initial_hidden_state(batch_size: int, hidden_size: int):
@@ -41,6 +46,7 @@ class State(NamedTuple):
 class GruPolicy(hk.Module):
 
   def __init__(self,
+               output_size: Sequence[int],
                hidden_size: int,
                actor_config: dict,
                initialization: str = 'glorot'):
@@ -49,7 +55,7 @@ class GruPolicy(hk.Module):
         hidden_size,
         w_i_init=nets.initializer(initialization),
         w_h_init=hk.initializers.Orthogonal())
-    self._head = models.Actor(**actor_config)
+    self._head = models.Actor(output_size, **actor_config)
 
   def __call__(self, observation: jnp.ndarray, state: State):
     embeddings, hidden = state.vec
@@ -64,14 +70,34 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(Rl2Cpo, self).__init__(observation_space, action_space, config,
-                                 logger, actor, critic, safety_critic)
+    self.config = config
+    self.logger = logger
+    self.rng_seq = hk.PRNGSequence(config.seed)
+    self.training_step = 0
+    num_steps = self.config.time_limit // self.config.action_repeat
+    self.buffer = etb.EpisodicTrajectoryBuffer(self.config.num_trajectories,
+                                               num_steps,
+                                               observation_space.shape,
+                                               action_space.shape,
+                                               self.config.task_batch_size)
     parallel_envs = self.config.parallel_envs
     hidden_state = _initial_hidden_state(parallel_envs, self.config.hidden_size)
+    zeros = jnp.zeros((parallel_envs, 1))
     self.state = State(hidden_state,
-                       jnp.zeros((parallel_envs,) + action_space.shape),
-                       jnp.zeros((parallel_envs,)), jnp.zeros(parallel_envs,),
-                       jnp.zeros((parallel_envs,)))
+                       jnp.zeros((parallel_envs,) + action_space.shape), zeros,
+                       zeros, zeros)
+    self.actor = utils.Learner(
+        actor, next(self.rng_seq), config.actor_opt,
+        utils.get_mixed_precision_policy(config.precision),
+        np.tile(observation_space.sample(), (parallel_envs, 1)), self.state)
+    self.critic = utils.Learner(
+        critic, next(self.rng_seq), config.critic_opt,
+        utils.get_mixed_precision_policy(config.precision),
+        observation_space.sample())
+    self.safety_critic = utils.Learner(
+        safety_critic, next(self.rng_seq), config.critic_opt,
+        utils.get_mixed_precision_policy(config.precision),
+        observation_space.sample())
     self.task_id = -1
     self.margin = 0.
 
@@ -108,8 +134,8 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     self.training_step += sum(transition.steps)
     # Keep prev_hidden after computing a forward pass in `self.policy(...)`
     hidden = self.state.hidden
-    self.state = State(hidden, transition.action, transition.reward,
-                       transition.cost, transition.done)
+    self.state = State(hidden, transition.action, transition.reward[:, None],
+                       transition.cost[:, None], transition.done[:, None])
 
   def observe_task_id(self, task_id: Optional[str] = None):
     self.task_id = (self.task_id + 1) % self.config.task_batch_size
@@ -119,31 +145,29 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
   def train(self, trajectory_data: TrajectoryData):
     eval_ = self.adapt_critics_and_evaluate(self.critic.state,
                                             self.safety_critic.state,
-                                            trajectory_data.o)
+                                            trajectory_data.o,
+                                            trajectory_data.r,
+                                            trajectory_data.c)
+    # Assuming that the mean cost return across different MDPs bounded.
     constraint = trajectory_data.c.sum(1).mean()
-    self.actor.state, actor_report = self.update_actor(
-        self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
-        eval_.advantage, eval_.cost_advantage, constraint)
-    self.critic.state, critic_report = self.update_critic(
-        self.critic.state, trajectory_data.o[:, :-1], eval_.return_)
-    if self.safe:
-      self.safety_critic.state, safety_report = self.update_safety_critic(
-          self.safety_critic.state, trajectory_data.o[:, :-1],
-          eval_.cost_return)
-      critic_report.update(safety_report)
-    for k, v in {**actor_report, **critic_report}.items():
-      self.logger[k] = v.mean()
-
-  def update_actor(self, state: utils.LearningState,
-                   *args) -> [utils.LearningState, dict]:
-    trajectory_data, advantage, cost_advantage, constraint = args
-    old_pis = self._rollout_policy(state.params, trajectory_data)
-    old_pi_logprob = old_pis.log_prob(trajectory_data.a)
     c = (constraint - self.config.cost_limit)
     self.margin = max(0, self.margin + self.config.margin_lr * c)
     c += self.margin
     c /= (self.config.time_limit + 1e-8)
-    g, b, old_pi_loss, old_surrogate_cost = self._cpo_grads(
+    self.actor.state, info = self.update_actor(self.actor.state,
+                                               trajectory_data, eval_.advantage,
+                                               eval_.cost_advantage, c)
+    info['agent/margin'] = self.margin
+    for k, v in info.items():
+      self.logger[k] = float(v)
+
+  @partial(jax.jit, static_argnums=0)
+  def update_actor(self, state: utils.LearningState,
+                   *args) -> [utils.LearningState, dict]:
+    trajectory_data, advantage, cost_advantage, c = args
+    old_pis = self._rollout_policy(state.params, trajectory_data)
+    old_pi_logprob = old_pis.log_prob(trajectory_data.a)
+    g, b, old_pi_loss, old_surrogate_cost, _ = self._cpo_grads(
         state.params, trajectory_data, advantage, cost_advantage,
         old_pi_logprob)
     # Ravel the params so every computation from now on is made on actual
@@ -153,8 +177,9 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     def d_kl_hvp(x):
 
       def d_kl(p):
-        pis, _ = self._rollout_policy(unravel_tree(p), trajectory_data.o)
-        return pis.kl_divergence(old_pis).mean()
+        pis = self._rollout_policy(unravel_tree(p), trajectory_data)
+        kl = tfd.kl_divergence(pis.distribution, old_pis.distribution).mean()
+        return kl
 
       return cpo.hvp(d_kl, (p,), (x,))
 
@@ -166,7 +191,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     def evaluate_policy(params):
       (new_pi_loss, new_surrogate_cost), (*_, pis) = self.policy_loss(
           params, trajectory_data, advantage, cost_advantage, old_pi_logprob)
-      kl_d = pis.kl_divergence(old_pis).mean()
+      kl_d = pis.distribution.kl_divergence(old_pis.distribution).mean()
       return new_pi_loss, new_surrogate_cost, kl_d
 
     new_params, info = cpo.backtracking(direction, evaluate_policy, old_pi_loss,
@@ -175,7 +200,6 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                         self.config.backtrack_iters,
                                         self.config.backtrack_coeff,
                                         self.config.target_kl)
-    info['agent/margin'] = self.margin
     return utils.LearningState(new_params, self.actor.opt_state), info
 
   @partial(jax.jit, static_argnums=0)
@@ -206,19 +230,28 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
   def _rollout_policy(self, params: hk.Params, trajectory_data: TrajectoryData):
     num_tasks = trajectory_data.o.shape[0]
+    num_episodes = trajectory_data.o.shape[1]
+    # No need for the last observation. Standardize dimensions.
+    trajectory_data = TrajectoryData(
+        trajectory_data.o[:, :, :-1],
+        trajectory_data.a,
+        trajectory_data.r[..., None],
+        trajectory_data.c[..., None],
+    )
     # Concatente episodes to a single long episodes.
     reshape = lambda x: x.reshape(num_tasks, -1, x.shape[-1])
     trajectory_data = TrajectoryData(*map(reshape, trajectory_data))
     # We don't keep track of dones in the regular setting, since fixed-length
     # episodes are assumed, we know the timestep of the last step.
-    dones = jnp.zeros_like(trajectory_data.r, bool)
+    dones = jnp.zeros_like(trajectory_data.r)
     time_limit = self.config.time_limit
-    dones = dones.at[::time_limit].set(True)
+    dones = dones.at[::time_limit].set(1.)
     # Set the time axis as the leading axis, as required by scan.
-    swapaxes = lambda x: x.swapexes(0, 1)
+    swapaxes = lambda x: x.swapaxes(0, 1)
     trajectory_data = TrajectoryData(*map(swapaxes, trajectory_data))
     dones = swapaxes(dones)
-    init = State(*map(jnp.zeros_like, self.state))
+    make_init = lambda x: jnp.zeros((num_tasks,) + x.shape[1:])
+    init = State(*map(make_init, self.state))
 
     def step(carry, xs):
       o, a, r, c, d = xs
@@ -229,9 +262,11 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     _, pis = jax.lax.scan(
         step,
         init,
-        (trajectory_data.o[:-1], trajectory_data.a, trajectory_data.r,
-         trajectory_data.a, dones),
+        (trajectory_data.o, trajectory_data.a, trajectory_data.r,
+         trajectory_data.c, dones),
     )
+    # Reshape back to the input dimension and shape
+    pis = tfd.BatchReshape(pis, (num_tasks, num_episodes, time_limit))
     return pis
 
   @partial(jax.jit, static_argnums=0)
@@ -242,8 +277,8 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
     # Fit the critics to the returns of the given task and return the
     # evaluation.
-    def per_batch_evaluation(observation: jnp.ndarray, reward: jnp.ndarray,
-                             cost: jnp.ndarray):
+    def per_task_evaluation(observation: jnp.ndarray, reward: jnp.ndarray,
+                            cost: jnp.ndarray):
       reward_return = vpg.discounted_cumsum(reward, self.config.discount)
       cost_return = vpg.discounted_cumsum(cost, self.config.cost_discount)
       adapted_critic_state, _ = self.update_critic(critic_state,
@@ -258,10 +293,6 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                        adapted_safety_critic_state.params,
                                        observation, reward, cost)
 
-    evaluation = jax.vmap(per_batch_evaluation)
+    evaluation = jax.vmap(per_task_evaluation)
     eval_ = evaluation(observation, reward, cost)
-    num_tasks = observation.shape[0]
-    # Concatente episodes to a single long episodes.
-    reshape = lambda x: x.reshape(num_tasks, -1, x.shape[-1])
-    eval_ = safe_vpg.Evaluation(*map(reshape, eval_))
     return eval_

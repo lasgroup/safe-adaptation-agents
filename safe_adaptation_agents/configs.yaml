@@ -126,3 +126,21 @@ maml_cpo:
   policy_inner_lr: 0.1
   inner_steps: 1
 
+rl2_cpo:
+  entropy_regularization: 0.
+  vf_iters: 80
+  actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
+  critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
+  discount: 0.99
+  lambda_: 0.97
+  cost_discount: 0.99
+  num_trajectories: 20
+  hidden_size: 128
+  actor_opt: {}
+  critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
+  target_kl: 0.01
+  backtrack_coeff: 0.8
+  backtrack_iters: 10
+  damping_coeff: 0.1
+  margin_lr: 0.05
+
