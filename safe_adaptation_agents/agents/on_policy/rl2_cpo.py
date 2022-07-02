@@ -118,6 +118,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                        self.state.prev_cost, self.state.done)
     return action
 
+  @partial(jax.jit, static_argnums=(0, 5, 6))
   def statefull_policy(self, observation: jnp.ndarray, params: hk.Params,
                        state: State, key: jnp.ndarray, train: bool,
                        adapt: bool) -> [jnp.ndarray, jnp.ndarray]:
