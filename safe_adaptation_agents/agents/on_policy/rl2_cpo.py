@@ -148,12 +148,15 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                             trajectory_data.o,
                                             trajectory_data.r,
                                             trajectory_data.c)
-    # Assuming that the mean cost return across different MDPs bounded.
-    constraint = trajectory_data.c.sum(1).mean()
-    c = (constraint - self.config.cost_limit)
-    self.margin = max(0, self.margin + self.config.margin_lr * c)
-    c += self.margin
-    c /= (self.config.time_limit + 1e-8)
+    if self.safe:
+      # Assuming that the mean cost return across different MDPs bounded.
+      constraint = trajectory_data.c.sum(2).mean()
+      c = (constraint - self.config.cost_limit)
+      self.margin = max(0, self.margin + self.config.margin_lr * c)
+      c += self.margin
+      c /= (self.config.time_limit + 1e-8)
+    else:
+      c = 0.
     self.actor.state, info = self.update_actor(self.actor.state,
                                                trajectory_data, eval_.advantage,
                                                eval_.cost_advantage, c)
