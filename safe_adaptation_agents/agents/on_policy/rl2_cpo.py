@@ -113,8 +113,8 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
       self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
     action, hidden = self.stateful_policy(observation,
-                                          self.actor.params, self.state,
-                                          next(self.rng_seq), train, adapt)
+                                              self.actor.params, self.state,
+                                              next(self.rng_seq), train, adapt)
     # Update only hidden here, update the rest of the attributes
     # in 'self.observe(...)'
     self.state = State(hidden, self.state.prev_action, self.state.prev_reward,
@@ -134,6 +134,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     return action, hidden
 
   def observe(self, transition: Transition, adapt: bool):
+    orig_dones = transition.done[:, None]
     if transition.last:
       self.episodes_count += 1
       if self.episodes_count == self.config.episodes_per_task:
@@ -152,7 +153,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     # Keep prev_hidden after computing a forward pass in `self.policy(...)`
     hidden = self.state.hidden
     self.state = State(hidden, transition.action, transition.reward[:, None],
-                       transition.cost[:, None], transition.done[:, None])
+                       transition.cost[:, None], orig_dones)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     self.task_id = (self.task_id + 1) % self.config.task_batch_size
@@ -165,15 +166,13 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
                                             trajectory_data.o,
                                             trajectory_data.r,
                                             trajectory_data.c)
+    # Assuming that the mean cost return across different MDPs bounded.
+    constraint = trajectory_data.c.sum(2).mean()
+    c = (constraint - self.config.cost_limit)
     if self.safe:
-      # Assuming that the mean cost return across different MDPs bounded.
-      constraint = trajectory_data.c.sum(2).mean()
-      c = (constraint - self.config.cost_limit)
       self.margin = max(0., self.margin + self.config.margin_lr * c)
       c += self.margin
-      c /= (self.config.time_limit + 1e-8)
-    else:
-      c = 0.
+    c /= (self.config.time_limit + 1e-8)
     self.actor.state, info = self.update_actor(self.actor.state,
                                                trajectory_data, eval_.advantage,
                                                eval_.cost_advantage, c)
@@ -259,12 +258,12 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
         trajectory_data.r[..., None],
         trajectory_data.c[..., None],
     )
-    time_limit = self.config.time_limit * self.config.episodes_per_task
-    dones = np.zeros((num_tasks, num_episodes, time_limit, 1))
+    episode_length = self.config.time_limit * self.config.episodes_per_task
+    dones = np.zeros((num_tasks, num_episodes, episode_length, 1))
     # We don't keep track of dones in the episodic setting. Since fixed-length
     # episodes are assumed, we know the timestep of the last step of each MDP
     # episode within the concatenated episode.
-    dones[:, :, ::-time_limit] = 1.0
+    dones[:, :, ::-self.config.time_limit] = 1.0
     # Merge parallel_envs and task_batch axes. Set the time axis as the
     # leading axis, as required by scan.
     standardize = lambda x: x.reshape(-1, *x.shape[2:]).transpose(1, 0, 2)
@@ -286,7 +285,8 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
          trajectory_data.c, dones),
     )
     # Reshape back to the input dimension and shape
-    pis = tfd.BatchReshape(pis, (num_tasks, num_episodes, time_limit))
+    pis = jax.tree_map(lambda x: x.swapaxes(0, 1), pis)
+    pis = tfd.BatchReshape(pis, (num_tasks, num_episodes, episode_length))
     return pis
 
   @partial(jax.jit, static_argnums=0)
