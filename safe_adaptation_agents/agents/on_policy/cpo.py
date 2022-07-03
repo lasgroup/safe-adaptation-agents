@@ -110,8 +110,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
   def policy_loss(self, params: hk.Params, *args):
     observation, action, advantage, cost_advantage, old_pi_logprob = args
     pi = self.actor.apply(params, observation)
-    log_prob = pi.log_prob(action)
-    ratio = jnp.exp(log_prob - old_pi_logprob)
+    logprob = pi.log_prob(action)
+    ratio = jnp.exp(logprob - old_pi_logprob)
     surr_advantage = ratio * advantage
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())

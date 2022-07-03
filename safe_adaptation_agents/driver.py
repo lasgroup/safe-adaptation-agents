@@ -32,7 +32,7 @@ def interact(agent: Agent,
   episodes = [defaultdict(list, {'observation': [observations]})]
   adapt = adaptation_buffer is not None
   # Discard transitions from environments such that episodes always finish
-  # after time_limit
+  # after time_limit.
   discard = min(steps // environment.time_limit, environment.num_envs)
   with tqdm(total=steps) as pbar:
     while step < steps:

@@ -78,11 +78,10 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.training_step = 0
     num_steps = self.config.time_limit // self.config.action_repeat
-    self.buffer = etb.EpisodicTrajectoryBuffer(self.config.num_trajectories,
-                                               num_steps,
-                                               observation_space.shape,
-                                               action_space.shape,
-                                               self.config.task_batch_size)
+    self.buffer = etb.EpisodicTrajectoryBuffer(
+        self.config.num_trajectories, num_steps * self.config.episodes_per_task,
+        observation_space.shape, action_space.shape,
+        self.config.task_batch_size)
     parallel_envs = self.config.parallel_envs
     hidden_state = _initial_hidden_state(parallel_envs, self.config.hidden_size)
     zeros = jnp.zeros((parallel_envs, 1))
@@ -103,6 +102,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
         observation_space.sample())
     self.task_id = -1
     self.margin = 0.
+    self.episodes_count = 0
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -134,6 +134,19 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     return action, hidden
 
   def observe(self, transition: Transition, adapt: bool):
+    if transition.last:
+      self.episodes_count += 1
+      if self.episodes_count == self.config.episodes_per_task:
+        self.episodes_count = 0
+      else:
+        # Avoid flagging this transition as the last so that the trajectory
+        # buffer will proceed with a single concatenated episode. See
+        # Zintgraf et al. https://arxiv.org/pdf/1910.08348.pdf
+        done = np.zeros_like(transition.done)
+        transition = Transition(transition.observation,
+                                transition.next_observation, transition.action,
+                                transition.reward, transition.cost, done,
+                                transition.info)
     self.buffer.add(transition)
     self.training_step += sum(transition.steps)
     # Keep prev_hidden after computing a forward pass in `self.policy(...)`
@@ -168,7 +181,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     for k, v in info.items():
       self.logger[k] = float(v)
 
-  @partial(jax.jit, static_argnums=0)
+  # @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: utils.LearningState,
                    *args) -> [utils.LearningState, dict]:
     trajectory_data, advantage, cost_advantage, c = args
@@ -218,15 +231,15 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     jac_fn = jax.jacobian(self.policy_loss, has_aux=True)
     jac, outs = jac_fn(pi_params, trajectory_data, advantage, cost_advantage,
                        old_pi_logprob)
-    old_pi_loss, surrogate_cost_old, pis = outs
+    old_pi_loss, surrogate_cost_old, _ = outs
     g, b = jac
     return g, b, old_pi_loss, surrogate_cost_old
 
   def policy_loss(self, params: hk.Params, *args):
     trajectory_data, advantage, cost_advantage, old_pi_logprob = args
     pis = self._rollout_policy(params, trajectory_data)
-    log_prob = pis.log_prob(trajectory_data.a)
-    ratio = jnp.exp(log_prob - old_pi_logprob)
+    logprob = pis.log_prob(trajectory_data.a)
+    ratio = jnp.exp(logprob - old_pi_logprob)
     surr_advantage = ratio * advantage
     objective = (
         surr_advantage + self.config.entropy_regularization * pis.entropy())
@@ -246,19 +259,18 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
         trajectory_data.r[..., None],
         trajectory_data.c[..., None],
     )
-    dones = jnp.zeros_like(trajectory_data.r)
-    # We don't keep track of dones in the regular setting, since fixed-length
-    # episodes are assumed, we know the timestep of the last step.
-    dones = dones.at[:, :, -1].set(1.)
-    # Concatente episodes to have "meta-episode" per task.
-    reshape = lambda x: x.reshape(num_tasks, -1, x.shape[-1])
-    trajectory_data = TrajectoryData(*map(reshape, trajectory_data))
-    dones = reshape(dones)
-    # Set the time axis as the leading axis, as required by scan.
-    swapaxes = lambda x: x.swapaxes(0, 1)
-    trajectory_data = TrajectoryData(*map(swapaxes, trajectory_data))
-    dones = swapaxes(dones)
-    make_init = lambda x: jnp.zeros((num_tasks,) + x.shape[1:])
+    time_limit = self.config.time_limit * self.config.episodes_per_task
+    dones = np.zeros((num_tasks, num_episodes, time_limit, 1))
+    # We don't keep track of dones in the episodic setting. Since fixed-length
+    # episodes are assumed, we know the timestep of the last step of each MDP
+    # episode within the concatenated episode.
+    dones[:, :, ::-time_limit] = 1.0
+    # Merge parallel_envs and task_batch axes. Set the time axis as the
+    # leading axis, as required by scan.
+    standardize = lambda x: x.reshape(-1, *x.shape[2:]).transpose(1, 0, 2)
+    trajectory_data = TrajectoryData(*map(standardize, trajectory_data))
+    dones = standardize(dones)
+    make_init = lambda x: jnp.zeros((num_tasks * num_episodes, x.shape[-1]))
     init = State(*map(make_init, self.state))
 
     def step(carry, xs):
@@ -273,7 +285,6 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
         (trajectory_data.o, trajectory_data.a, trajectory_data.r,
          trajectory_data.c, dones),
     )
-    time_limit = self.config.time_limit
     # Reshape back to the input dimension and shape
     pis = tfd.BatchReshape(pis, (num_tasks, num_episodes, time_limit))
     return pis

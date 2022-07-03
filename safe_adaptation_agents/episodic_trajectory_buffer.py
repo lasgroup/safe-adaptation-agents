@@ -71,6 +71,7 @@ class EpisodicTrajectoryBuffer:
     self.cost[self.task_id, episode_slice,
               self.idx] = transition.cost[:batch_size].copy()
     if transition.last:
+      assert self.idx == self.reward.shape[2] - 1
       self.observation[self.task_id, episode_slice, self.idx +
                        1] = transition.next_observation[:batch_size].copy()
       if self.episode_id + batch_size == self.observation.shape[
