@@ -62,7 +62,7 @@ class GRUPolicy(hk.Module):
   def __call__(self, observation: jnp.ndarray, state: State):
     embeddings, hidden = state.vec
     ins = jnp.concatenate([observation, embeddings], -1)
-    ins = jax.nn.elu(hk.Linear(self._cell.hidden_size)(ins))
+    ins = jnn.elu(hk.Linear(self._cell.hidden_size)(ins))
     outs, hidden = self._cell(ins, hidden)
     return self._head(outs), hidden
 

@@ -121,7 +121,7 @@ def test_cheetah():
       '--time_limit', '200', '--num_trajectories', '20', '--train_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--test_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--jit', 'True',
-      '--target_kl', '1e-2', '--damping_coeff', '1e-5', '--vf_iters', '10'
+      '--target_kl', '0.1', '--damping_coeff', '1e-5', '--vf_iters', '10'
   ])
   if not config.jit:
     from jax.config import config as jax_config
