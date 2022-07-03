@@ -75,13 +75,13 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
   elif config.agent == 'rl2_cpo':
     from safe_adaptation_agents.agents.on_policy import rl2_cpo
     actor = hk.without_apply_rng(
-        hk.transform(lambda x, s: rl2_cpo.GruPolicy(
+        hk.transform(lambda x, s: rl2_cpo.GRUPolicy(
             action_space.shape, config.hidden_size, config.actor)(x, s)))
     critic = hk.without_apply_rng(
         hk.transform(lambda x: models.DenseDecoder(
             **config.critic, output_size=(1,))(x)))
     safety_critic = deepcopy(critic)
-    return rl2_cpo.Rl2Cpo(observation_space, action_space, config, logger,
+    return rl2_cpo.RL2CPO(observation_space, action_space, config, logger,
                           actor, critic, safety_critic)
   else:
     raise ValueError('Could not find the requested agent.')

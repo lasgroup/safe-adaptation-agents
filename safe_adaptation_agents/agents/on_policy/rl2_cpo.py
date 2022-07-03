@@ -43,14 +43,14 @@ class State(NamedTuple):
         -1), self.hidden
 
 
-class GruPolicy(hk.Module):
+class GRUPolicy(hk.Module):
 
   def __init__(self,
                output_size: Sequence[int],
                hidden_size: int,
                actor_config: dict,
                initialization: str = 'glorot'):
-    super(GruPolicy, self).__init__()
+    super(GRUPolicy, self).__init__()
     self._cell = hk.GRU(
         hidden_size,
         w_i_init=nets.initializer(initialization),
@@ -64,7 +64,7 @@ class GruPolicy(hk.Module):
     return self._head(outs), hidden
 
 
-class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
+class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
@@ -109,9 +109,9 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
           'buffer with adaptation and query data)')
       self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
-    action, hidden = self.statefull_policy(observation,
-                                           self.actor.params, self.state,
-                                           next(self.rng_seq), train, adapt)
+    action, hidden = self.stateful_policy(observation,
+                                          self.actor.params, self.state,
+                                          next(self.rng_seq), train, adapt)
     # Update only hidden here, update the rest of the attributes
     # in 'self.observe(...)'
     self.state = State(hidden, self.state.prev_action, self.state.prev_reward,
@@ -119,9 +119,9 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     return action
 
   @partial(jax.jit, static_argnums=(0, 5, 6))
-  def statefull_policy(self, observation: jnp.ndarray, params: hk.Params,
-                       state: State, key: jnp.ndarray, train: bool,
-                       adapt: bool) -> [jnp.ndarray, jnp.ndarray]:
+  def stateful_policy(self, observation: jnp.ndarray, params: hk.Params,
+                      state: State, key: jnp.ndarray, train: bool,
+                      adapt: bool) -> [jnp.ndarray, jnp.ndarray]:
     policy, hidden = self.actor.apply(params, observation, state)
     # Take the mode only on query episodes in which we evaluate the agent.
     if not adapt and not train:
@@ -153,7 +153,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
       # Assuming that the mean cost return across different MDPs bounded.
       constraint = trajectory_data.c.sum(2).mean()
       c = (constraint - self.config.cost_limit)
-      self.margin = max(0, self.margin + self.config.margin_lr * c)
+      self.margin = max(0., self.margin + self.config.margin_lr * c)
       c += self.margin
       c /= (self.config.time_limit + 1e-8)
     else:
@@ -171,7 +171,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
     trajectory_data, advantage, cost_advantage, c = args
     old_pis = self._rollout_policy(state.params, trajectory_data)
     old_pi_logprob = old_pis.log_prob(trajectory_data.a)
-    g, b, old_pi_loss, old_surrogate_cost, _ = self._cpo_grads(
+    g, b, old_pi_loss, old_surrogate_cost = self._cpo_grads(
         state.params, trajectory_data, advantage, cost_advantage,
         old_pi_logprob)
     # Ravel the params so every computation from now on is made on actual
@@ -206,7 +206,6 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                         self.config.target_kl)
     return utils.LearningState(new_params, self.actor.opt_state), info
 
-  @partial(jax.jit, static_argnums=0)
   def _cpo_grads(self, pi_params: hk.Params, trajectory_data: TrajectoryData,
                  advantage: jnp.ndarray, cost_advantage: jnp.ndarray,
                  old_pi_logprob: jnp.ndarray):
@@ -216,7 +215,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
                        old_pi_logprob)
     old_pi_loss, surrogate_cost_old, pis = outs
     g, b = jac
-    return g, b, old_pi_loss, surrogate_cost_old, pis
+    return g, b, old_pi_loss, surrogate_cost_old
 
   def policy_loss(self, params: hk.Params, *args):
     trajectory_data, advantage, cost_advantage, old_pi_logprob = args
@@ -235,21 +234,21 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
   def _rollout_policy(self, params: hk.Params, trajectory_data: TrajectoryData):
     num_tasks = trajectory_data.o.shape[0]
     num_episodes = trajectory_data.o.shape[1]
-    # No need for the last observation. Standardize dimensions.
+    # Drop last observations. Standardize dimensions.
     trajectory_data = TrajectoryData(
         trajectory_data.o[:, :, :-1],
         trajectory_data.a,
         trajectory_data.r[..., None],
         trajectory_data.c[..., None],
     )
-    # Concatente episodes to a single long episodes.
-    reshape = lambda x: x.reshape(num_tasks, -1, x.shape[-1])
-    trajectory_data = TrajectoryData(*map(reshape, trajectory_data))
+    dones = jnp.zeros_like(trajectory_data.r)
     # We don't keep track of dones in the regular setting, since fixed-length
     # episodes are assumed, we know the timestep of the last step.
-    dones = jnp.zeros_like(trajectory_data.r)
-    time_limit = self.config.time_limit
-    dones = dones.at[::time_limit].set(1.)
+    dones = dones.at[:, :, -1].set(1.)
+    # Concatente episodes to have "meta-episode" per task.
+    reshape = lambda x: x.reshape(num_tasks, -1, x.shape[-1])
+    trajectory_data = TrajectoryData(*map(reshape, trajectory_data))
+    dones = reshape(dones)
     # Set the time axis as the leading axis, as required by scan.
     swapaxes = lambda x: x.swapaxes(0, 1)
     trajectory_data = TrajectoryData(*map(swapaxes, trajectory_data))
@@ -269,6 +268,7 @@ class Rl2Cpo(safe_vpg.SafeVanillaPolicyGradients):
         (trajectory_data.o, trajectory_data.a, trajectory_data.r,
          trajectory_data.c, dones),
     )
+    time_limit = self.config.time_limit
     # Reshape back to the input dimension and shape
     pis = tfd.BatchReshape(pis, (num_tasks, num_episodes, time_limit))
     return pis
