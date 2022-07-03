@@ -181,7 +181,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     for k, v in info.items():
       self.logger[k] = float(v)
 
-  # @partial(jax.jit, static_argnums=0)
+  @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: utils.LearningState,
                    *args) -> [utils.LearningState, dict]:
     trajectory_data, advantage, cost_advantage, c = args

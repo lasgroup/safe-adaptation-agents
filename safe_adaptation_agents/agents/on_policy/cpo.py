@@ -156,13 +156,13 @@ def step_direction(g: chex.ArrayTree,
         lambda: 0)
     optim_case = jax.lax.cond(
         jax.lax.bitwise_and(
-            jax.lax.bitwise_and(optim_case == 0, c >= 0), B >= 0), lambda: 1,
+            jax.lax.bitwise_and(optim_case == 0, c >= 0.), B >= 0), lambda: 1,
         lambda: 0)
     return optim_case, w, r, s, A, B
 
   if safe:
     optim_case, w, r, s, A, B = jax.lax.cond(
-        jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo, cpo)
+        jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0.), trpo, cpo)
   else:
     optim_case, w, r, s, A, B = trpo()
 
