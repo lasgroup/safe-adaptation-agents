@@ -117,7 +117,7 @@ def test_cheetah():
       '--configs', 'defaults', '--agent', 'rl2_cpo', '--eval_trials', '0',
       '--epochs', '1000', '--render_episodes', '0', '--log_dir',
       'results/test_rl2_cpo_half_cheetah', '--task_batch_size', '16', '--safe',
-      'False', '--actor.layers', '[128, 128]', '--critic.layers', '[128, 128]',
+      'False', '--actor.layers', '[128, 128]', '--critic.layers', '[64, 64]',
       '--time_limit', '200', '--num_trajectories', '20', '--train_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--test_driver',
       '{\'adaptation_steps\': 2000, \'query_steps\': 2000}', '--jit', 'True',
