@@ -49,6 +49,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
+  @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, action, advantage, cost_advantage, constraint = args
     old_pi = self.actor.apply(state.params, observation)
@@ -93,7 +94,6 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     info['agent/margin'] = self.margin
     return LearningState(new_params, self.actor.opt_state), info
 
-  @partial(jax.jit, static_argnums=0)
   def _cpo_grads(self, pi_params: hk.Params, observation: jnp.ndarray,
                  action: jnp.ndarray, advantage: jnp.ndarray,
                  cost_advantage: jnp.ndarray, old_pi_logprob: jnp.ndarray):

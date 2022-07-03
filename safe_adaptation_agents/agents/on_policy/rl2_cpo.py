@@ -4,6 +4,7 @@ from functools import partial
 
 import jax.lax
 import numpy as np
+import optax
 from gym.spaces import Space
 
 import jax.numpy as jnp
@@ -60,6 +61,7 @@ class GRUPolicy(hk.Module):
   def __call__(self, observation: jnp.ndarray, state: State):
     embeddings, hidden = state.vec
     ins = jnp.concatenate([observation, embeddings], -1)
+
     outs, hidden = self._cell(ins, hidden)
     return self._head(outs), hidden
 
@@ -204,6 +206,8 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
                                         self.config.backtrack_iters,
                                         self.config.backtrack_coeff,
                                         self.config.target_kl)
+    info['agent/actor/objective_grad'] = optax.global_norm(g)
+    info['agent/actor/surrogate_cost_grad'] = optax.global_norm(b)
     return utils.LearningState(new_params, self.actor.opt_state), info
 
   def _cpo_grads(self, pi_params: hk.Params, trajectory_data: TrajectoryData,
