@@ -15,6 +15,8 @@ from safe_adaptation_agents import models
 
 def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
          logger: TrainingLogger):
+  # TODO (yarden): all VPG agents share the same factory, so this should be
+  #  refactored.
   if config.agent == 'vanilla_policy_gradients':
     from safe_adaptation_agents.agents.on_policy import vpg
     actor = hk.without_apply_rng(
@@ -70,5 +72,16 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     safety_critic = deepcopy(critic)
     return maml_cpo.MamlCpo(observation_space, action_space, config, logger,
                             actor, critic, safety_critic)
+  elif config.agent == 'rl2_cpo':
+    from safe_adaptation_agents.agents.on_policy import rl2_cpo
+    actor = hk.without_apply_rng(
+        hk.transform(lambda x, s: rl2_cpo.GRUPolicy(
+            action_space.shape, config.hidden_size, config.actor)(x, s)))
+    critic = hk.without_apply_rng(
+        hk.transform(lambda x: models.DenseDecoder(
+            **config.critic, output_size=(1,))(x)))
+    safety_critic = deepcopy(critic)
+    return rl2_cpo.RL2CPO(observation_space, action_space, config, logger,
+                          actor, critic, safety_critic)
   else:
     raise ValueError('Could not find the requested agent.')

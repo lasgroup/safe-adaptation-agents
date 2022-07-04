@@ -50,6 +50,8 @@ class Actor(hk.Module):
     else:
       mu, stddev = x, hk.get_parameter('pi_stddev', (x.shape[-1],), x.dtype,
                                        hk.initializers.Constant(-0.5))
+      if stddev.ndim == 1:
+        stddev = jnp.expand_dims(stddev, 0)
     if self._squash:
       init_std = utils.inv_softplus(5.)
       stddev = jnn.softplus(stddev + init_std) + self._min_stddev

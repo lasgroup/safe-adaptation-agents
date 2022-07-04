@@ -49,6 +49,7 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
+  @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
     observation, action, advantage, cost_advantage, constraint = args
     old_pi = self.actor.apply(state.params, observation)
@@ -93,9 +94,9 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
     info['agent/margin'] = self.margin
     return LearningState(new_params, self.actor.opt_state), info
 
-  @partial(jax.jit, static_argnums=0)
-  def _cpo_grads(self, pi_params, observation, action, advantage,
-                 cost_advantage, old_pi_logprob):
+  def _cpo_grads(self, pi_params: hk.Params, observation: jnp.ndarray,
+                 action: jnp.ndarray, advantage: jnp.ndarray,
+                 cost_advantage: jnp.ndarray, old_pi_logprob: jnp.ndarray):
     # Take gradients of the objective and surrogate cost w.r.t. pi_params.
     jac = jax.jacobian(self.policy_loss)(pi_params, observation, action,
                                          advantage, cost_advantage,
@@ -109,8 +110,8 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
   def policy_loss(self, params: hk.Params, *args):
     observation, action, advantage, cost_advantage, old_pi_logprob = args
     pi = self.actor.apply(params, observation)
-    log_prob = pi.log_prob(action)
-    ratio = jnp.exp(log_prob - old_pi_logprob)
+    logprob = pi.log_prob(action)
+    ratio = jnp.exp(logprob - old_pi_logprob)
     surr_advantage = ratio * advantage
     objective = (
         surr_advantage + self.config.entropy_regularization * pi.entropy())
@@ -155,13 +156,13 @@ def step_direction(g: chex.ArrayTree,
         lambda: 0)
     optim_case = jax.lax.cond(
         jax.lax.bitwise_and(
-            jax.lax.bitwise_and(optim_case == 0, c >= 0), B >= 0), lambda: 1,
+            jax.lax.bitwise_and(optim_case == 0, c >= 0.), B >= 0), lambda: 1,
         lambda: 0)
     return optim_case, w, r, s, A, B
 
   if safe:
     optim_case, w, r, s, A, B = jax.lax.cond(
-        jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0), trpo, cpo)
+        jax.lax.bitwise_and(jnp.dot(b, b) <= 1e-8, c < 0.), trpo, cpo)
   else:
     optim_case, w, r, s, A, B = trpo()
 
