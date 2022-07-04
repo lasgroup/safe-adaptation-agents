@@ -113,8 +113,8 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
       self.train(self.buffer.dump())
       self.logger.log_metrics(self.training_step)
     action, hidden = self.stateful_policy(observation,
-                                              self.actor.params, self.state,
-                                              next(self.rng_seq), train, adapt)
+                                          self.actor.params, self.state,
+                                          next(self.rng_seq), train, adapt)
     # Update only hidden here, update the rest of the attributes
     # in 'self.observe(...)'
     self.state = State(hidden, self.state.prev_action, self.state.prev_reward,
@@ -262,10 +262,10 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     dones = np.zeros((num_tasks, num_episodes, episode_length, 1))
     # We don't keep track of dones in the episodic setting. Since fixed-length
     # episodes are assumed, we know the timestep of the last step of each MDP
-    # episode within the concatenated episode.
+    # episode within the concatenated meta-episode.
     dones[:, :, ::-self.config.time_limit] = 1.0
-    # Merge parallel_envs and task_batch axes. Set the time axis as the
-    # leading axis, as required by scan.
+    # Merge parallel_envs and task_batch axes. Make time-major ordering,
+    # as required by jax.lax.scan.
     standardize = lambda x: x.reshape(-1, *x.shape[2:]).transpose(1, 0, 2)
     trajectory_data = TrajectoryData(*map(standardize, trajectory_data))
     dones = standardize(dones)
