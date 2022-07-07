@@ -1,6 +1,6 @@
 import functools
-from typing import Mapping, Tuple, Optional
 from types import SimpleNamespace
+from typing import Mapping, Tuple, Optional
 
 import gym
 import haiku as hk
@@ -12,10 +12,10 @@ from tensorflow_probability.substrates import jax as tfp
 from tqdm import tqdm
 
 import safe_adaptation_agents.utils as utils
-from safe_adaptation_agents.logging import TrainingLogger
+from safe_adaptation_agents.agents import agent
 from safe_adaptation_agents.agents.la_mbda.replay_buffer import ReplayBuffer
 from safe_adaptation_agents.agents.la_mbda.rssm import init_state
-from safe_adaptation_agents.agents import agent
+from safe_adaptation_agents.logging import TrainingLogger
 
 PRNGKey = jnp.ndarray
 State = Tuple[jnp.ndarray, jnp.ndarray]
@@ -133,7 +133,7 @@ class LaMBDA(agent.Agent):
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
         total=self.config.update_steps):
-      self.learning_states, report = self._update(
+      self.learning_states, report = self._update_actor_critic(
           dict(batch), *self.learning_states, key=next(self.rng_seq))
       # Average training metrics across update steps.
       for k, v in report.items():
@@ -141,7 +141,7 @@ class LaMBDA(agent.Agent):
     self.logger.log_metrics(self.training_step)
 
   @functools.partial(jax.jit, static_argnums=0)
-  def _update(
+  def _update_actor_critic(
       self,
       batch: Batch,
       model_state: LearningState,

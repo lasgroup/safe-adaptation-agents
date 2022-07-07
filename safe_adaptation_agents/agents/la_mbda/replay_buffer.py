@@ -1,9 +1,8 @@
 from typing import Tuple, Iterator
 
 import numpy as np
-
-from tensorflow import data as tfd
 import tensorflow_datasets as tfds
+from tensorflow import data as tfd
 
 from safe_adaptation_agents import agents
 from safe_adaptation_agents import episodic_trajectory_buffer as etb
