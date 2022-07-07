@@ -51,6 +51,7 @@ class LaMBDA(agent.Agent):
                model: hk.MultiTransformed,
                actor: hk.Transformed,
                critic: hk.Transformed,
+               safety_critic: hk.Transformed,
                replay_buffer: ReplayBuffer,
                logger: TrainingLogger,
                config: SimpleNamespace,
@@ -69,6 +70,9 @@ class LaMBDA(agent.Agent):
                                precision, features_example.astype(dtype))
     self.critic = utils.Learner(critic, next(self.rng_seq), config.critic_opt,
                                 precision, features_example[None].astype(dtype))
+    self.safety_critic = utils.Learner(safety_critic, next(self.rng_seq),
+                                       config.critic_opt, precision,
+                                       features_example[None].astype(dtype))
     self.replay_buffer = replay_buffer
     self.logger = logger
     self.state = (self.init_state,
@@ -241,6 +245,25 @@ class LaMBDA(agent.Agent):
     return new_state, {
         'agent/critic/loss': loss_,
         'agent/critic/grads': optax.global_norm(grads)
+    }
+
+  def update_safety_critic(
+      self, features: jnp.ndarray, state: LearningState,
+      lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
+    params, opt_state = state
+
+    def loss(params: hk.Params) -> float:
+      values = self.safety_critic.apply(params, features[:, :-1])
+      targets = jax.lax.stop_gradient(lambda_values)
+      discount = discount_sequence(self.config.discount,
+                                   self.config.imag_horizon - 1)
+      return -(values.log_prob(targets) * discount).mean()
+
+    (loss_, grads) = jax.value_and_grad(loss)(params)
+    new_state = self.safety_critic.grad_step(grads, state)
+    return new_state, {
+        'agent/safety_critic/loss': loss_,
+        'agent/safety_critic/grads': optax.global_norm(grads)
     }
 
   @property
