@@ -132,11 +132,20 @@ class LaMBDA(agent.Agent):
                        self.precision.compute_dtype)
     return jax.tree_map(lambda x: x.squeeze(0), state)
 
-  def update(self):
+  def update(
+      self,
+      batch: Batch,
+      model_state: LearningState,
+      actor_state: LearningState,
+      critic_state: LearningState,
+      key: PRNGKey,
+  ):
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
         total=self.config.update_steps):
+      model_state, model_report, features = self.update_model(
+          batch, model_state, subkey)
       self.learning_states, report = self._update_actor_critic(
           dict(batch), *self.learning_states, key=next(self.rng_seq))
       # Average training metrics across update steps.
@@ -164,6 +173,7 @@ class LaMBDA(agent.Agent):
     critic_state, critic_report = self.update_critic(generated_features,
                                                      critic_state,
                                                      lambda_values)
+    safety_critic_state, safety_critic_report = self.update_safety_critic()
     report = {**model_report, **actor_report, **critic_report}
     return (model_state, actor_state, critic_state), report
 
