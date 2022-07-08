@@ -1,28 +1,36 @@
-import numpy as np
+from jax import lax
+import jax.numpy as jnp
+
+import haiku as hk
 
 
-class AugmentedLagrangian:
+class AugmentedLagrangian(hk.Module):
 
-  def __init__(self, initial_lagrangian: float, initial_penalty: float,
-               penalty_multiplier_factor: float):
+  def __init__(self, initial_lagrangian: float, initial_penalty: float):
     super(AugmentedLagrangian, self).__init__()
-    self.lagrangian = initial_lagrangian
-    self.penalty = initial_penalty
-    self.penalty_multiplier_factor = penalty_multiplier_factor
+    self._initial_lagrangian = initial_lagrangian
+    self._initial_penalty = initial_penalty
 
-  def __call__(self, cost_value: np.ndarray, cost_threshold: np.ndarray):
+  def __call__(self, cost_value: jnp.ndarray,
+               cost_threshold: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray]:
     # Nocedal-Wright 2006 Numerical Optimization, Eq. 17.65, p. 546
     # (with a slight change of notation)
     # Taking the mean value since E[V_c(s)]_p(s) ~= J_c
     g = cost_value - cost_threshold
-    c = self.penalty
-    cond = self.lagrangian + c * g
-    old_lagrangian = self.lagrangian
-    self.lagrangian = max(0., cond)
-    if cond < 0.:
-      psi = old_lagrangian * g + c / 2. * g**2
-    else:
-      psi = -1. / (2. * c) * old_lagrangian**2
-    # Clip to make sure that c is non-decreasing.
-    self.penalty = np.clip(c * (self.penalty_multiplier_factor + 1.), c, 1.)
-    return psi, old_lagrangian, c
+    c = hk.get_parameter(
+        'penalty',
+        (1,),
+        hk.initializers.Constant(self._initial_penalty),
+    )
+    lagrangian = hk.get_parameter(
+        'lagrangian',
+        (1,),
+        hk.initializers.Constant(self._initial_lagrangian),
+    )
+    cond = lagrangian + c * g
+    psi = lax.cond(
+        cond > 0.,
+        lambda: lagrangian * g + c / 2. * g**2,
+        lambda: -1. / (2. * c) * lagrangian**2,
+    )
+    return psi, cond

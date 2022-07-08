@@ -92,7 +92,7 @@ class RSSM(hk.Module):
   def __init__(self, config):
     super(RSSM, self).__init__()
     self.c = config
-    config.rssm.update({'initialization': self.c.initialization})
+    config.rssm.train({'initialization': self.c.initialization})
     self.prior = Prior(config.rssm)
     self.posterior = Posterior(config.rssm)
 
