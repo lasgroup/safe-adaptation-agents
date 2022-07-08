@@ -170,7 +170,9 @@ class LaMBDA(agent.Agent):
           tfd.kl_divergence(posterior, prior).mean(), self.config.free_kl)
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
-      log_p_cost = cost.log_prob(batch.c).mean()
+      # Generally costs can be greater than 1. (especially if we use
+      # ActionRepeat), still the cost is modeled as an indicator.
+      log_p_cost = cost.log_prob(batch.c > 0.).mean()
       loss_ = self.config.kl_scale * kl - log_p_obs - log_p_rews - log_p_cost
       return loss_, {
           'agent/model/kl': kl,
@@ -215,7 +217,10 @@ class LaMBDA(agent.Agent):
       loss_ = (-reward_lambdas * discount).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, 1:]).mean()
-        cost_lambdas = compute_lambda_values(cost_values, cost.mean(),
+        # The cost decoder predicts an indicator ({0, 1}) but the total cost
+        # is summed if `action_repeat` > 1
+        cost = cost.mean() * self.config.action_repeat
+        cost_lambdas = compute_lambda_values(cost_values, cost,
                                              self.config.safety_discount,
                                              self.config.lambda_)
         penalty, cond = lagrangian(cost_lambdas.mean(), self.config.cost_limit)
