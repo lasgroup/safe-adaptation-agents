@@ -28,10 +28,6 @@ LearningState = utils.LearningState
 
 def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
                           discount: float, lambda_: float) -> jnp.ndarray:
-  """
-  Compute a discounted cummulative sum of rewards using TD-Lambda (lesser
-  bias).
-  """
   tds = rewards + (1. - lambda_) * discount * next_values
   tds = tds.at[-1].add(lambda_ * discount * next_values[-1])
   return utils.discounted_cumsum(tds, lambda_ * discount)
@@ -45,18 +41,12 @@ def discount_sequence(factor, length):
 
 class LaMBDA(agent.Agent):
 
-  def __init__(self,
-               observation_space: gym.Space,
-               action_space: gym.Space,
-               model: hk.MultiTransformed,
-               actor: hk.Transformed,
-               critic: hk.Transformed,
-               safety_critic: hk.Transformed,
+  def __init__(self, observation_space: gym.Space, action_space: gym.Space,
+               model: hk.MultiTransformed, actor: hk.Transformed,
+               critic: hk.Transformed, safety_critic: hk.Transformed,
                augmented_lagrangian: hk.Transformed,
-               replay_buffer: rb.ReplayBuffer,
-               logger: TrainingLogger,
-               config: SimpleNamespace,
-               prefil_policy=None):
+               replay_buffer: rb.ReplayBuffer, logger: TrainingLogger,
+               config: SimpleNamespace):
     super(LaMBDA, self).__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.precision = utils.get_mixed_precision_policy(self.config.precision)
@@ -80,7 +70,7 @@ class LaMBDA(agent.Agent):
     self.state = (self.init_state,
                   jnp.zeros(action_space.shape, self.precision.compute_dtype))
     self.training_step = 0
-    self._prefill_policy = prefil_policy or (lambda x: action_space.sample())
+    self._prefill_policy = lambda x: action_space.sample()
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -166,6 +156,7 @@ class LaMBDA(agent.Agent):
         self.logger[k] = v.mean() / self.config.update_steps
     self.logger.log_metrics(self.training_step)
 
+  @partial(jax.jit, static_argnums=0)
   def update_model(self, batch: rb.etb.TrajectoryData, state: LearningState,
                    key: PRNGKey) -> Tuple[LearningState, dict, jnp.ndarray]:
     params, opt_state = state
@@ -196,6 +187,7 @@ class LaMBDA(agent.Agent):
     report['agent/model/grads'] = optax.global_norm(grads)
     return new_state, report, report.pop('features')
 
+  @partial(jax.jit, static_argnums=0)
   def update_actor(
       self, state: LearningState, features: jnp.ndarray,
       model_params: hk.Params, critic_params: hk.Params,
@@ -240,6 +232,7 @@ class LaMBDA(agent.Agent):
         'agent/actor/grads': optax.global_norm(grads)
     }, aux
 
+  @partial(jax.jit, static_argnums=0)
   def update_critic(self, state: LearningState, features: jnp.ndarray,
                     lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
     params, opt_state = state
@@ -275,6 +268,7 @@ class LaMBDA(agent.Agent):
         'agent/safety_critic/grads': optax.global_norm(grads)
     }
 
+  @partial(jax.jit, static_argnums=0)
   def update_lagrangian(self, state: LearningState,
                         cond: jnp.ndarray) -> [LearningState, dict]:
     lagrangian, penalty_multiplier = state.params
