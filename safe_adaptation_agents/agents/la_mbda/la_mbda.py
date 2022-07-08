@@ -62,7 +62,7 @@ class LaMBDA(agent.Agent):
                                 self.precision,
                                 features_example[None].astype(dtype))
     self.safety_critic = utils.Learner(safety_critic, next(self.rng_seq),
-                                       config.critic_opt, self.precision,
+                                       config.safety_critic_opt, self.precision,
                                        features_example[None].astype(dtype))
     self.lagrangian = utils.Learner(augmented_lagrangian, next(self.rng_seq),
                                     {}, self.precision, 1., 0.)

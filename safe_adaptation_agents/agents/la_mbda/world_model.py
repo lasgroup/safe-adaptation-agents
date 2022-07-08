@@ -44,17 +44,18 @@ class WorldModel(hk.Module):
     super(WorldModel, self).__init__()
     self.rssm = rssm.RSSM(config)
     self.encoder = Encoder(config.encoder['depth'],
-                           tuple(config.encoder['kernels']),
-                           config.initialization)
+                           tuple(config.encoder['kernels']))
     self.decoder = Decoder(config.decoder['depth'],
                            tuple(config.decoder['kernels']),
-                           observation_space.shape, config.initialization)
-    self.reward = models.DenseDecoder(
-        tuple(config.reward['output_sizes']) + (1,), 'normal',
-        config.initialization, 'reward')
-    self.cost = models.DenseDecoder(
-        tuple(config.const['output_sizes']) + (1,), 'bernoulli',
-        config.initialization, 'cost')
+                           observation_space.shape)
+    self.reward = models.DenseDecoder((1,),
+                                      tuple(config.reward['layers']),
+                                      'normal',
+                                      name='reward')
+    self.cost = models.DenseDecoder((1,),
+                                    tuple(config.cost['layers']),
+                                    'bernoulli',
+                                    name='cost')
 
   def __call__(
       self, prev_state: rssm.State, prev_action: jnp.ndarray,
@@ -94,7 +95,10 @@ class WorldModel(hk.Module):
 
 class Encoder(hk.Module):
 
-  def __init__(self, depth: int, kernels: Sequence[int], initialization: str):
+  def __init__(self,
+               depth: int,
+               kernels: Sequence[int],
+               initialization: str = 'glorot'):
     super(Encoder, self).__init__()
     self._depth = depth
     self._kernels = kernels
@@ -119,8 +123,11 @@ class Encoder(hk.Module):
 
 class Decoder(hk.Module):
 
-  def __init__(self, depth: int, kernels: Sequence[int],
-               output_shape: Sequence[int], initialization: str):
+  def __init__(self,
+               depth: int,
+               kernels: Sequence[int],
+               output_shape: Sequence[int],
+               initialization: str = 'glorot'):
     super(Decoder, self).__init__()
     self._depth = depth
     self._kernels = kernels

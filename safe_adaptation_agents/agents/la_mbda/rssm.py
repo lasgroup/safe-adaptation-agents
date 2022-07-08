@@ -29,23 +29,18 @@ class Prior(hk.Module):
         hk.Linear(
             self.c['deterministic_size'],
             name='h1',
-            w_init=initializer(self.c['initialization']))(cat))
+            w_init=initializer('glorot'))(cat))
     x, det = hk.GRU(
         self.c['deterministic_size'],
-        w_i_init=initializer(self.c['initialization']),
+        w_i_init=initializer('glorot'),
         w_h_init=hk.initializers.Orthogonal())(x, det)
     x = jnn.elu(
-        hk.Linear(
-            self.c['hidden'],
-            name='h2',
-            w_init=initializer(self.c['initialization']))(x))
+        hk.Linear(self.c['hidden'], name='h2', w_init=initializer('glorot'))(x))
     x = hk.Linear(
-        self.c['stochastic_size'] * 2,
-        name='h3',
-        w_init=initializer(self.c['initialization']))(
+        self.c['stochastic_size'] * 2, name='h3', w_init=initializer('glorot'))(
             x)
     mean, stddev = jnp.split(x, 2, -1)
-    stddev = jnn.softplus(stddev) + self.c['min_stddev']
+    stddev = jnn.softplus(stddev) + 1.
     prior = tfd.MultivariateNormalDiag(mean, stddev)
     sample = prior.sample(seed=hk.next_rng_key())
     return prior, (sample, det)
@@ -63,17 +58,13 @@ class Posterior(hk.Module):
     _, det = prev_state
     cat = jnp.concatenate([det, observation], -1)
     x = jnn.elu(
-        hk.Linear(
-            self.c['hidden'],
-            name='h1',
-            w_init=initializer(self.c['initialization']))(cat))
+        hk.Linear(self.c['hidden'], name='h1',
+                  w_init=initializer('glorot'))(cat))
     x = hk.Linear(
-        self.c['stochastic_size'] * 2,
-        name='h2',
-        w_init=initializer(self.c['initialization']))(
+        self.c['stochastic_size'] * 2, name='h2', w_init=initializer('glorot'))(
             x)
     mean, stddev = jnp.split(x, 2, -1)
-    stddev = jnn.softplus(stddev) + self.c['min_stddev']
+    stddev = jnn.softplus(stddev) + 0.1
     posterior = tfd.MultivariateNormalDiag(mean, stddev)
     sample = posterior.sample(seed=hk.next_rng_key())
     return posterior, (sample, det)
@@ -92,7 +83,6 @@ class RSSM(hk.Module):
   def __init__(self, config):
     super(RSSM, self).__init__()
     self.c = config
-    config.rssm.train({'initialization': self.c.initialization})
     self.prior = Prior(config.rssm)
     self.posterior = Posterior(config.rssm)
 

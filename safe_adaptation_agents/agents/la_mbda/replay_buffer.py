@@ -1,4 +1,4 @@
-from typing import Tuple, Iterator
+from typing import Tuple, Iterator, Optional
 
 import numpy as np
 import tensorflow_datasets as tfds
@@ -36,10 +36,13 @@ class ReplayBuffer:
     ), dtype=np.float32)
     self._valid_episodes = 0
     self.rs = np.random.RandomState(seed)
-    example = next(iter(self._sample_batch(batch_size, sequence_length)))
+    example = next(
+        iter(self._sample_batch(batch_size, sequence_length, capacity)))
+    generator = lambda: self._sample_batch(batch_size, sequence_length)
     dataset = tfd.Dataset.from_generator(
-        self._sample_batch(batch_size, sequence_length),
-        *zip(*tuple((v.dtype, v.shape) for v in example)))
+        generator,
+        *zip(*tuple((v.dtype, v.shape) for v in example)),
+    )
     dataset = dataset.prefetch(10)
     self._dataset = dataset
 
@@ -71,7 +74,14 @@ class ReplayBuffer:
       self._valid_episodes = min(self._valid_episodes + 1, capacity)
     self.idx = (self.idx + 1) % episode_length
 
-  def _sample_batch(self, batch_size: int, sequence_length: int):
+  def _sample_batch(self,
+                    batch_size: int,
+                    sequence_length: int,
+                    valid_episodes: Optional[int] = None):
+    if valid_episodes is not None:
+      valid_episodes = valid_episodes
+    else:
+      valid_episodes = self._valid_episodes
     while True:
       low = self.rs.randint(0, self.observation.shape[1] - sequence_length,
                             batch_size)
@@ -79,7 +89,7 @@ class ReplayBuffer:
           np.arange(sequence_length),
           (batch_size, 1),
       )
-      episode_ids = self.rs.permutation(self._valid_episodes)[:batch_size]
+      episode_ids = self.rs.permutation(valid_episodes)[:batch_size]
       o, a, r, c = [
           x[episode_ids[:, None], timestep_ids] for x in (
               self.observation,

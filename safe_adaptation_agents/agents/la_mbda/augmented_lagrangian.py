@@ -19,13 +19,13 @@ class AugmentedLagrangian(hk.Module):
     g = cost_value - cost_threshold
     c = hk.get_parameter(
         'penalty',
-        (1,),
-        hk.initializers.Constant(self._initial_penalty),
+        (),
+        init=hk.initializers.Constant(self._initial_penalty),
     )
     lagrangian = hk.get_parameter(
         'lagrangian',
-        (1,),
-        hk.initializers.Constant(self._initial_lagrangian),
+        (),
+        init=hk.initializers.Constant(self._initial_lagrangian),
     )
     cond = lagrangian + c * g
     psi = lax.cond(
