@@ -12,6 +12,32 @@ from safe_adaptation_agents.agents.la_mbda import rssm
 tfd = tfp.distributions
 
 
+def create_model(config, observation_space):
+
+  def model():
+    _model = WorldModel(observation_space, config)
+
+    def filter_state(prev_state, prev_action, observation):
+      return _model(prev_state, prev_action, observation)
+
+    def generate_sequence(initial_state, policy, policy_params, actions=None):
+      return _model.generate_sequence(initial_state, policy, policy_params,
+                                      actions)
+
+    def observe_sequence(observations, actions):
+      return _model.observe_sequence(observations, actions)
+
+    def decode(feature):
+      return _model.decode(feature)
+
+    def init(observations, actions):
+      return _model.observe_sequence(observations, actions)
+
+    return init, (filter_state, generate_sequence, observe_sequence, decode)
+
+  return hk.multi_transform(model)
+
+
 class WorldModel(hk.Module):
 
   def __init__(self, observation_space, config):

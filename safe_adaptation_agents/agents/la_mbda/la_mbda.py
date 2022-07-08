@@ -42,11 +42,11 @@ def discount_sequence(factor, length):
 class LaMBDA(agent.Agent):
 
   def __init__(self, observation_space: gym.Space, action_space: gym.Space,
+               logger: TrainingLogger, config: SimpleNamespace,
                model: hk.MultiTransformed, actor: hk.Transformed,
                critic: hk.Transformed, safety_critic: hk.Transformed,
                augmented_lagrangian: hk.Transformed,
-               replay_buffer: rb.ReplayBuffer, logger: TrainingLogger,
-               config: SimpleNamespace):
+               replay_buffer: rb.ReplayBuffer):
     super(LaMBDA, self).__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.precision = utils.get_mixed_precision_policy(self.config.precision)
