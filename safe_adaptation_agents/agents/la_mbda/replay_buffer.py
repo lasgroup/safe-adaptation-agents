@@ -11,7 +11,7 @@ from safe_adaptation_agents import episodic_trajectory_buffer as etb
 class ReplayBuffer:
 
   def __init__(self, observation_shape: Tuple, action_shape: Tuple,
-               capacity: int, max_length: int, seed: int, batch_size: int,
+               max_length: int, seed: int, capacity: int, batch_size: int,
                sequence_length: int):
     self.idx = 0
     self.episode_id = 0

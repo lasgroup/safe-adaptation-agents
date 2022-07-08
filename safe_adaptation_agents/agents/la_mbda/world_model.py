@@ -53,8 +53,8 @@ class WorldModel(hk.Module):
         tuple(config.reward['output_sizes']) + (1,), 'normal',
         config.initialization, 'reward')
     self.cost = models.DenseDecoder(
-        tuple(config.terminal['output_sizes']) + (1,), 'bernoulli',
-        config.initialization, 'terminal')
+        tuple(config.const['output_sizes']) + (1,), 'bernoulli',
+        config.initialization, 'cost')
 
   def __call__(
       self, prev_state: rssm.State, prev_action: jnp.ndarray,
@@ -84,9 +84,9 @@ class WorldModel(hk.Module):
     (prior,
      posterior), features = self.rssm.observe_sequence(observations, actions)
     reward = self.reward(features)
-    terminal = self.cost(features)
+    cost = self.cost(features)
     decoded = self.decode(features)
-    return (prior, posterior), features, decoded, reward, terminal
+    return (prior, posterior), features, decoded, reward, cost
 
   def decode(self, featuers: jnp.ndarray) -> tfd.Normal:
     return self.decoder(featuers)

@@ -145,3 +145,27 @@ rl2_cpo:
   damping_coeff: 0.1
   margin_lr: 0.05
 
+la_mbda:
+  precision: 16
+  train_every: 1000
+  update_steps: 100
+  action_repeat: 2
+  replay_buffer: {capacity: 1000, batch_size: 32, sequence_length: 50}
+  # World Model
+  rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
+  model_opt: {lr: 6e-4, eps: 1e-7, clip: 100}
+  encoder: {depth: 32, kernels: [4, 4, 4, 4]}
+  decoder: {depth: 32, kernels: [5, 5, 6, 6]}
+  reward: {output_sizes: [400, 400]}
+  cost: {output_sizes: [400, 400, 400]}
+  free_kl: 3.0
+  kl_scale: 1.0
+  # Actor-Critic
+  actor: {output_sizes: [400, 400, 400, 400], min_stddev: 1e-4}
+  critic: {output_sizes: [400, 400, 400]}
+  actor_opt: {lr: 8e-5, eps: 1e-5, clip: 100}
+  critic_opt: {lr: 8e-5, eps: 1e-5, clip: 100}
+  lambda_: 0.95
+  imag_horizon: 15
+
+

@@ -72,7 +72,7 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     safety_critic = deepcopy(critic)
     return rl2_cpo.RL2CPO(observation_space, action_space, config, logger,
                           actor, critic, safety_critic)
-  elif config.agent == 'lambda':
+  elif config.agent == 'la_mbda':
     from safe_adaptation_agents import utils
     from safe_adaptation_agents.agents.la_mbda import world_model
     from safe_adaptation_agents.agents.la_mbda import augmented_lagrangian as al
@@ -90,7 +90,8 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
         hk.transform(lambda cost, limit: al.AugmentedLagrangian(
             **config.augmented_lagrangian)(cost, limit)))
     replay_buffer = rb.ReplayBuffer(observation_space.shape, action_space.shape,
-                                    **config.replay_buffer)
+                                    config.time_limit // config.action_repeat,
+                                    config.seed, **config.replay_buffer)
     policy = utils.get_mixed_precision_policy(config.precision)
     hk.mixed_precision.set_policy(world_model.WorldModel, policy)
     hk.mixed_precision.set_policy(models.Actor, policy)
