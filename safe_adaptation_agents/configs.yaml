@@ -169,7 +169,8 @@ la_mbda:
   safety_critic_opt: {lr: 2e-4, eps: 1e-5, clip: 100}
   augmented_lagrangian: {initial_lagrangian: 1e-6, initial_penalty: 5e-9}
   penalty_power_factor: 1e-5
-  safety_discount: 0.995
+  discount: 0.99
+  cost_discount: 0.995
   lambda_: 0.95
   imag_horizon: 15
 
