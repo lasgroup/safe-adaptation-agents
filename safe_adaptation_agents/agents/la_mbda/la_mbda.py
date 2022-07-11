@@ -153,12 +153,12 @@ class LaMBDA(agent.Agent):
       )
       trajectoris, reward_lambdas, cost_lambdas, cond = aux
       self.critic.state, critic_report = self.update_critic(
-          self.critic.state, features, reward_lambdas)
+          self.critic.state, trajectoris, reward_lambdas)
       if self.safe:
         self.lagrangian.state, lagrangian_report = self.update_lagrangian(
             self.lagrangian.state, cond)
         self.safety_critic.state, s_critic_report = self.update_safety_critic(
-            self.safety_critic.state, features, cost_lambdas)
+            self.safety_critic.state, trajectoris, cost_lambdas)
         critic_report.update({**s_critic_report, **lagrangian_report})
       reports = {**model_report, **actor_report, **critic_report}
       # Average training metrics across update steps.
