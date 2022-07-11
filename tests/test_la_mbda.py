@@ -26,7 +26,8 @@ def test_run():
       '--train_driver.adaptation_steps', '30000', '--epochs', '1', '--safe',
       'False', '--log_dir', 'results/test_lambda_safe', '--time_limit', '100',
       '--replay_buffer', '{capacity: 10, batch_size: 10, sequence_length: 8}',
-      '--prefill', '100', '--update_steps', '2', '--train_every', '1000'
+      '--prefill', '100', '--update_steps', '2', '--train_every', '100',
+      '--parallel_envs', '1'
   ])
   if not config.jit:
     from jax.config import config as jax_config

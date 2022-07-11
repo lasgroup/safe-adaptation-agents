@@ -57,19 +57,20 @@ class ReplayBuffer:
                                      transition.action, transition.reward,
                                      transition.cost, transition.done,
                                      transition.info)
-    capacity, episode_length = self.reward.shape[1:2]
+    capacity, episode_length = self.reward.shape
     batch_size = min(transition.observation.shape[0], capacity)
-    slice = np.arange(self.episode_id, self.episode_id + batch_size)
+    # Discard data if batch size overflows capacity.
+    end = min(self.episode_id + batch_size, capacity)
+    episode_slice = slice(self.episode_id, end)
     for data, val in zip(
         (self.observation, self.action, self.reward, self.cost),
-        transition.observation, transition.action, transition.reward,
-        transition.cost):
-      # Put new values in data, wrap if needed.
-      np.put(data[:, self.idx], slice, val[:batch_size].copy(), mode='wrap')
+        (transition.observation, transition.action, transition.reward,
+         transition.cost)):
+      data[episode_slice, self.idx] = val[:batch_size]
     if transition.last:
       assert self.idx == episode_length - 1
-      np.put(self.observation[slice, self.idx + 1],
-             transition.next_observation[:batch_size].copy())
+      self.observation[episode_slice,
+                       self.idx + 1] = transition.next_observation[:batch_size]
       self.episode_id = (self.episode_id + batch_size) % capacity
       self._valid_episodes = min(self._valid_episodes + 1, capacity)
     self.idx = (self.idx + 1) % episode_length

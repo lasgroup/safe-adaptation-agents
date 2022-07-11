@@ -55,7 +55,7 @@ class LaMBDA(agent.Agent):
         model, next(self.rng_seq), config.model_opt, self.precision,
         observation_space.sample()[None, None].astype(dtype),
         action_space.sample()[None, None].astype(dtype))
-    features_example = jnp.concatenate(self.init_state, -1)[None]
+    features_example = jnp.concatenate(self.init_state, -1)
     self.actor = utils.Learner(actor, next(self.rng_seq), config.actor_opt,
                                self.precision, features_example.astype(dtype))
     self.critic = utils.Learner(critic, next(self.rng_seq), config.critic_opt,
@@ -68,9 +68,15 @@ class LaMBDA(agent.Agent):
                                     {}, self.precision, 1., 0.)
     self.replay_buffer = replay_buffer
     self.state = (self.init_state,
-                  jnp.zeros(action_space.shape, self.precision.compute_dtype))
+                  jnp.zeros((self.config.parallel_envs,) + action_space.shape,
+                            self.precision.compute_dtype))
     self.training_step = 0
-    self._prefill_policy = lambda x: action_space.sample()
+    self._prefill_policy = lambda x: jax.device_put(
+        jax.random.uniform(
+            next(self.rng_seq), (x.shape[0],) + action_space.shape,
+            minval=-1.,
+            maxval=1.),
+        device=jax.devices("cpu")[0])
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -83,7 +89,7 @@ class LaMBDA(agent.Agent):
                                         self.model.params, self.actor.params,
                                         next(self.rng_seq), train)
     self.state = (current_state, action)
-    return np.clip(action.astype(np.float32), -1.0, 1.0)
+    return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass
@@ -106,7 +112,7 @@ class LaMBDA(agent.Agent):
     observation = observation.astype(self.precision.compute_dtype)
     _, current_state = filter_(model_params, subkey, prev_state, prev_action,
                                observation)
-    features = jnp.concatenate(current_state, -1)[None]
+    features = jnp.concatenate(current_state, -1)
     policy = self.actor.apply(actor_params, features)
     key, subkey = jax.random.split(key)
     action = policy.sample(seed=subkey) if training else policy.mode()
@@ -123,7 +129,7 @@ class LaMBDA(agent.Agent):
     state = init_state(1, self.config.rssm['stochastic_size'],
                        self.config.rssm['deterministic_size'],
                        self.precision.compute_dtype)
-    return jax.tree_map(lambda x: x.squeeze(0), state)
+    return state
 
   def train(self):
     for batch in tqdm(
@@ -289,7 +295,7 @@ class LaMBDA(agent.Agent):
 
   @property
   def time_to_update(self):
-    return self.training_step > self.config.prefill and \
+    return self.training_step >= self.config.prefill and \
            self.training_step % self.config.train_every == 0
 
   @property

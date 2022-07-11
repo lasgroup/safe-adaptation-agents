@@ -62,7 +62,7 @@ class WorldModel(hk.Module):
       observation: jnp.ndarray
   ) -> Tuple[Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
              rssm.State]:
-    observation = jnp.squeeze(self.encoder(observation[None, None]))
+    observation = jnp.squeeze(self.encoder(observation[:, None]), 1)
     return self.rssm(prev_state, prev_action, observation)
 
   def generate_sequence(
