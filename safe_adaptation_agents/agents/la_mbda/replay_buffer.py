@@ -108,6 +108,8 @@ class ReplayBuffer:
       yield o, a, r, c
 
   def sample(self, n_batches: int) -> Iterator[etb.TrajectoryData]:
+    if self._valid_episodes == 0:
+      return
     for batch in self._dataset.take(n_batches):
       yield etb.TrajectoryData(*map(lambda x: x.numpy(), batch))
 
