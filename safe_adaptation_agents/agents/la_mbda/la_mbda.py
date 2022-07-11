@@ -186,10 +186,12 @@ class LaMBDA(agent.Agent):
       # ActionRepeat), still the cost is modeled as an indicator.
       log_p_cost = cost.log_prob(batch.c > 0.).mean()
       loss_ = self.config.kl_scale * kl - log_p_obs - log_p_rews - log_p_cost
+      posterior_entropy = posterior.entropy().astype(jnp.float32).mean()
+      prior_entropy = prior.entropy().astype(jnp.float32).mean()
       return loss_, {
           'agent/model/kl': kl,
-          'agent/model/post_entropy': posterior.entropy().mean(),
-          'agent/model/prior_entropy': prior.entropy().mean(),
+          'agent/model/post_entropy': posterior_entropy,
+          'agent/model/prior_entropy': prior_entropy,
           'agent/model/log_p_observation': -log_p_obs,
           'agent/model/log_p_reward': -log_p_rews,
           'agent/model/log_p_cost': -log_p_cost,
