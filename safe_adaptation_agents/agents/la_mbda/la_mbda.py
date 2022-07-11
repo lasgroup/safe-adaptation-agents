@@ -166,7 +166,7 @@ class LaMBDA(agent.Agent):
         self.logger[k] = v.mean() / self.config.update_steps
     self.logger.log_metrics(self.training_step)
 
-  @partial(jax.jit, static_argnums=0)
+  # @partial(jax.jit, static_argnums=0)
   def update_model(self, state: LearningState, batch: rb.etb.TrajectoryData,
                    key: PRNGKey) -> Tuple[LearningState, dict, jnp.ndarray]:
     params, opt_state = state
@@ -177,7 +177,7 @@ class LaMBDA(agent.Agent):
       (prior, posterior), features, decoded, reward, cost = outputs_infer
       kl = tfd.kl_divergence(posterior, prior).mean()
       kl = jnp.maximum(kl, self.config.free_kl)
-      log_p_obs = decoded.log_prob(batch.o[:, 1:]).mean()
+      log_p_obs = decoded.log_prob(batch.o[:, 1:]).astype(jnp.float32).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
       # ActionRepeat), still the cost is modeled as an indicator.
