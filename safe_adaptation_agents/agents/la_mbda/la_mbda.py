@@ -135,7 +135,7 @@ class LaMBDA(agent.Agent):
     return state
 
   def train(self):
-    print("Updating world model and actor-critic.")
+    print("Updating world model and actor-critic.\n")
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
@@ -231,7 +231,7 @@ class LaMBDA(agent.Agent):
         # is summed if `action_repeat` > 1
         cost = cost.mean() * self.config.action_repeat
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
-                                             self.config.safety_discount,
+                                             self.config.cost_discount,
                                              self.config.lambda_)
         penalty, cond = lagrangian(cost_lambdas.mean(), self.config.cost_limit)
         loss_ += penalty
@@ -286,14 +286,18 @@ class LaMBDA(agent.Agent):
   @partial(jax.jit, static_argnums=0)
   def update_lagrangian(self, state: LearningState,
                         cond: jnp.ndarray) -> [LearningState, dict]:
-    lagrangian, penalty_multiplier = state.params
+    params = state.params['augmented_lagrangian'].values()
+    lagrangian, penalty_multiplier = params
     new_lagrangian = jnn.relu(cond)
     new_penalty = jnp.clip(
         penalty_multiplier * (self.config.penalty_power_factor + 1.),
         penalty_multiplier,
         1.,
     )
-    new_params = {'lagrangian': new_lagrangian, 'penalty': new_penalty}
+    new_params = dict(augmented_lagrangian={
+        'lagrangian': new_lagrangian,
+        'penalty': new_penalty
+    })
     report = {'agent/lagrangian': new_lagrangian, 'agent/penatly': new_penalty}
     return LearningState(new_params, state.opt_state), report
 
