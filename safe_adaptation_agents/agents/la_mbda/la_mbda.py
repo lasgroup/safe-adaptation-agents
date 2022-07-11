@@ -166,7 +166,7 @@ class LaMBDA(agent.Agent):
         self.logger[k] = v.mean() / self.config.update_steps
     self.logger.log_metrics(self.training_step)
 
-  # @partial(jax.jit, static_argnums=0)
+  @partial(jax.jit, static_argnums=0)
   def update_model(self, state: LearningState, batch: rb.etb.TrajectoryData,
                    key: PRNGKey) -> Tuple[LearningState, dict, jnp.ndarray]:
     params, opt_state = state
