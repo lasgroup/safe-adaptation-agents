@@ -99,21 +99,25 @@ class RSSM(hk.Module):
                         actor: hk.Transformed,
                         actor_params: hk.Params,
                         actions=None) -> jnp.ndarray:
+    vec = lambda state: jnp.concatenate(state, -1)
 
-    def vec(state):
-      return jnp.concatenate(state, -1)
+    def step(carry, x):
+      if actions is None:
+        key = x
+        features = jax.lax.stop_gradient(vec(carry))
+        action = actor.apply(actor_params, features).sample(seed=key)
+      else:
+        action = x
+      _, carry = self.prior(carry, action)
+      return carry, vec(carry)
 
-    horizon = self.c.imag_horizon if actions is None else actions.shape[1]
-    sequence = jnp.zeros(
-        (initial_features.shape[0], horizon,
-         self.c.rssm['stochastic_size'] + self.c.rssm['deterministic_size']))
-    state = jnp.split(initial_features, (self.c.rssm['stochastic_size'],), -1)
-    keys = hk.next_rng_keys(horizon)
-    for t, key in enumerate(keys):
-      action = actor.apply(actor_params, jax.lax.stop_gradient(
-          vec(state))).sample(seed=key) if actions is None else actions[:, t]
-      _, state = self.prior(state, action)
-      sequence = sequence.at[:, t].set(vec(state))
+    if actions is None:
+      xs = jnp.asarray(hk.next_rng_keys(self.c.sample_horizon))
+    else:
+      xs = actions.swapaxes(0, 1)
+    init = jnp.split(initial_features, (self.c.rssm['stochastic_size'],), -1)
+    _, sequence = hk.scan(step, tuple(init), xs)
+    sequence = jnp.asarray(sequence).swapaxes(0, 1)
     return sequence
 
   def observe_sequence(

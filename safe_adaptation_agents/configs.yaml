@@ -172,6 +172,6 @@ la_mbda:
   discount: 0.99
   cost_discount: 0.995
   lambda_: 0.95
-  imag_horizon: 15
+  sample_horizon: 15
 
 

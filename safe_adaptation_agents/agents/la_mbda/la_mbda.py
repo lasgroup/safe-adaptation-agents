@@ -33,6 +33,9 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
 
+compute_lambda_values = jax.vmap(compute_lambda_values, [0, 0, None, None])
+
+
 def discount_sequence(factor, length):
   d = np.cumprod(factor * np.ones((length - 1,)))
   d = np.concatenate([np.ones((1,)), d])
@@ -132,6 +135,7 @@ class LaMBDA(agent.Agent):
     return state
 
   def train(self):
+    print("Updating world model and actor-critic.")
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
@@ -214,18 +218,19 @@ class LaMBDA(agent.Agent):
       trajectories, reward, cost = generate_experience(key, flattened_features,
                                                        policy, params)
       reward_values = reward_critic(trajectories[:, 1:]).mean()
-      reward_lambdas = compute_lambda_values(reward_values, reward.mean(),
+      reward_lambdas = compute_lambda_values(reward_values,
+                                             reward.mean()[:, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
       discount = discount_sequence(self.config.discount,
-                                   self.config.imag_horizon - 1)
+                                   self.config.sample_horizon - 1)
       loss_ = (-reward_lambdas * discount).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, 1:]).mean()
         # The cost decoder predicts an indicator ({0, 1}) but the total cost
         # is summed if `action_repeat` > 1
         cost = cost.mean() * self.config.action_repeat
-        cost_lambdas = compute_lambda_values(cost_values, cost,
+        cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
                                              self.config.safety_discount,
                                              self.config.lambda_)
         penalty, cond = lagrangian(cost_lambdas.mean(), self.config.cost_limit)
@@ -250,7 +255,7 @@ class LaMBDA(agent.Agent):
     def loss(params: hk.Params) -> float:
       values = self.critic.apply(params, features[:, :-1])
       discount = discount_sequence(self.config.discount,
-                                   self.config.imag_horizon - 1)
+                                   self.config.sample_horizon - 1)
       return -(values.log_prob(lambda_values) * discount).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(params)
@@ -268,7 +273,7 @@ class LaMBDA(agent.Agent):
     def loss(params: hk.Params) -> float:
       values = self.safety_critic.apply(params, features[:, :-1])
       discount = discount_sequence(self.config.discount,
-                                   self.config.imag_horizon - 1)
+                                   self.config.sample_horizon - 1)
       return -(values.log_prob(lambda_values) * discount).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(params)
