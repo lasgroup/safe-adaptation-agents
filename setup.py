@@ -3,9 +3,17 @@
 from setuptools import setup, find_packages
 
 required = [
-    'safe-adaptation-gym', 'jax', 'dm-haiku', 'optax', 'jmp', 'numpy',
-    'ruamel.yaml', 'tensorboardX', 'tensorflow', 'tensorflow-probability',
-    'moviepy', 'tensorflow-datasets'
+    'safe-adaptation-gym',
+    'jax',
+    'dm-haiku',
+    'optax',
+    'jmp',
+    'numpy',
+    'ruamel.yaml',
+    'tensorboardX',
+    'tensorflow',
+    'tensorflow-probability',
+    'moviepy',
 ]
 
 extras = {'dev': ['pytest>=4.4.0', 'Pillow', 'matplotlib', 'mujoco-py']}
