@@ -256,11 +256,11 @@ class LaMBDA(agent.Agent):
   def update_critic(self, state: LearningState, features: jnp.ndarray,
                     lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
     params, opt_state = state
+    discount = discount_sequence(self.config.discount,
+                                 self.config.sample_horizon - 1)
 
     def loss(params: hk.Params) -> float:
       values = self.critic.apply(params, features[:, :-1])
-      discount = discount_sequence(self.config.discount,
-                                   self.config.sample_horizon - 1)
       return -(values.log_prob(lambda_values) * discount).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(params)
@@ -274,11 +274,11 @@ class LaMBDA(agent.Agent):
       self, state: LearningState, features: jnp.ndarray,
       lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
     params, opt_state = state
+    discount = discount_sequence(self.config.discount,
+                                 self.config.sample_horizon - 1)
 
     def loss(params: hk.Params) -> float:
       values = self.safety_critic.apply(params, features[:, :-1])
-      discount = discount_sequence(self.config.discount,
-                                   self.config.sample_horizon - 1)
       return -(values.log_prob(lambda_values) * discount).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(params)

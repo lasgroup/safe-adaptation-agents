@@ -60,7 +60,7 @@ def test_not_safe():
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'la_mbda',
       '--eval_trials', '1', '--render_episodes', '0',
-      '--train_driver.adaptation_steps', '30000', '--epochs', '334', '--safe',
+      '--train_driver.adaptation_steps', '30000', '--epochs', '33', '--safe',
       'False', '--log_dir', 'results/test_lambda_safe'
   ])
   if not config.jit:
@@ -93,7 +93,7 @@ def test_safe():
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'la_mbda',
       '--eval_trials', '1', '--render_episodes', '0',
-      '--train_driver.adaptation_steps', '30000', '--epochs', '334', '--safe',
+      '--train_driver.adaptation_steps', '30000', '--epochs', '33', '--safe',
       'True', '--log_dir', 'results/test_lambda_safe'
   ])
   if not config.jit:
