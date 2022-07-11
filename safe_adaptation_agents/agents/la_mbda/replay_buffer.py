@@ -38,13 +38,8 @@ class ReplayBuffer:
     self.rs = np.random.RandomState(seed)
     example = next(
         iter(self._sample_batch(batch_size, sequence_length, capacity)))
-    generator = lambda: self._sample_batch(batch_size, sequence_length)
-    dataset = tfd.Dataset.from_generator(
-        generator,
-        *zip(*tuple((v.dtype, v.shape) for v in example)),
-    )
-    dataset = dataset.prefetch(10)
-    self._dataset = dataset
+    self._generator = lambda: self._sample_batch(batch_size, sequence_length)
+    self._dataset = _make_dataset(self._generator, example)
 
   def add(self, transition: agents.Transition):
     """
@@ -114,6 +109,25 @@ class ReplayBuffer:
     for batch in self._dataset.take(n_batches):
       yield etb.TrajectoryData(*map(lambda x: x.numpy(), batch))
 
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    del state['_dataset']
+    return state
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+    example = next(iter(self._generator()))
+    self._dataset = _make_dataset(self._generator, example)
+
 
 def _quantize(vec):
   return (vec * 255).astype(np.uint8)
+
+
+def _make_dataset(generator, example):
+  dataset = tfd.Dataset.from_generator(
+      generator,
+      *zip(*tuple((v.dtype, v.shape) for v in example)),
+  )
+  dataset = dataset.prefetch(10)
+  return dataset
