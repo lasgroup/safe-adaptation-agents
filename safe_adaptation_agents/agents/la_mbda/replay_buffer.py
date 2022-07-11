@@ -105,7 +105,7 @@ class ReplayBuffer:
       ]
       o = self.observation[episode_ids[:, None], timestep_ids]
       if self.obs_dtype == np.uint8:
-        o = (o / 255. - 0.5).astype(self.dtype)
+        o = (o / 255.).astype(self.dtype)
       yield o, a, r, c
 
   def sample(self, n_batches: int) -> Iterator[etb.TrajectoryData]:
@@ -116,4 +116,4 @@ class ReplayBuffer:
 
 
 def _quantize(vec):
-  return ((vec + 0.5) * 255).astype(np.uint8)
+  return (vec * 255).astype(np.uint8)
