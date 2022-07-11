@@ -137,7 +137,7 @@ class LaMBDA(agent.Agent):
         leave=False,
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
-          batch, self.model.state, next(self.rng_seq))
+          self.model.state, batch, next(self.rng_seq))
       self.actor.state, actor_report, aux = self.update_actor(
           self.actor.state,
           features,
@@ -163,17 +163,16 @@ class LaMBDA(agent.Agent):
     self.logger.log_metrics(self.training_step)
 
   @partial(jax.jit, static_argnums=0)
-  def update_model(self, batch: rb.etb.TrajectoryData, state: LearningState,
+  def update_model(self, state: LearningState, batch: rb.etb.TrajectoryData,
                    key: PRNGKey) -> Tuple[LearningState, dict, jnp.ndarray]:
     params, opt_state = state
 
     def loss(params: hk.Params) -> Tuple[float, dict]:
       _, _, infer, _ = self.model.apply
       outputs_infer = infer(params, key, batch.o[:, 1:], batch.a)
-
       (prior, posterior), features, decoded, reward, cost = outputs_infer
-      kl = jnp.maximum(
-          tfd.kl_divergence(posterior, prior).mean(), self.config.free_kl)
+      kl = tfd.kl_divergence(posterior, prior).mean()
+      kl = jnp.maximum(kl, self.config.free_kl)
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
@@ -186,7 +185,7 @@ class LaMBDA(agent.Agent):
           'agent/model/prior_entropy': prior.entropy().mean(),
           'agent/model/log_p_observation': -log_p_obs,
           'agent/model/log_p_reward': -log_p_rews,
-          'agent/model/log_p_cost': -cost,
+          'agent/model/log_p_cost': -log_p_cost,
           'features': features
       }
 

@@ -89,9 +89,13 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     augmented_lagrangian = hk.without_apply_rng(
         hk.transform(lambda cost, limit: al.AugmentedLagrangian(
             **config.augmented_lagrangian)(cost, limit)))
-    replay_buffer = rb.ReplayBuffer(observation_space.shape, action_space.shape,
-                                    config.time_limit // config.action_repeat,
-                                    config.seed, **config.replay_buffer)
+    replay_buffer = rb.ReplayBuffer(
+        observation_space.shape,
+        action_space.shape,
+        config.time_limit // config.action_repeat,
+        config.seed,
+        **config.replay_buffer,
+        precision=config.precision)
     policy = utils.get_mixed_precision_policy(config.precision)
     hk.mixed_precision.set_policy(world_model.WorldModel, policy)
     hk.mixed_precision.set_policy(models.Actor, policy)

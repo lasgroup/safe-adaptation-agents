@@ -120,18 +120,20 @@ class RSSM(hk.Module):
       self, observations: Observation, actions: Action
   ) -> Tuple[Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
              jnp.ndarray]:
-    priors, posteriors = [], []
-    features = jnp.zeros(observations.shape[:2] +
-                         (self.c.rssm['stochastic_size'] +
-                          self.c.rssm['deterministic_size'],))
-    state = init_state(observations.shape[0], self.c.rssm['stochastic_size'],
-                       self.c.rssm['deterministic_size'])
-    for t in range(observations.shape[1]):
-      (prior, posterior), state = self.__call__(state, actions[:, t],
-                                                observations[:, t])
-      priors.append((prior.mean(), prior.stddev()))
-      posteriors.append((posterior.mean(), posterior.stddev()))
-      features = features.at[:, t].set(jnp.concatenate(state, -1))
-    priors = jnp.asarray(priors)
-    posteriors = jnp.asarray(posteriors)
+    init = init_state(observations.shape[0], self.c.rssm['stochastic_size'],
+                      self.c.rssm['deterministic_size'])
+    # Time-major inputs
+    xs = [x.swapaxes(0, 1) for x in (actions, observations)]
+
+    def step(carry, xs):
+      action, observation = xs
+      (prior, posterior), carry = self.__call__(carry, action, observation)
+      return carry, (prior, posterior, jnp.concatenate(carry, -1))
+
+    _, outs = hk.scan(step, init, xs)
+    # Swap back to batch-major outputs
+    priors, posteriors, features = jax.tree_map(
+        lambda x: x.swapaxes(0, 1),
+        outs,
+    )
     return (priors, posteriors), features

@@ -79,15 +79,16 @@ class WorldModel(hk.Module):
 
   def observe_sequence(
       self, observations: jnp.ndarray, actions: jnp.ndarray
-  ) -> Tuple[Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
-             jnp.ndarray, tfd.Normal, tfd.Normal, tfd.Bernoulli]:
+  ) -> [
+      Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
+      jnp.ndarray, tfd.Normal, tfd.Normal, tfd.Bernoulli
+  ]:
     observations = self.encoder(observations)
-    (prior,
-     posterior), features = self.rssm.observe_sequence(observations, actions)
+    dists, features = self.rssm.observe_sequence(observations, actions)
     reward = self.reward(features)
     cost = self.cost(features)
     decoded = self.decode(features)
-    return (prior, posterior), features, decoded, reward, cost
+    return dists, features, decoded, reward, cost
 
   def decode(self, featuers: jnp.ndarray) -> tfd.Normal:
     return self.decoder(featuers)
