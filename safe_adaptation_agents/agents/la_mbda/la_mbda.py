@@ -83,7 +83,7 @@ class LaMBDA(agent.Agent):
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
-    if self.training_step <= self.config.prefill and train:
+    if self.training_step < self.config.prefill and train:
       return self._prefill_policy(observation)
     if self.time_to_update and train:
       self.train()
@@ -112,6 +112,8 @@ class LaMBDA(agent.Agent):
              training=True) -> Tuple[jnp.ndarray, State]:
     filter_, *_ = self.model.apply
     key, subkey = jax.random.split(key)
+    batch_shape = observation.shape[0]
+    prev_state = tuple(map(lambda x: x[:batch_shape], prev_state))
     observation = observation.astype(self.precision.compute_dtype)
     _, current_state = filter_(model_params, subkey, prev_state, prev_action,
                                observation)
@@ -129,7 +131,8 @@ class LaMBDA(agent.Agent):
 
   @property
   def init_state(self):
-    state = init_state(1, self.config.rssm['stochastic_size'],
+    state = init_state(self.config.parallel_envs,
+                       self.config.rssm['stochastic_size'],
                        self.config.rssm['deterministic_size'],
                        self.precision.compute_dtype)
     return state
