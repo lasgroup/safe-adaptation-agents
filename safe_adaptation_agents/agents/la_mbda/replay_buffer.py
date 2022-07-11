@@ -17,31 +17,31 @@ class ReplayBuffer:
     self.dtype = {16: np.float16, 32: np.float32}[precision]
     self.obs_dtype = np.uint8 if len(observation_shape) == 3 else self.dtype
     self.observation = np.zeros(
-      (
-        capacity,
-        max_length + 1,
-      ) + observation_shape, dtype=self.obs_dtype)
+        (
+            capacity,
+            max_length + 1,
+        ) + observation_shape, dtype=self.obs_dtype)
     self.action = np.zeros(
-      (
+        (
+            capacity,
+            max_length,
+        ) + action_shape, dtype=self.dtype)
+    self.reward = np.zeros((
         capacity,
         max_length,
-      ) + action_shape, dtype=self.dtype)
-    self.reward = np.zeros((
-      capacity,
-      max_length,
     ), dtype=self.dtype)
     self.cost = np.zeros((
-      capacity,
-      max_length,
+        capacity,
+        max_length,
     ), dtype=self.dtype)
     self._valid_episodes = 0
     self.rs = np.random.RandomState(seed)
     example = next(
-      iter(self._sample_batch(batch_size, sequence_length, capacity)))
+        iter(self._sample_batch(batch_size, sequence_length, capacity)))
     generator = lambda: self._sample_batch(batch_size, sequence_length)
     dataset = tfd.Dataset.from_generator(
-      generator,
-      *zip(*tuple((v.dtype, v.shape) for v in example)),
+        generator,
+        *zip(*tuple((v.dtype, v.shape) for v in example)),
     )
     dataset = dataset.prefetch(10)
     self._dataset = dataset
@@ -62,15 +62,16 @@ class ReplayBuffer:
     end = min(self.episode_id + batch_size, capacity)
     episode_slice = slice(self.episode_id, end)
     for data, val in zip(
-        (self.observation, self.action, self.reward, self.cost),
-        (transition.observation, transition.action, transition.reward,
-         transition.cost)):
+        (self.action, self.reward, self.cost),
+        (transition.action, transition.reward, transition.cost)):
       data[episode_slice, self.idx] = val[:batch_size].astype(self.dtype)
+    observation = transition.observation[:batch_size].astype(self.obs_dtype)
+    self.observation[episode_slice, self.idx] = observation
     if transition.last:
       assert self.idx == episode_length - 1
       next_obs = _quantize(transition.next_observation[:batch_size])
       self.observation[episode_slice,
-                       self.idx + 1] = next_obs.astype(self.dtype)
+                       self.idx + 1] = next_obs.astype(self.obs_dtype)
       self.episode_id = (self.episode_id + batch_size) % capacity
       self._valid_episodes = min(self._valid_episodes + 1, capacity)
     self.idx = (self.idx + 1) % episode_length
@@ -88,19 +89,19 @@ class ReplayBuffer:
     while True:
       low = self.rs.choice(time_limit - sequence_length - 1, batch_size)
       timestep_ids = low[:, None] + np.tile(
-        np.arange(sequence_length + 1),
-        (batch_size, 1),
+          np.arange(sequence_length + 1),
+          (batch_size, 1),
       )
       episode_ids = self.rs.choice(valid_episodes, size=batch_size)
       # Sample a sequence of length H for the actions, rewards and costs,
       # and a length of H + 1 for the observations (which is needed for
       # bootstrapping)
       a, r, c = [
-        x[episode_ids[:, None], timestep_ids[:, :-1]] for x in (
-          self.action,
-          self.reward,
-          self.cost,
-        )
+          x[episode_ids[:, None], timestep_ids[:, :-1]] for x in (
+              self.action,
+              self.reward,
+              self.cost,
+          )
       ]
       o = self.observation[episode_ids[:, None], timestep_ids]
       if self.obs_dtype == np.uint8:

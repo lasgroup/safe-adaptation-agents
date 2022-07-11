@@ -138,7 +138,7 @@ class LaMBDA(agent.Agent):
     return state
 
   def train(self):
-    print("Updating world model and actor-critic.\n")
+    print("Updating world model and actor-critic.")
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
