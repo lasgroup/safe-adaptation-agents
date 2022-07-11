@@ -166,7 +166,7 @@ class LaMBDA(agent.Agent):
       reports = {**model_report, **actor_report, **critic_report}
       # Average training metrics across update steps.
       for k, v in reports.items():
-        self.logger[k] = v.mean() / self.config.update_steps
+        self.logger[k] = v.mean()
     self.logger.log_metrics(self.training_step)
 
   @partial(jax.jit, static_argnums=0)
