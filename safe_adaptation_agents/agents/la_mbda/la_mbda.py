@@ -357,7 +357,9 @@ def evaluate_model(observations, actions, key, model, model_params, precision):
       actions=actions[:1, conditioning_length:])
   key, subkey = jax.random.split(key)
   generated_decoded = decode(model_params, subkey, generated)
-  prediction = generated_decoded.mean()
-  out = jnp.abs(observations[:1, conditioning_length + 1:] - prediction)
+  y_hat = generated_decoded.mean()
+  y = observations[:1, conditioning_length + 1:]
+  error = jnp.abs(y - y_hat)
+  out = y + error
   out = ((out + 0.5) * 255).astype(jnp.uint8)
   return out
