@@ -333,9 +333,7 @@ class LaMBDA(agent.Agent):
     eval_video = evaluate_model(batch.o, batch.a, next(self.rng_seq),
                                 self.model, self.model.params, self.precision)
     self.logger.log_video(
-        np.array(eval_video, copy=False).transpose([0, 1, 4, 2, 3]),
-        step=self.training_step,
-        name='agent/model/error')
+        eval_video, step=self.training_step, name='agent/model/error')
 
 
 @partial(jax.jit, static_argnums=(3, 5))
