@@ -168,6 +168,8 @@ class LaMBDA(agent.Agent):
       # Average training metrics across update steps.
       for k, v in reports.items():
         self.logger[k] = v.mean()
+    if self.config.evaluate_model:
+      self.evaluate_model()
     self.logger.log_metrics(self.training_step)
 
   @partial(jax.jit, static_argnums=0)
@@ -210,8 +212,8 @@ class LaMBDA(agent.Agent):
       model_params: hk.Params, critic_params: hk.Params,
       safety_critic_params: hk.Params, lagrangian_params: hk.Params,
       key: PRNGKey) -> [LearningState, dict, Tuple[jnp.ndarray, ...]]:
-    _, generate_experience, *_ = self.model.apply
-    generate_experience = partial(generate_experience, model_params)
+    _, generate_trajectory, *_ = self.model.apply
+    generate_trajectory = partial(generate_trajectory, model_params)
     reward_critic = partial(self.critic.apply, critic_params)
     cost_critic = partial(self.safety_critic.apply, safety_critic_params)
     lagrangian = partial(self.lagrangian.apply, lagrangian_params)
@@ -221,7 +223,7 @@ class LaMBDA(agent.Agent):
     flattened_features = features.reshape((-1, features.shape[-1]))
 
     def loss(params: hk.Params):
-      trajectories, reward, cost = generate_experience(key, flattened_features,
+      trajectories, reward, cost = generate_trajectory(key, flattened_features,
                                                        policy, params)
       reward_values = reward_critic(trajectories[:, 1:]).mean()
       reward_lambdas = compute_lambda_values(reward_values,
@@ -323,3 +325,39 @@ class LaMBDA(agent.Agent):
   @property
   def safe(self):
     return self.config.safe
+
+  def evaluate_model(self):
+    batch = next(self.replay_buffer.sample(1))
+    eval_video = evaluate_model(batch.o, batch.a, next(self.rng_seq),
+                                self.model, self.model.params, self.precision)
+    self.logger.log_video(
+        np.array(eval_video, copy=False).transpose([0, 1, 4, 2, 3]),
+        step=self.training_step,
+        name='agent/model/error')
+
+
+@partial(jax.jit, static_argnums=(3, 5))
+def evaluate_model(observations, actions, key, model, model_params, precision):
+  length = min(len(observations) + 1, 50)
+  observations, actions = jax.tree_map(
+      lambda x: x.astype(precision.compute_dtype), (observations, actions))
+  _, generate_sequence, infer, decode = model.apply
+  key, subkey = jax.random.split(key)
+  _, features, infered_decoded, *_ = infer(model_params, subkey,
+                                           observations[:1, 1:length + 1],
+                                           actions[:1, :length])
+  conditioning_length = length // 5
+  key, subkey = jax.random.split(key)
+  generated, *_ = generate_sequence(
+      model_params,
+      subkey,
+      features[:, conditioning_length],
+      None,
+      None,
+      actions=actions[:1, conditioning_length:])
+  key, subkey = jax.random.split(key)
+  generated_decoded = decode(model_params, subkey, generated)
+  prediction = generated_decoded.mean()
+  out = jnp.abs(observations[:1, conditioning_length + 1:] - prediction)
+  out = ((out + 0.5) * 255).astype(jnp.uint8)
+  return out

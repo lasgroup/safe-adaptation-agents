@@ -173,5 +173,6 @@ la_mbda:
   cost_discount: 0.995
   lambda_: 0.95
   sample_horizon: 15
+  evaluate_model: True
 
 
