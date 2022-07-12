@@ -327,6 +327,8 @@ class LaMBDA(agent.Agent):
     return self.config.safe
 
   def evaluate_model(self):
+    if self.replay_buffer.empty:
+      return
     batch = next(self.replay_buffer.sample(1))
     eval_video = evaluate_model(batch.o, batch.a, next(self.rng_seq),
                                 self.model, self.model.params, self.precision)
