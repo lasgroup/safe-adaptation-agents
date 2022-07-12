@@ -163,7 +163,7 @@ la_mbda:
   kl_scale: 1.0
   # Actor-Critic
   actor: {layers: [400, 400, 400, 400], min_stddev: 0.01, max_stddev: 10., activation: jnn.elu, initialization: glorot, squash: True, heteroscedastic: True}
-  critic: {layers: [400, 400, 400], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
+  critic: {layers: [400, 400, 400], dist: normal, activation: jnn.elu, name: 'critic', initialization: glorot}
   actor_opt: {lr: 8e-5, eps: 1e-5, clip: 100}
   critic_opt: {lr: 8e-5, eps: 1e-5, clip: 100}
   safety_critic_opt: {lr: 2e-4, eps: 1e-5, clip: 100}

@@ -58,8 +58,8 @@ class ReplayBuffer:
     self.observation[episode_slice, self.idx] = observation
     if transition.last:
       assert self.idx == episode_length - 1
-      self.observation[episode_slice,
-                       self.idx + 1] = transition.next_observation[:batch_size]
+      next_obs = transition.next_observation[:batch_size].astype(self.obs_dtype)
+      self.observation[episode_slice, self.idx + 1] = next_obs
       self.episode_id = (self.episode_id + batch_size) % capacity
       self._valid_episodes = min(self._valid_episodes + batch_size, capacity)
     self.idx = (self.idx + 1) % episode_length
