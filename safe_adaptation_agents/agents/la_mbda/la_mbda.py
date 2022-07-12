@@ -5,6 +5,7 @@ from typing import Tuple, Optional
 import gym
 import haiku as hk
 import jax
+from jax import scipy as jci
 import jax.numpy as jnp
 import jax.nn as jnn
 import numpy as np
@@ -357,10 +358,12 @@ def evaluate_model(observations, actions, key, model, model_params, precision):
       actions=actions[:1, conditioning_length:])
   key, subkey = jax.random.split(key)
   generated_decoded = decode(model_params, subkey, generated)
-  y_hat = generated_decoded.mean()
-  y = observations[:1, conditioning_length + 1:]
-  error = jnp.abs(y - y_hat)
-  # Minus sign to make errors darker.
-  out = y - error
-  out = ((out + 0.5) * 255).astype(jnp.uint8)
+  y_hat = generated_decoded.mean()[0]
+  y = observations[0, conditioning_length + 1:]
+  correlate = jax.vmap(partial(jci.signal.correlate2d, mode='same'))
+  # https://docs.opencv.org/3.4/en/d25/imgproc_color_conversions.html
+  to_gray = lambda x: jnp.dot(x[..., :3], np.array([0.2989, 0.5870, 0.1140]))
+  correlation = correlate(to_gray(y), to_gray(y_hat))
+  out = ((correlation + 0.5) * 255).astype(jnp.uint8)
+  out = jnp.expand_dims(out, (0, -1))
   return out
