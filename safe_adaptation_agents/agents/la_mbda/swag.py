@@ -142,12 +142,12 @@ class SWAG(u.Learner):
               scale: float, key: u.PRNGKey) -> hk.Params:
     key, subkey = jax.random.split(key)
     sample_var = lambda p, k: jnp.sqrt(p / 2.) * jax.random.normal(k, p.shape)
-    num_leafes = len(jax.tree_leaves(variance))
-    keys = jax.random.split(key, num_leafes + 1)
+    num_leaves = len(jax.tree_leaves(variance))
+    keys = jax.random.split(key, num_leaves + 1)
     var_sample = jax.tree_map(sample_var, variance, keys[1:])
     sample_cov = lambda p, k: jnp.matmul(p, jax.random.normal(
         k, (p.shape[0], 1)))
-    keys = jax.random.split(keys[0], num_leafes + 1)
+    keys = jax.random.split(keys[0], num_leaves + 1)
     cov_sample = jax.tree_map(sample_cov, covariance, keys[1:])
     rand_sample = lambda v, c: v + c.reshape(v.shape)
     sample_rand = jax.tree_map(rand_sample, var_sample, cov_sample)
