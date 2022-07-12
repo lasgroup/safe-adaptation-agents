@@ -61,7 +61,7 @@ class ReplayBuffer:
       self.observation[episode_slice,
                        self.idx + 1] = transition.next_observation[:batch_size]
       self.episode_id = (self.episode_id + batch_size) % capacity
-      self._valid_episodes = min(self._valid_episodes + 1, capacity)
+      self._valid_episodes = min(self._valid_episodes + batch_size, capacity)
     self.idx = (self.idx + 1) % episode_length
 
   def _sample_batch(self,
