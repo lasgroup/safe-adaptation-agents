@@ -115,6 +115,7 @@ class LaMBDA(agent.Agent):
     batch_shape = observation.shape[0]
     prev_state = tuple(map(lambda x: x[:batch_shape], prev_state))
     observation = observation.astype(self.precision.compute_dtype)
+    observation = rb.preprocess(observation)
     _, current_state = filter_(model_params, subkey, prev_state, prev_action,
                                observation)
     features = jnp.concatenate(current_state, -1)

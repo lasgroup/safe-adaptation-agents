@@ -45,12 +45,6 @@ class ReplayBuffer:
     """
     Adds transitions to the current running trajectory.
     """
-    if self.obs_dtype == np.uint8:
-      quantized = _quantize(transition.observation)
-      transition = agents.Transition(quantized, transition.next_observation,
-                                     transition.action, transition.reward,
-                                     transition.cost, transition.done,
-                                     transition.info)
     capacity, episode_length = self.reward.shape
     batch_size = min(transition.observation.shape[0], capacity)
     # Discard data if batch size overflows capacity.
@@ -64,9 +58,8 @@ class ReplayBuffer:
     self.observation[episode_slice, self.idx] = observation
     if transition.last:
       assert self.idx == episode_length - 1
-      next_obs = _quantize(transition.next_observation[:batch_size])
       self.observation[episode_slice,
-                       self.idx + 1] = next_obs.astype(self.obs_dtype)
+                       self.idx + 1] = transition.next_observation[:batch_size]
       self.episode_id = (self.episode_id + batch_size) % capacity
       self._valid_episodes = min(self._valid_episodes + 1, capacity)
     self.idx = (self.idx + 1) % episode_length
@@ -100,7 +93,7 @@ class ReplayBuffer:
       ]
       o = self.observation[episode_ids[:, None], timestep_ids]
       if self.obs_dtype == np.uint8:
-        o = (o / 255.).astype(self.dtype)
+        o = preprocess(o).astype(self.dtype)
       yield o, a, r, c
 
   def sample(self, n_batches: int) -> Iterator[etb.TrajectoryData]:
@@ -120,8 +113,8 @@ class ReplayBuffer:
     self._dataset = _make_dataset(self._generator, example)
 
 
-def _quantize(vec):
-  return (vec * 255).astype(np.uint8)
+def preprocess(image):
+  return image / 255. - .5
 
 
 def _make_dataset(generator, example):
