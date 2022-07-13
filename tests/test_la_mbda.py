@@ -23,12 +23,13 @@ def test_run():
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'la_mbda',
       '--eval_trials', '1', '--render_episodes', '0',
-      '--train_driver.adaptation_steps', '200',
-      '--test_driver.query_steps', '200', '--epochs', '1', '--safe',
-      'True', '--log_dir', 'results/test_lambda_safe', '--time_limit', '100',
-      '--replay_buffer', '{capacity: 10, batch_size: 5, sequence_length: 8}',
-      '--prefill', '100', '--update_steps', '2', '--train_every', '100',
-      '--parallel_envs', '1'
+      '--train_driver.adaptation_steps', '200', '--test_driver.query_steps',
+      '200', '--epochs', '1', '--safe', 'True', '--log_dir',
+      'results/test_lambda_safe', '--time_limit', '100', '--replay_buffer',
+      '{capacity: 10, batch_size: 5, sequence_length: 8}', '--prefill', '100',
+      '--update_steps', '2', '--train_every', '100', '--parallel_envs', '1',
+      '--swag',
+      '{start_averaging: 1, average_period: 1, max_num_models: 1, decay: 0.8, scale: 1.}'
   ])
   if not config.jit:
     from jax.config import config as jax_config

@@ -176,9 +176,9 @@ class LaMBDA(agent.Agent):
     self.logger.log_metrics(self.training_step)
 
   @partial(jax.jit, static_argnums=0)
-  def update_model(self, state: LearningState, batch: rb.etb.TrajectoryData,
-                   key: PRNGKey) -> Tuple[LearningState, dict, jnp.ndarray]:
-    params, opt_state = state
+  def update_model(
+      self, state: swag.SWAGLearningState, batch: rb.etb.TrajectoryData,
+      key: PRNGKey) -> Tuple[swag.SWAGLearningState, dict, jnp.ndarray]:
 
     def loss(params: hk.Params) -> Tuple[float, dict]:
       _, _, infer, _ = self.model.apply
@@ -204,7 +204,7 @@ class LaMBDA(agent.Agent):
           'features': features
       }
 
-    grads, report = jax.grad(loss, has_aux=True)(params)
+    grads, report = jax.grad(loss, has_aux=True)(state.params)
     new_state = self.model.grad_step(grads, state)
     report['agent/model/grads'] = optax.global_norm(grads)
     return new_state, report, report.pop('features')
@@ -261,7 +261,6 @@ class LaMBDA(agent.Agent):
   @partial(jax.jit, static_argnums=0)
   def update_critic(self, state: LearningState, features: jnp.ndarray,
                     lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
-    params, opt_state = state
     discount = discount_sequence(self.config.discount,
                                  self.config.sample_horizon - 1)
 
@@ -269,7 +268,7 @@ class LaMBDA(agent.Agent):
       values = self.critic.apply(params, features[:, :-1])
       return -(values.log_prob(lambda_values) * discount).mean()
 
-    (loss_, grads) = jax.value_and_grad(loss)(params)
+    (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.critic.grad_step(grads, state)
     return new_state, {
         'agent/critic/loss': loss_,
@@ -279,7 +278,6 @@ class LaMBDA(agent.Agent):
   def update_safety_critic(
       self, state: LearningState, features: jnp.ndarray,
       lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
-    params, opt_state = state
     discount = discount_sequence(self.config.discount,
                                  self.config.sample_horizon - 1)
 
@@ -287,7 +285,7 @@ class LaMBDA(agent.Agent):
       values = self.safety_critic.apply(params, features[:, :-1])
       return -(values.log_prob(lambda_values) * discount).mean()
 
-    (loss_, grads) = jax.value_and_grad(loss)(params)
+    (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.safety_critic.grad_step(grads, state)
     return new_state, {
         'agent/safety_critic/loss': loss_,

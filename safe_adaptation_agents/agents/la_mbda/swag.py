@@ -26,6 +26,10 @@ class SWAGLearningState(NamedTuple):
   def opt_state(self):
     return self.learning_state.opt_state
 
+  @property
+  def iterations(self):
+    return self.learning_state.opt_state[1].count
+
 
 class SWAG(u.Learner):
 
@@ -57,16 +61,25 @@ class SWAG(u.Learner):
 
   @property
   def state(self):
-    learning_state = super(SWAG, self).state()
+    learning_state = super(SWAG, self).state
     return SWAGLearningState(learning_state, self.mu, self.variance,
                              self.covariance_mat)
 
   @state.setter
   def state(self, state: SWAGLearningState):
-    super(SWAG, self).state(state.learning_state)
+    # Set Learner's `learning_state` in a hacky way.
+    u.Learner.state.fset(self, state.learning_state)
     self.mu = state.mu
     self.variance = state.variance
     self.covariance_mat = state.covariance
+
+  @property
+  def warm(self):
+    count = self.state.iterations
+    average_period = self._average_period
+    num_snapshots = max(0, (count - self._start_averaging) // average_period)
+    max_num_models = self._max_num_models
+    return count >= self._start_averaging and num_snapshots >= max_num_models
 
   def grad_step(self, grads, state: SWAGLearningState) -> SWAGLearningState:
     learning_state = super(SWAG, self).grad_step(grads, state.learning_state)
@@ -78,7 +91,7 @@ class SWAG(u.Learner):
   def _update_stats(self, updated_state: u.LearningState, mu: hk.Params,
                     variance: hk.Params,
                     covariance: hk.Params) -> [hk.Params, hk.Params, hk.Params]:
-    count = updated_state.opt_state.count + 1
+    count = updated_state.opt_state[1].count + 1
     # number of times snapshots of weights have been taken (using max to
     # avoid negative values of num_snapshots).
     num_snapshots = jnp.maximum(
@@ -104,7 +117,7 @@ class SWAG(u.Learner):
         return new_var
 
       new_mean = jax.tree_map(compute_mu, mu, updated_state.params)
-      new_var = jax.tree_map(compute_var, mu, compute_var, updated_state.params)
+      new_var = jax.tree_map(compute_var, mu, variance, updated_state.params)
 
       def compute_cov(old_cov, old_param, new_mean):
         # Shift old covariances one step to the right. Update the leftmost
@@ -122,8 +135,8 @@ class SWAG(u.Learner):
     # 2. Iteration is one in which snapshot should be taken.
     checkpoint = self._start_averaging + num_snapshots * self._average_period
     mu, variance, covariance = jax.lax.cond(
-        count >= self._start_averaging & count == checkpoint, compute_stats,
-        lambda: mu, variance, covariance)
+        (count >= self._start_averaging) & (count == checkpoint), compute_stats,
+        lambda: (mu, variance, covariance))
     return mu, variance, covariance
 
   def posterior_samples(self, num_samples: int, key: u.PRNGKey):
