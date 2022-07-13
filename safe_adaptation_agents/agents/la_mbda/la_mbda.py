@@ -17,6 +17,7 @@ import safe_adaptation_agents.utils as utils
 from safe_adaptation_agents.agents import agent
 from safe_adaptation_agents.agents.la_mbda import replay_buffer as rb
 from safe_adaptation_agents.agents.la_mbda.rssm import init_state
+from safe_adaptation_agents.agents.la_mbda import swag
 from safe_adaptation_agents.logging import TrainingLogger
 
 PRNGKey = jnp.ndarray
@@ -55,10 +56,11 @@ class LaMBDA(agent.Agent):
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.precision = utils.get_mixed_precision_policy(self.config.precision)
     dtype = self.precision.compute_dtype
-    self.model = utils.Learner(
-        model, next(self.rng_seq), config.model_opt, self.precision,
-        observation_space.sample()[None, None].astype(dtype),
-        action_space.sample()[None, None].astype(dtype))
+    self.model = swag.SWAG(model, next(self.rng_seq), config.model_opt,
+                           self.precision,
+                           observation_space.sample()[None, None].astype(dtype),
+                           action_space.sample()[None, None].astype(dtype),
+                           **config.swag)
     features_example = jnp.concatenate(self.init_state, -1)
     self.actor = utils.Learner(actor, next(self.rng_seq), config.actor_opt,
                                self.precision, features_example.astype(dtype))
