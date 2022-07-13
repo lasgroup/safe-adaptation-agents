@@ -143,6 +143,9 @@ class LaMBDA(agent.Agent):
 
   def train(self):
     print("Updating world model and actor-critic.")
+    # Use the critic params for the previous iteration to update to actor.
+    critic_params = self.critic.params
+    safety_critic_params = self.safety_critic.params
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
@@ -153,8 +156,8 @@ class LaMBDA(agent.Agent):
           self.actor.state,
           features,
           self.model.params,
-          self.critic.params,
-          self.safety_critic.params,
+          critic_params,
+          safety_critic_params,
           self.lagrangian.params,
           next(self.rng_seq),
       )
@@ -358,12 +361,7 @@ def evaluate_model(observations, actions, key, model, model_params, precision):
       actions=actions[:1, conditioning_length:])
   key, subkey = jax.random.split(key)
   generated_decoded = decode(model_params, subkey, generated)
-  y_hat = generated_decoded.mean()[0]
-  y = observations[0, conditioning_length + 1:]
-  correlate = jax.vmap(partial(jci.signal.correlate2d, mode='same'))
-  # https://docs.opencv.org/3.4/en/d25/imgproc_color_conversions.html
-  to_gray = lambda x: jnp.dot(x[..., :3], np.array([0.2989, 0.5870, 0.1140]))
-  correlation = correlate(to_gray(y), to_gray(y_hat))
-  out = ((correlation + 0.5) * 255).astype(jnp.uint8)
-  out = jnp.expand_dims(out, (0, -1))
+  prediction = generated_decoded.mean()
+  out = jnp.abs(observations[:1, conditioning_length + 1:] - prediction)
+  out = ((out + 0.5) * 255).astype(jnp.uint8)
   return out
