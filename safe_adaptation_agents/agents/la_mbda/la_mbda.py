@@ -279,6 +279,7 @@ class LaMBDA(agent.Agent):
         'agent/critic/grads': optax.global_norm(grads)
     }
 
+  @partial(jax.jit, static_argnums=0)
   def update_safety_critic(
       self, state: LearningState, features: jnp.ndarray,
       lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
