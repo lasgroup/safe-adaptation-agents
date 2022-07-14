@@ -92,7 +92,7 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     replay_buffer = rb.ReplayBuffer(
         observation_space.shape,
         action_space.shape,
-        config.time_limit,
+        config.time_limit // config.action_repeat,
         config.seed,
         **config.replay_buffer,
         precision=config.precision)

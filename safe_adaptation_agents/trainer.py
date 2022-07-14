@@ -131,6 +131,7 @@ class Trainer:
     train_driver = driver.Driver(
         **config.train_driver,
         time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         on_episode_end=lambda episode, task_name, adapt: on_episode_end(
@@ -138,6 +139,7 @@ class Trainer:
     test_driver = driver.Driver(
         **config.test_driver,
         time_limit=config.time_limit,
+        action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         on_episode_end=lambda episode, task_name, adapt: on_episode_end(

@@ -29,7 +29,7 @@ class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
     super(MamlPpoLagrangian,
           self).__init__(observation_space, action_space, config, logger, actor,
                          critic, safety_critic)
-    num_steps = self.config.time_limit
+    num_steps = self.config.time_limit // self.config.action_repeat
     self.buffer = etb.EpisodicTrajectoryBuffer(
         self.config.num_trajectories + self.config.num_query_trajectories,
         num_steps, observation_space.shape, action_space.shape,

@@ -193,7 +193,8 @@ class LaMBDA(agent.Agent):
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).astype(jnp.float32).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
-      # ActionRepeat), still the cost is modeled as an indicator.
+      # ActionRepeat). However, since the cost is modeled as an indicator,
+      # we transform it back to a continuous variable.
       log_p_cost = cost.log_prob(batch.c > 0.)
       log_p_cost = jnp.where(batch.c > 0., log_p_cost * self.config.cost_weight,
                              log_p_cost).mean()
