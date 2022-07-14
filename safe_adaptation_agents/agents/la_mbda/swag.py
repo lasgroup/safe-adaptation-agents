@@ -140,7 +140,7 @@ class SWAG(u.Learner):
 
   def posterior_samples(self, num_samples: int, key: u.PRNGKey):
     state = self.state
-    return self._sample(
+    return _sample(
         state.mu,
         state.variance,
         state.covariance,
@@ -148,21 +148,25 @@ class SWAG(u.Learner):
         jnp.asarray(jax.random.split(key, num_samples)),
     )
 
-  @jax.jit
-  @partial(jax.vmap, in_axes=[None, None, None, None, None, 0])
-  def _sample(self, mean: hk.Params, variance: hk.Params, covariance: hk.Params,
-              scale: float, key: u.PRNGKey) -> hk.Params:
-    key, subkey = jax.random.split(key)
-    sample_var = lambda p, k: jnp.sqrt(p / 2.) * jax.random.normal(k, p.shape)
-    num_leaves = len(jax.tree_leaves(variance))
-    keys = jax.random.split(key, num_leaves + 1)
-    var_sample = jax.tree_map(sample_var, variance, keys[1:])
-    sample_cov = lambda p, k: jnp.matmul(p, jax.random.normal(
-        k, (p.shape[0], 1)))
-    keys = jax.random.split(keys[0], num_leaves + 1)
-    cov_sample = jax.tree_map(sample_cov, covariance, keys[1:])
-    rand_sample = lambda v, c: v + c.reshape(v.shape)
-    sample_rand = jax.tree_map(rand_sample, var_sample, cov_sample)
-    shift_scale = lambda m, r: m + (scale**0.5) * r
-    sample = jax.tree_map(shift_scale, mean, sample_rand)
-    return sample
+
+@jax.jit
+@partial(jax.vmap, in_axes=[None, None, None, None, 0])
+def _sample(mean: hk.Params, variance: hk.Params, covariance: hk.Params,
+            scale: float, key: u.PRNGKey) -> hk.Params:
+  key, subkey = jax.random.split(key)
+  sample_var = lambda p, k: jnp.sqrt(p / 2.) * jax.random.normal(k, p.shape)
+  leaves, flat = jax.tree_flatten(variance)
+  num_leaves = len(leaves)
+  keys = jax.random.split(key, num_leaves + 1)
+  var_keys = jax.tree_unflatten(flat, keys[1:])
+  var_sample = jax.tree_map(sample_var, variance, var_keys)
+  sample_cov = lambda p, k: jnp.matmul(p.T, jax.random.normal(
+      k, (p.shape[0], 1)))
+  keys = jax.random.split(keys[0], num_leaves + 1)
+  cov_keys = jax.tree_unflatten(flat, keys[1:])
+  cov_sample = jax.tree_map(sample_cov, covariance, cov_keys)
+  rand_sample = lambda v, c: v + c.reshape(v.shape)
+  sample_rand = jax.tree_map(rand_sample, var_sample, cov_sample)
+  shift_scale = lambda m, r: m + (scale**0.5) * r
+  sample = jax.tree_map(shift_scale, mean, sample_rand)
+  return sample

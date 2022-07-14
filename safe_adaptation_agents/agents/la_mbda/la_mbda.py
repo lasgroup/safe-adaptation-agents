@@ -151,12 +151,13 @@ class LaMBDA(agent.Agent):
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
           self.model.state, batch, next(self.rng_seq))
-      model_posteriors = self.model.posterior_samples(
-          self.config.posterior_samples, next(self.rng_seq))
+      # TODO (yarden): use posterior samples.
+      # model_posteriors = self.model.posterior_samples(
+      #     self.config.posterior_samples, next(self.rng_seq))
       self.actor.state, actor_report, aux = self.update_actor(
           self.actor.state,
           features,
-          model_posteriors,
+          self.model.params,
           critic_params,
           safety_critic_params,
           self.lagrangian.params,
@@ -225,9 +226,9 @@ class LaMBDA(agent.Agent):
       key: PRNGKey) -> [LearningState, dict, Tuple[jnp.ndarray, ...]]:
     _, generate_trajectory, *_ = self.model.apply
     # Prepare `generate_trajectory` to sample with different posteriors.
-    generate_trajectory = jax.vmap(self._generate_trajectories,
-                                   [0, None, None, None])
-    generate_trajectory = partial(generate_trajectory, model_params)
+    # generate_trajectory = jax.vmap(self._generate_trajectories,
+    #                                [0, None, None, None])
+    generate_trajectory = partial(self._generate_trajectories, model_params)
     reward_critic = partial(self.critic.apply, critic_params)
     cost_critic = partial(self.safety_critic.apply, safety_critic_params)
     lagrangian = partial(self.lagrangian.apply, lagrangian_params)
