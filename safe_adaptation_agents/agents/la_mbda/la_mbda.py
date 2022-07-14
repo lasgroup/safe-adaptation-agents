@@ -238,7 +238,7 @@ class LaMBDA(agent.Agent):
       reward_lambdas = compute_lambda_values(reward_values, reward[:, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
-      loss_ = (-reward_lambdas).mean()
+      loss_ = -reward_lambdas.mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, 1:]).mean()
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
