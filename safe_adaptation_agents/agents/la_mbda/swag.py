@@ -151,7 +151,7 @@ class SWAG(u.Learner):
 
 
 @jax.jit
-@partial(jax.vmap, in_axes=[None, None, None, None, 0])
+@partial(jax.vmap, in_axes=(None, None, None, None, 0))
 def _sample(mean: hk.Params, variance: hk.Params, covariance: hk.Params,
             scale: float, key: u.PRNGKey) -> hk.Params:
   key, subkey = jax.random.split(key)
@@ -161,9 +161,8 @@ def _sample(mean: hk.Params, variance: hk.Params, covariance: hk.Params,
   keys = jax.random.split(key, num_leaves + 1)
   var_keys = jax.tree_unflatten(flat, keys[1:])
   var_sample = jax.tree_map(sample_var, variance, var_keys)
-  sample_cov = lambda p, k: jnp.matmul(
-      p.T,
-      jax.random.normal(k, (p.shape[0], 1)) / ((2. * (p.shape[0] - 1.))**0.5))
+  sample_cov = lambda p, k: jnp.matmul(p.T, jax.random.normal(
+      k, (p.shape[0], 1))) / ((2. * (p.shape[0] - 1.))**0.5)
   keys = jax.random.split(keys[0], num_leaves + 1)
   cov_keys = jax.tree_unflatten(flat, keys[1:])
   cov_sample = jax.tree_map(sample_cov, covariance, cov_keys)

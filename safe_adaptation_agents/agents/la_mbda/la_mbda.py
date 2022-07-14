@@ -226,6 +226,9 @@ class LaMBDA(agent.Agent):
                    lagrangian_params: hk.Params,
                    key: PRNGKey) -> [LearningState, dict, UpdateActorResult]:
     # Prepare `generate_trajectory` to sample with different posteriors.
+    # Note that we do not vmap the key, so that under equal posterior samples
+    # we get the equal trajectories -- this allows us to use only the aleatoric
+    # uncertainty
     generate_trajectories = jax.vmap(self._generate_trajectories,
                                      (0, None, None, None))
     generate_trajectories = partial(generate_trajectories, model_params)
