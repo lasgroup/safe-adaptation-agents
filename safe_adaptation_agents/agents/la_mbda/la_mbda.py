@@ -243,7 +243,7 @@ class LaMBDA(agent.Agent):
         cost_values = cost_critic(trajectories[:, 1:]).mean()
         # The cost decoder predicts an indicator ({0, 1}) but the total cost
         # is summed if `action_repeat` > 1
-        cost = cost.mean() * self.config.action_repeat
+        cost = cost.mode() * self.config.action_repeat
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
                                              self.config.cost_discount,
                                              self.config.lambda_)
