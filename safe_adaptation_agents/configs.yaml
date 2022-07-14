@@ -162,6 +162,7 @@ la_mbda:
   cost: {layers: [400, 400, 400]}
   free_kl: 3.0
   kl_scale: 1.0
+  kl_mix: 0.8
   # Actor-Critic
   actor: {layers: [400, 400, 400, 400], min_stddev: 0.01, max_stddev: 10., activation: jnn.elu, initialization: glorot, squash: True, heteroscedastic: True}
   critic: {layers: [400, 400, 400], dist: normal, activation: jnn.elu, name: 'critic', initialization: glorot}

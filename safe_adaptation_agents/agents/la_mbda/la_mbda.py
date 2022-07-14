@@ -181,19 +181,20 @@ class LaMBDA(agent.Agent):
   def update_model(
       self, state: swag.SWAGLearningState, batch: rb.etb.TrajectoryData,
       key: PRNGKey) -> Tuple[swag.SWAGLearningState, dict, jnp.ndarray]:
+    config = self.config
 
     def loss(params: hk.Params) -> Tuple[float, dict]:
       _, _, infer, _ = self.model.apply
       outputs_infer = infer(params, key, batch.o[:, 1:], batch.a)
       (prior, posterior), features, decoded, reward, cost = outputs_infer
-      kl = tfd.kl_divergence(posterior, prior).mean()
-      kl = jnp.maximum(kl, self.config.free_kl)
+      kl_loss, kl = balanced_kl_loss(posterior, prior, config.free_kl,
+                                     config.kl_mix)
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).astype(jnp.float32).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
       # ActionRepeat), still the cost is modeled as an indicator.
       log_p_cost = cost.log_prob(batch.c > 0.).mean()
-      loss_ = self.config.kl_scale * kl - log_p_obs - log_p_rews - log_p_cost
+      loss_ = config.kl_scale * kl_loss - log_p_obs - log_p_rews - log_p_cost
       posterior_entropy = posterior.entropy().astype(jnp.float32).mean()
       prior_entropy = prior.entropy().astype(jnp.float32).mean()
       return loss_, {
@@ -337,6 +338,17 @@ class LaMBDA(agent.Agent):
                                 self.model, self.model.params, self.precision)
     self.logger.log_video(
         eval_video, step=self.training_step, name='agent/model/error')
+
+
+# https://github.com/danijar/dreamerv2/blob/259e3faa0e01099533e29b0efafdf240adeda4b5/common/nets.py#L130
+def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
+                     free_nats: float,
+                     mix: float) -> [jnp.ndarray, jnp.ndarray]:
+  sg = lambda x: jax.tree_map(jax.lax.stop_gradient, x)
+  lhs = tfd.kl_divergence(posterior, sg(prior)).mean()
+  rhs = tfd.kl_divergence(sg(posterior), prior).mean()
+  return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
+      rhs, free_nats), lhs
 
 
 @partial(jax.jit, static_argnums=(3, 5))
