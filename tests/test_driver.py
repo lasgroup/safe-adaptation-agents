@@ -71,7 +71,6 @@ def test_run(tasks):
       NUM_EPISODES * 100,
       100,
       100,
-      1,
       env.observation_space.shape,
       env.action_space.shape,
       1,

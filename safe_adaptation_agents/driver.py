@@ -82,7 +82,6 @@ class Driver:
                adaptation_steps: int,
                query_steps: int,
                time_limit: int,
-               action_repeat: int,
                observation_shape: Tuple,
                action_shape: Tuple,
                expose_task_id: bool = False,
@@ -90,9 +89,8 @@ class Driver:
                                                  None]] = None,
                render_episodes: int = 0,
                render_mode: str = 'rgb_array'):
-    num_steps = time_limit // action_repeat
     self.adaptation_buffer = etb.EpisodicTrajectoryBuffer(
-        adaptation_steps // time_limit, num_steps, observation_shape,
+        adaptation_steps // time_limit, time_limit, observation_shape,
         action_shape)
     self.adaptation_steps = adaptation_steps
     self.query_steps = query_steps

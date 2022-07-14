@@ -77,7 +77,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     self.logger = logger
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.training_step = 0
-    num_steps = self.config.time_limit // self.config.action_repeat
+    num_steps = self.config.time_limit
     self.buffer = etb.EpisodicTrajectoryBuffer(
         self.config.num_trajectories, num_steps * self.config.episodes_per_task,
         observation_space.shape, action_space.shape,
