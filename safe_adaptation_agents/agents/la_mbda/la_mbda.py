@@ -193,7 +193,9 @@ class LaMBDA(agent.Agent):
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
       # ActionRepeat), still the cost is modeled as an indicator.
-      log_p_cost = cost.log_prob(batch.c > 0.).mean()
+      log_p_cost = cost.log_prob(batch.c > 0.)
+      log_p_cost = jnp.where(batch.c > 0., log_p_cost * self.config.cost_weight,
+                             log_p_cost).mean()
       loss_ = config.kl_scale * kl_loss - log_p_obs - log_p_rews - log_p_cost
       posterior_entropy = posterior.entropy().astype(jnp.float32).mean()
       prior_entropy = prior.entropy().astype(jnp.float32).mean()
@@ -319,14 +321,6 @@ class LaMBDA(agent.Agent):
   def time_to_update(self):
     return self.training_step >= self.config.prefill and \
            self.training_step % self.config.train_every == 0
-
-  @property
-  def learning_states(self):
-    return self.model.state, self.actor.state, self.critic.state
-
-  @learning_states.setter
-  def learning_states(self, states):
-    self.model.state, self.actor.state, self.critic.state = states
 
   @property
   def safe(self):
