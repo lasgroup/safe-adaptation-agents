@@ -258,7 +258,8 @@ class LaMBDA(agent.Agent):
     new_state = self.actor.grad_step(grads, state)
     return new_state, {
         'agent/actor/loss': loss_,
-        'agent/actor/grads': optax.global_norm(grads)
+        'agent/actor/grads': optax.global_norm(grads),
+        'agent/actor/pred_constraint': aux[2].mean()
     }, aux
 
   @partial(jax.jit, static_argnums=0)
