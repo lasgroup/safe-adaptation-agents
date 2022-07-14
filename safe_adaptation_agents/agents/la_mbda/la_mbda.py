@@ -40,6 +40,8 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
 # 2. For the time horizon axis.
 compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
 compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
+
+
 class LaMBDA(agent.Agent):
 
   def __init__(self, observation_space: gym.Space, action_space: gym.Space,
@@ -214,7 +216,7 @@ class LaMBDA(agent.Agent):
     report['agent/model/grads'] = optax.global_norm(grads)
     return new_state, report, report.pop('features')
 
-  # @partial(jax.jit, static_argnums=0)
+  @partial(jax.jit, static_argnums=0)
   def update_actor(
       self, state: LearningState, features: jnp.ndarray,
       model_params: hk.Params, critic_params: hk.Params,
@@ -368,10 +370,16 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
 def estimate_upper_bound(trajectories: jnp.ndarray,
                          values: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray]:
   ids = jnp.argmax(values.mean(2), axis=0)
-  value_upper_bound = jnp.take_along_axis(values, ids[None, :, None]).squeeze(0)
-  trajectories_upper_bound = jnp.take_along_axis(trajectories,
-                                                 ids[None, :, None,
-                                                     None]).squeeze(0)
+  value_upper_bound = jnp.take_along_axis(
+      values,
+      ids[None, :, None],
+      1,
+  ).squeeze(0)
+  trajectories_upper_bound = jnp.take_along_axis(
+      trajectories,
+      ids[None, :, None, None],
+      1,
+  ).squeeze(0)
   return trajectories_upper_bound, value_upper_bound
 
 
