@@ -7,6 +7,7 @@ import haiku as hk
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
+import jmp
 import numpy as np
 import optax
 from tensorflow_probability.substrates import jax as tfp
@@ -314,6 +315,8 @@ class LaMBDA(agent.Agent):
         'lagrangian': new_lagrangian,
         'penalty': new_penalty
     })
+    finite = jmp.all_finite(new_params)
+    new_params = jmp.select_tree(finite, new_params, params)
     report = {'agent/lagrangian': new_lagrangian, 'agent/penatly': new_penalty}
     return LearningState(new_params, state.opt_state), report
 
