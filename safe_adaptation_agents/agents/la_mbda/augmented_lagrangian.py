@@ -1,7 +1,6 @@
-from jax import lax
-import jax.numpy as jnp
-
 import haiku as hk
+import jax.numpy as jnp
+from jax import lax
 
 
 class AugmentedLagrangian(hk.Module):

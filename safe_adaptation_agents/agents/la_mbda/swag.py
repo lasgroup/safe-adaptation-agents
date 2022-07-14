@@ -1,12 +1,11 @@
-from typing import Union, Dict, Any, NamedTuple
 from copy import deepcopy
 from functools import partial
+from typing import Union, Dict, Any, NamedTuple
 
-import jax.numpy as jnp
-import haiku as hk
 import chex
+import haiku as hk
 import jax
-
+import jax.numpy as jnp
 import jmp
 
 from safe_adaptation_agents import utils as u
