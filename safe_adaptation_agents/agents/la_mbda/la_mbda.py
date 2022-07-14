@@ -38,11 +38,6 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
 compute_lambda_values = jax.vmap(compute_lambda_values, [0, 0, None, None])
 
 
-def discount_sequence(factor, length):
-  d = np.cumprod(factor * np.ones((length,))) / factor
-  return d
-
-
 class LaMBDA(agent.Agent):
 
   def __init__(self, observation_space: gym.Space, action_space: gym.Space,
@@ -243,9 +238,7 @@ class LaMBDA(agent.Agent):
       reward_lambdas = compute_lambda_values(reward_values, reward[:, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
-      discount = discount_sequence(self.config.discount,
-                                   self.config.sample_horizon - 1)
-      loss_ = (-reward_lambdas * discount).mean()
+      loss_ = (-reward_lambdas).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, 1:]).mean()
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
@@ -357,19 +350,6 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
   rhs = tfd.kl_divergence(sg(posterior), prior).mean()
   return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
       rhs, free_nats), lhs
-
-
-# def gather_optimistic_sample(posterior, values):
-#   values_summary = jnp.reduce_mean(values, 2)
-#   optimistic_ids = tf.stack([
-#       tf.cast(tf.range(tf.shape(values)[0]), tf.int64),
-#       tf.argmax(values_summary, 1)
-#   ], 1)
-#   optimistic_sample = {
-#       k: tf.gather_nd(v, optimistic_ids) for k, v in posterior.items()
-#   }
-#   optimistic_values = tf.gather_nd(values, optimistic_ids)
-#   return optimistic_sample, optimistic_values
 
 
 @partial(jax.jit, static_argnums=(3, 5))
