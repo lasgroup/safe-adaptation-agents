@@ -35,11 +35,18 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
 
-# vmap is needed twice:
-# 1. For the posterior samples axis.
-# 2. For the time horizon axis.
+# First vmap the time horizon axis.
 compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
-compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
+# Merge the posterior samples and batch axes.
+compute_lambda_values = hk.BatchApply(compute_lambda_values)
+
+
+class UpdateActorResult(NamedTuple):
+  optimistic_sample: jnp.ndarray
+  pessimistic_sample: jnp.ndarray
+  reward_lambdas: jnp.ndarray
+  cost_lambdas: jnp.ndarray
+  cond: jnp.ndarray
 
 
 class LaMBDA(agent.Agent):
@@ -150,25 +157,21 @@ class LaMBDA(agent.Agent):
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
           self.model.state, batch, next(self.rng_seq))
-      model_posteriors = self.model.posterior_samples(
-          self.config.posterior_samples, next(self.rng_seq))
+      if self.model.warm:
+        model_posteriors = self.model.posterior_samples(
+            self.config.posterior_samples, next(self.rng_seq))
+      else:
+        model_posteriors = utils.pytrees_stack([self.model.params])
       self.actor.state, actor_report, aux = self.update_actor(
           self.actor.state, features, model_posteriors, critic_params,
           safety_critic_params, self.lagrangian.params, next(self.rng_seq))
-      (
-          optimistic_sample,
-          pessimistic_sample,
-          reward_lambdas,
-          cost_lambdas,
-          cond,
-      ) = aux
       self.critic.state, critic_report = self.update_critic(
-          self.critic.state, optimistic_sample, reward_lambdas)
+          self.critic.state, aux.optimistic_sample, aux.reward_lambdas)
       if self.safe:
         self.lagrangian.state, lagrangian_report = self.update_lagrangian(
-            self.lagrangian.state, cond)
+            self.lagrangian.state, aux.cond)
         self.safety_critic.state, s_critic_report = self.update_safety_critic(
-            self.safety_critic.state, pessimistic_sample, cost_lambdas)
+            self.safety_critic.state, aux.pessimistic_sample, aux.cost_lambdas)
         critic_report.update({**s_critic_report, **lagrangian_report})
       reports = {**model_report, **actor_report, **critic_report}
       # Average training metrics across update steps.
@@ -217,11 +220,11 @@ class LaMBDA(agent.Agent):
     return new_state, report, report.pop('features')
 
   @partial(jax.jit, static_argnums=0)
-  def update_actor(
-      self, state: LearningState, features: jnp.ndarray,
-      model_params: hk.Params, critic_params: hk.Params,
-      safety_critic_params: hk.Params, lagrangian_params: hk.Params,
-      key: PRNGKey) -> [LearningState, dict, Tuple[jnp.ndarray, ...]]:
+  def update_actor(self, state: LearningState, features: jnp.ndarray,
+                   model_params: hk.Params, critic_params: hk.Params,
+                   safety_critic_params: hk.Params,
+                   lagrangian_params: hk.Params,
+                   key: PRNGKey) -> [LearningState, dict, UpdateActorResult]:
     # Prepare `generate_trajectory` to sample with different posteriors.
     generate_trajectories = jax.vmap(self._generate_trajectories,
                                      (0, None, None, None))
@@ -257,20 +260,15 @@ class LaMBDA(agent.Agent):
         cost_lambdas = jnp.zeros_like(reward_lambdas)
         cond = np.array([0.])
         pessimistic_sample = optimistic_sample
-      return loss_, (
-          optimistic_sample,
-          pessimistic_sample,
-          reward_lambdas,
-          cost_lambdas,
-          cond,
-      )
+      return loss_, UpdateActorResult(optimistic_sample, pessimistic_sample,
+                                      reward_lambdas, cost_lambdas, cond)
 
     (loss_, aux), grads = jax.value_and_grad(loss, has_aux=True)(state.params)
     new_state = self.actor.grad_step(grads, state)
     return new_state, {
         'agent/actor/loss': loss_,
         'agent/actor/grads': optax.global_norm(grads),
-        'agent/actor/pred_constraint': aux[2].mean()
+        'agent/actor/pred_constraint': aux.cost_lambdas.mean()
     }, aux
 
   @partial(jax.jit, static_argnums=0)
