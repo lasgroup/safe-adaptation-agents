@@ -37,7 +37,7 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
 
 # First vmap the time horizon axis.
 compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
-# Merge the posterior samples and batch axes.
+# Then merge the posterior samples axis and batch axis.
 compute_lambda_values = hk.BatchApply(compute_lambda_values)
 
 

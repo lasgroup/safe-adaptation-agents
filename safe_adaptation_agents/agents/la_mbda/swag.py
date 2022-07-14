@@ -16,6 +16,7 @@ class SWAGLearningState(NamedTuple):
   mu: hk.Params
   variance: hk.Params
   covariance: hk.Params
+  count: int
 
   @property
   def params(self):
@@ -52,17 +53,18 @@ class SWAG(u.Learner):
     self._decay = decay
     self.scale = scale
     self.mu = jax.tree_map(jnp.zeros_like, self.params)
+    self.variance = deepcopy(self.mu)
     var = [
         jax.tree_map(jnp.zeros_like, self.params) for _ in range(max_num_models)
     ]
-    self.variance = deepcopy(self.mu)
     self.covariance_mat = u.pytrees_stack(var)
+    self.count = 0
 
   @property
   def state(self):
     learning_state = super(SWAG, self).state
     return SWAGLearningState(learning_state, self.mu, self.variance,
-                             self.covariance_mat)
+                             self.covariance_mat, self.count)
 
   @state.setter
   def state(self, state: SWAGLearningState):
@@ -71,6 +73,7 @@ class SWAG(u.Learner):
     self.mu = state.mu
     self.variance = state.variance
     self.covariance_mat = state.covariance
+    self.count = state.count
 
   @property
   def warm(self):
@@ -82,24 +85,19 @@ class SWAG(u.Learner):
 
   def grad_step(self, grads, state: SWAGLearningState) -> SWAGLearningState:
     learning_state = super(SWAG, self).grad_step(grads, state.learning_state)
-    mu, variance, covariance = self._update_stats(learning_state, state.mu,
-                                                  state.variance,
-                                                  state.covariance)
-    return SWAGLearningState(learning_state, mu, variance, covariance)
+    mu, variance, covariance, count = self._update_stats(
+        learning_state, state.mu, state.variance, state.covariance, state.count)
+    return SWAGLearningState(learning_state, mu, variance, covariance, count)
 
   def _update_stats(self, updated_state: u.LearningState, mu: hk.Params,
-                    variance: hk.Params,
-                    covariance: hk.Params) -> [hk.Params, hk.Params, hk.Params]:
-    count = updated_state.opt_state[1].count + 1
-    # number of times snapshots of weights have been taken (using max to
-    # avoid negative values of num_snapshots).
-    num_snapshots = jnp.maximum(
-        0, count - self._start_averaging // self._average_period)
+                    variance: hk.Params, covariance: hk.Params,
+                    count: int) -> [hk.Params, hk.Params, hk.Params, int]:
     decay = self._decay
 
     def compute_stats():
       # https://www.tensorflow.org/probability/api_docs/python/tfp/stats/assign_moving_mean_variance
-      bias_correction = 1. - decay**count
+      t = count + 1
+      bias_correction = 1. - decay**t
 
       def compute_mu(old_mean, value):
         new_mean = old_mean + (1. - decay) * (value - old_mean)
@@ -107,9 +105,9 @@ class SWAG(u.Learner):
         return new_mean
 
       def compute_var(old_mean, old_var, value):
-        old_count = jnp.where(count > 1., count - 1., jnp.inf)
+        old_count = jnp.where(t > 1., t - 1., jnp.inf)
         old_bias_correction = 1. - decay**old_count
-        old_mean / old_bias_correction
+        old_mean /= old_bias_correction
         sq_diff = (value - old_mean)**2
         new_var = old_var + (1. - decay) * (decay * sq_diff - old_var)
         new_var /= bias_correction
@@ -127,16 +125,22 @@ class SWAG(u.Learner):
 
       new_cov = jax.tree_map(compute_cov, covariance, updated_state.params,
                              new_mean)
-      return new_mean, new_var, new_cov
+      return new_mean, new_var, new_cov, t
+
+    # number of times snapshots of weights have been taken (using max to
+    # avoid negative values of num_snapshots).
+    iterations = updated_state.opt_state[1].count
+    num_snapshots = jnp.maximum(
+        0, iterations - self._start_averaging // self._average_period)
 
     # The mean update should happen iff two conditions are met:
     # 1. A min number of iterations (start_averaging) have taken place.
     # 2. Iteration is one in which snapshot should be taken.
     checkpoint = self._start_averaging + num_snapshots * self._average_period
-    mu, variance, covariance = jax.lax.cond(
-        (count >= self._start_averaging) & (count == checkpoint), compute_stats,
-        lambda: (mu, variance, covariance))
-    return mu, variance, covariance
+    mu, variance, covariance, count = jax.lax.cond(
+        (iterations >= self._start_averaging) & (iterations == checkpoint),
+        compute_stats, lambda: (mu, variance, covariance, count))
+    return mu, variance, covariance, count
 
   def posterior_samples(self, num_samples: int, key: u.PRNGKey):
     state = self.state
@@ -160,8 +164,9 @@ def _sample(mean: hk.Params, variance: hk.Params, covariance: hk.Params,
   keys = jax.random.split(key, num_leaves + 1)
   var_keys = jax.tree_unflatten(flat, keys[1:])
   var_sample = jax.tree_map(sample_var, variance, var_keys)
-  sample_cov = lambda p, k: jnp.matmul(p.T, jax.random.normal(
-      k, (p.shape[0], 1)))
+  sample_cov = lambda p, k: jnp.matmul(
+      p.T,
+      jax.random.normal(k, (p.shape[0], 1)) / ((2. * (p.shape[0] - 1.))**0.5))
   keys = jax.random.split(keys[0], num_leaves + 1)
   cov_keys = jax.tree_unflatten(flat, keys[1:])
   cov_sample = jax.tree_map(sample_cov, covariance, cov_keys)
