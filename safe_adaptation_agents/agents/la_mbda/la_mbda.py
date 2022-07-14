@@ -1,6 +1,6 @@
 from functools import partial
 from types import SimpleNamespace
-from typing import Tuple, Optional
+from typing import Tuple, Optional, NamedTuple
 
 import gym
 import haiku as hk
@@ -35,9 +35,11 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
 
-compute_lambda_values = jax.vmap(compute_lambda_values, [0, 0, None, None])
-
-
+# vmap is needed twice:
+# 1. For the posterior samples axis.
+# 2. For the time horizon axis.
+compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
+compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
 class LaMBDA(agent.Agent):
 
   def __init__(self, observation_space: gym.Space, action_space: gym.Space,
@@ -146,26 +148,25 @@ class LaMBDA(agent.Agent):
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
           self.model.state, batch, next(self.rng_seq))
-      # TODO (yarden): use posterior samples.
-      # model_posteriors = self.model.posterior_samples(
-      #     self.config.posterior_samples, next(self.rng_seq))
+      model_posteriors = self.model.posterior_samples(
+          self.config.posterior_samples, next(self.rng_seq))
       self.actor.state, actor_report, aux = self.update_actor(
-          self.actor.state,
-          features,
-          self.model.params,
-          critic_params,
-          safety_critic_params,
-          self.lagrangian.params,
-          next(self.rng_seq),
-      )
-      trajectoris, reward_lambdas, cost_lambdas, cond = aux
+          self.actor.state, features, model_posteriors, critic_params,
+          safety_critic_params, self.lagrangian.params, next(self.rng_seq))
+      (
+          optimistic_sample,
+          pessimistic_sample,
+          reward_lambdas,
+          cost_lambdas,
+          cond,
+      ) = aux
       self.critic.state, critic_report = self.update_critic(
-          self.critic.state, trajectoris, reward_lambdas)
+          self.critic.state, optimistic_sample, reward_lambdas)
       if self.safe:
         self.lagrangian.state, lagrangian_report = self.update_lagrangian(
             self.lagrangian.state, cond)
         self.safety_critic.state, s_critic_report = self.update_safety_critic(
-            self.safety_critic.state, trajectoris, cost_lambdas)
+            self.safety_critic.state, pessimistic_sample, cost_lambdas)
         critic_report.update({**s_critic_report, **lagrangian_report})
       reports = {**model_report, **actor_report, **critic_report}
       # Average training metrics across update steps.
@@ -213,17 +214,17 @@ class LaMBDA(agent.Agent):
     report['agent/model/grads'] = optax.global_norm(grads)
     return new_state, report, report.pop('features')
 
-  @partial(jax.jit, static_argnums=0)
+  # @partial(jax.jit, static_argnums=0)
   def update_actor(
       self, state: LearningState, features: jnp.ndarray,
       model_params: hk.Params, critic_params: hk.Params,
       safety_critic_params: hk.Params, lagrangian_params: hk.Params,
       key: PRNGKey) -> [LearningState, dict, Tuple[jnp.ndarray, ...]]:
-    _, generate_trajectory, *_ = self.model.apply
     # Prepare `generate_trajectory` to sample with different posteriors.
-    # generate_trajectory = jax.vmap(self._generate_trajectories,
-    #                                [0, None, None, None])
-    generate_trajectory = partial(self._generate_trajectories, model_params)
+    generate_trajectories = jax.vmap(self._generate_trajectories,
+                                     (0, None, None, None))
+    generate_trajectories = partial(generate_trajectories, model_params)
+    # Prepare all other modules.
     reward_critic = partial(self.critic.apply, critic_params)
     cost_critic = partial(self.safety_critic.apply, safety_critic_params)
     lagrangian = partial(self.lagrangian.apply, lagrangian_params)
@@ -232,24 +233,35 @@ class LaMBDA(agent.Agent):
     flattened_features = features.reshape((-1, features.shape[-1]))
 
     def loss(params: hk.Params):
-      trajectories, reward, cost = generate_trajectory(params,
-                                                       flattened_features, key)
-      reward_values = reward_critic(trajectories[:, 1:]).mean()
-      reward_lambdas = compute_lambda_values(reward_values, reward[:, :-1],
+      trajectories, reward, cost = generate_trajectories(
+          params, flattened_features, key)
+      reward_values = reward_critic(trajectories[:, :, 1:]).mean()
+      reward_lambdas = compute_lambda_values(reward_values, reward[:, :, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
+      optimistic_sample, reward_lambdas = estimate_upper_bound(
+          trajectories, reward_lambdas)
       loss_ = -reward_lambdas.mean()
       if self.safe:
-        cost_values = cost_critic(trajectories[:, 1:]).mean()
-        cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
+        cost_values = cost_critic(trajectories[:, :, 1:]).mean()
+        cost_lambdas = compute_lambda_values(cost_values, cost[:, :, :-1],
                                              self.config.cost_discount,
                                              self.config.lambda_)
+        pessimistic_sample, cost_lambdas = estimate_upper_bound(
+            trajectories, cost_lambdas)
         penalty, cond = lagrangian(cost_lambdas.mean(), self.config.cost_limit)
         loss_ += penalty
       else:
         cost_lambdas = jnp.zeros_like(reward_lambdas)
         cond = np.array([0.])
-      return loss_, (trajectories, reward_lambdas, cost_lambdas, cond)
+        pessimistic_sample = optimistic_sample
+      return loss_, (
+          optimistic_sample,
+          pessimistic_sample,
+          reward_lambdas,
+          cost_lambdas,
+          cond,
+      )
 
     (loss_, aux), grads = jax.value_and_grad(loss, has_aux=True)(state.params)
     new_state = self.actor.grad_step(grads, state)
@@ -310,9 +322,10 @@ class LaMBDA(agent.Agent):
     report = {'agent/lagrangian': new_lagrangian, 'agent/penatly': new_penalty}
     return LearningState(new_params, state.opt_state), report
 
-  def _generate_trajectories(self, model_params: hk.Params,
-                             policy_params: hk.Params, features: jnp.ndarray,
-                             key: PRNGKey):
+  def _generate_trajectories(
+      self, model_params: hk.Params, policy_params: hk.Params,
+      features: jnp.ndarray,
+      key: PRNGKey) -> [jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     _, generate_trajectory, *_ = self.model.apply
     generate_trajectory = partial(generate_trajectory, model_params)
     policy = self.actor
@@ -350,6 +363,16 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
   rhs = tfd.kl_divergence(sg(posterior), prior).mean()
   return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
       rhs, free_nats), lhs
+
+
+def estimate_upper_bound(trajectories: jnp.ndarray,
+                         values: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray]:
+  ids = jnp.argmax(values.mean(2), axis=0)
+  value_upper_bound = jnp.take_along_axis(values, ids[None, :, None]).squeeze(0)
+  trajectories_upper_bound = jnp.take_along_axis(trajectories,
+                                                 ids[None, :, None,
+                                                     None]).squeeze(0)
+  return trajectories_upper_bound, value_upper_bound
 
 
 @partial(jax.jit, static_argnums=(3, 5))
