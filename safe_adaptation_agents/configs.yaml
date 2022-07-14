@@ -158,8 +158,8 @@ la_mbda:
   swag: {start_averaging: 500, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
   decoder: {depth: 32, kernels: [5, 5, 6, 6]}
-  reward: {layers: [400, 400, 400]}
-  cost: {layers: [400, 400, 400]}
+  reward: {layers: [400, 400]}
+  cost: {layers: [400, 400]}
   free_kl: 3.0
   kl_scale: 1.0
   kl_mix: 0.8
