@@ -10,6 +10,7 @@ def test_run():
 
   def make_env(config):
     import safe_adaptation_gym
+    from safe_adaptation_agents import wrapppers
     env = safe_adaptation_gym.make(
         config.robot,
         config.task,
@@ -18,6 +19,7 @@ def test_run():
             'obstacles_size_noise_scale': 0.,
             'robot_ctrl_range_scale': 0.
         })
+    env = wrapppers.ActionRepeat(env, config.action_repeat)
     return env
 
   config = options.load_config([
@@ -48,6 +50,7 @@ def test_not_safe():
 
   def make_env(config):
     import safe_adaptation_gym
+    from safe_adaptation_agents import wrapppers
     env = safe_adaptation_gym.make(
         config.robot,
         config.task,
@@ -56,6 +59,7 @@ def test_not_safe():
             'obstacles_size_noise_scale': 0.,
             'robot_ctrl_range_scale': 0.
         })
+    env = wrapppers.ActionRepeat(env, config.action_repeat)
     return env
 
   config = options.load_config([
@@ -81,6 +85,7 @@ def test_safe():
 
   def make_env(config):
     import safe_adaptation_gym
+    from safe_adaptation_agents import wrapppers
     env = safe_adaptation_gym.make(
         config.robot,
         config.task,
@@ -89,6 +94,7 @@ def test_safe():
             'obstacles_size_noise_scale': 0.,
             'robot_ctrl_range_scale': 0.
         })
+    env = wrapppers.ActionRepeat(env, config.action_repeat)
     return env
 
   config = options.load_config([
