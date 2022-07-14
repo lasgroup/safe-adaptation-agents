@@ -373,12 +373,12 @@ def estimate_upper_bound(trajectories: jnp.ndarray,
   value_upper_bound = jnp.take_along_axis(
       values,
       ids[None, :, None],
-      1,
+      0,
   ).squeeze(0)
   trajectories_upper_bound = jnp.take_along_axis(
       trajectories,
       ids[None, :, None, None],
-      1,
+      0,
   ).squeeze(0)
   return trajectories_upper_bound, value_upper_bound
 
