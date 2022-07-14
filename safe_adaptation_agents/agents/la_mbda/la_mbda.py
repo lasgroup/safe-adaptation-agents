@@ -282,7 +282,7 @@ class LaMBDA(agent.Agent):
   def update_safety_critic(
       self, state: LearningState, features: jnp.ndarray,
       lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
-    discount = discount_sequence(self.config.discount,
+    discount = discount_sequence(self.config.cost_discount,
                                  self.config.sample_horizon - 1)
 
     def loss(params: hk.Params) -> float:
