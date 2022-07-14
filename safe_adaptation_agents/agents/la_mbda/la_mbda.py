@@ -38,8 +38,7 @@ compute_lambda_values = jax.vmap(compute_lambda_values, [0, 0, None, None])
 
 
 def discount_sequence(factor, length):
-  d = np.cumprod(factor * np.ones((length - 1,)))
-  d = np.concatenate([np.ones((1,)), d])
+  d = np.cumprod(factor * np.ones((length,))) / factor
   return d
 
 
@@ -151,10 +150,12 @@ class LaMBDA(agent.Agent):
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
           self.model.state, batch, next(self.rng_seq))
+      model_posteriors = self.model.posterior_samples(
+          self.config.posterior_samples, next(self.rng_seq))
       self.actor.state, actor_report, aux = self.update_actor(
           self.actor.state,
           features,
-          self.model.params,
+          model_posteriors,
           critic_params,
           safety_critic_params,
           self.lagrangian.params,
@@ -219,21 +220,22 @@ class LaMBDA(agent.Agent):
       safety_critic_params: hk.Params, lagrangian_params: hk.Params,
       key: PRNGKey) -> [LearningState, dict, Tuple[jnp.ndarray, ...]]:
     _, generate_trajectory, *_ = self.model.apply
+    # Prepare `generate_trajectory` to sample with different posteriors.
+    generate_trajectory = jax.vmap(self._generate_trajectories,
+                                   [0, None, None, None])
     generate_trajectory = partial(generate_trajectory, model_params)
     reward_critic = partial(self.critic.apply, critic_params)
     cost_critic = partial(self.safety_critic.apply, safety_critic_params)
     lagrangian = partial(self.lagrangian.apply, lagrangian_params)
-    policy = self.actor
     # Flatten the features so that trajectory sampling starts from every
     # state in the model-inferred features.
     flattened_features = features.reshape((-1, features.shape[-1]))
 
     def loss(params: hk.Params):
-      trajectories, reward, cost = generate_trajectory(key, flattened_features,
-                                                       policy, params)
+      trajectories, reward, cost = generate_trajectory(params,
+                                                       flattened_features, key)
       reward_values = reward_critic(trajectories[:, 1:]).mean()
-      reward_lambdas = compute_lambda_values(reward_values,
-                                             reward.mean()[:, :-1],
+      reward_lambdas = compute_lambda_values(reward_values, reward[:, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
       discount = discount_sequence(self.config.discount,
@@ -241,9 +243,6 @@ class LaMBDA(agent.Agent):
       loss_ = (-reward_lambdas * discount).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, 1:]).mean()
-        # The cost decoder predicts an indicator ({0, 1}) but the total cost
-        # is summed if `action_repeat` > 1
-        cost = cost.mean() * self.config.action_repeat
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :-1],
                                              self.config.cost_discount,
                                              self.config.lambda_)
@@ -313,6 +312,18 @@ class LaMBDA(agent.Agent):
     report = {'agent/lagrangian': new_lagrangian, 'agent/penatly': new_penalty}
     return LearningState(new_params, state.opt_state), report
 
+  def _generate_trajectories(self, model_params: hk.Params,
+                             policy_params: hk.Params, features: jnp.ndarray,
+                             key: PRNGKey):
+    _, generate_trajectory, *_ = self.model.apply
+    generate_trajectory = partial(generate_trajectory, model_params)
+    policy = self.actor
+    trajectories, reward, cost = generate_trajectory(key, features, policy,
+                                                     policy_params)
+    # The cost decoder predicts an indicator ({0, 1}) but the total cost
+    # is summed if `action_repeat` > 1
+    return trajectories, reward.mean(), cost.mode() * self.config.action_repeat
+
   @property
   def time_to_update(self):
     return self.training_step >= self.config.prefill and \
@@ -349,6 +360,19 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
   rhs = tfd.kl_divergence(sg(posterior), prior).mean()
   return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
       rhs, free_nats), lhs
+
+
+# def gather_optimistic_sample(posterior, values):
+#   values_summary = jnp.reduce_mean(values, 2)
+#   optimistic_ids = tf.stack([
+#       tf.cast(tf.range(tf.shape(values)[0]), tf.int64),
+#       tf.argmax(values_summary, 1)
+#   ], 1)
+#   optimistic_sample = {
+#       k: tf.gather_nd(v, optimistic_ids) for k, v in posterior.items()
+#   }
+#   optimistic_values = tf.gather_nd(values, optimistic_ids)
+#   return optimistic_sample, optimistic_values
 
 
 @partial(jax.jit, static_argnums=(3, 5))

@@ -29,7 +29,8 @@ def test_run():
       '{capacity: 10, batch_size: 5, sequence_length: 8}', '--prefill', '100',
       '--update_steps', '2', '--train_every', '100', '--parallel_envs', '1',
       '--swag',
-      '{start_averaging: 1, average_period: 1, max_num_models: 1, decay: 0.8, scale: 1.}'
+      '{start_averaging: 1, average_period: 1, max_num_models: 1, decay: 0.8, scale: 1.}',
+    '--action_repeat', '1'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -62,7 +63,7 @@ def test_not_safe():
       '--configs', 'defaults', 'no_adaptation', '--agent', 'la_mbda',
       '--eval_trials', '1', '--render_episodes', '0',
       '--train_driver.adaptation_steps', '30000', '--epochs', '33', '--safe',
-      'False', '--log_dir', 'results/test_lambda_safe'
+      'False', '--log_dir', 'results/test_lambda_not_safe'
   ])
   if not config.jit:
     from jax.config import config as jax_config
