@@ -256,7 +256,7 @@ class LaMBDA(agent.Agent):
                                              self.config.lambda_)
       optimistic_sample, reward_lambdas = estimate_upper_bound(
           trajectories, reward_lambdas)
-      loss_ = (-reward_lambdas * discount).mean()
+      loss_ = (-reward_lambdas * discount).astype(jnp.float32).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, :, 1:]).mean()
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :, :-1],
@@ -287,7 +287,7 @@ class LaMBDA(agent.Agent):
 
     def loss(params: hk.Params) -> float:
       values = self.critic.apply(params, features[:, :-1])
-      return -(values.log_prob(lambda_values)).mean()
+      return -(values.log_prob(lambda_values).astype(jnp.float32)).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.critic.grad_step(grads, state)
@@ -303,7 +303,7 @@ class LaMBDA(agent.Agent):
 
     def loss(params: hk.Params) -> float:
       values = self.safety_critic.apply(params, features[:, :-1])
-      return -(values.log_prob(lambda_values)).mean()
+      return -(values.log_prob(lambda_values).astype(jnp.float32)).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.safety_critic.grad_step(grads, state)
