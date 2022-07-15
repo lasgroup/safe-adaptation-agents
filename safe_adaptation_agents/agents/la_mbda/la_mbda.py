@@ -44,8 +44,8 @@ compute_lambda_values = hk.BatchApply(compute_lambda_values)
 class UpdateActorResult(NamedTuple):
   optimistic_sample: jnp.ndarray
   pessimistic_sample: jnp.ndarray
-  reward_lambdas: jnp.ndarray
-  cost_lambdas: jnp.ndarray
+  optimistic_reward: jnp.ndarray
+  pessimistic_cost: jnp.ndarray
   cond: jnp.ndarray
 
 
@@ -149,6 +149,8 @@ class LaMBDA(agent.Agent):
   def train(self):
     print("Updating world model and actor-critic.")
     # Use the critic params for the previous iteration to update to actor.
+    critic_params = self.critic.params
+    safety_critic_params = self.safety_critic.params
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
@@ -164,12 +166,14 @@ class LaMBDA(agent.Agent):
           self.actor.state, features, model_posteriors, self.critic.params,
           self.safety_critic.params, self.lagrangian.params, next(self.rng_seq))
       self.critic.state, critic_report = self.update_critic(
-          self.critic.state, aux.optimistic_sample, aux.reward_lambdas)
+          self.critic.state, critic_params, aux.optimistic_sample,
+          aux.reward_lambdas)
       if self.safe:
         self.lagrangian.state, lagrangian_report = self.update_lagrangian(
             self.lagrangian.state, aux.cond)
         self.safety_critic.state, s_critic_report = self.update_safety_critic(
-            self.safety_critic.state, aux.pessimistic_sample, aux.cost_lambdas)
+            self.safety_critic.state, safety_critic_params,
+            aux.pessimistic_sample, aux.cost_lambdas)
         critic_report.update({**s_critic_report, **lagrangian_report})
       reports = {**model_report, **actor_report, **critic_report}
       # Average training metrics across update steps.
@@ -244,24 +248,23 @@ class LaMBDA(agent.Agent):
       reward_lambdas = compute_lambda_values(reward_values, reward[:, :, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
-      optimistic_sample, reward_lambdas = estimate_upper_bound(
-          trajectories, reward_lambdas)
+      optimistic_sample, reward_lambdas, reward = estimate_upper_bound(
+          trajectories, reward_lambdas, reward[:, :, :-1])
       loss_ = (-reward_lambdas).astype(jnp.float32).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, :, 1:]).mean()
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :, :-1],
                                              self.config.cost_discount,
                                              self.config.lambda_)
-        pessimistic_sample, cost_lambdas = estimate_upper_bound(
-            trajectories, cost_lambdas)
+        pessimistic_sample, cost_lambdas, cost = estimate_upper_bound(
+            trajectories, cost_lambdas, cost[:, :, :-1])
         penalty, cond = lagrangian(cost_lambdas.mean(), self.config.cost_limit)
         loss_ += penalty
       else:
-        cost_lambdas = jnp.zeros_like(reward_lambdas)
         cond = np.array([0.])
         pessimistic_sample = optimistic_sample
       return loss_, UpdateActorResult(optimistic_sample, pessimistic_sample,
-                                      reward_lambdas, cost_lambdas, cond)
+                                      reward, cost, cond)
 
     (loss_, aux), grads = jax.value_and_grad(loss, has_aux=True)(state.params)
     new_state = self.actor.grad_step(grads, state)
@@ -272,12 +275,17 @@ class LaMBDA(agent.Agent):
     }, aux
 
   @partial(jax.jit, static_argnums=0)
-  def update_critic(self, state: LearningState, features: jnp.ndarray,
-                    lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
+  def update_critic(self, state: LearningState, old_params: hk.Params,
+                    features: jnp.ndarray,
+                    rewards: jnp.ndarray) -> Tuple[LearningState, dict]:
+    reward_values = self.critic.apply(old_params, features[:, :, 1:]).mean()
+    reward_lambdas = compute_lambda_values(reward_values, rewards,
+                                           self.config.discount,
+                                           self.config.lambda_)
 
     def loss(params: hk.Params) -> float:
       values = self.critic.apply(params, features[:, :-1])
-      return -(values.log_prob(lambda_values).astype(jnp.float32)).mean()
+      return -(values.log_prob(reward_lambdas).astype(jnp.float32)).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.critic.grad_step(grads, state)
@@ -287,13 +295,20 @@ class LaMBDA(agent.Agent):
     }
 
   @partial(jax.jit, static_argnums=0)
-  def update_safety_critic(
-      self, state: LearningState, features: jnp.ndarray,
-      lambda_values: jnp.ndarray) -> Tuple[LearningState, dict]:
+  def update_safety_critic(self, state: LearningState, old_params: hk.Params,
+                           features: jnp.ndarray,
+                           costs: jnp.ndarray) -> Tuple[LearningState, dict]:
+    cost_values = self.safety_critic.apply(
+        old_params,
+        features[:, :, 1:],
+    ).mean()
+    cost_lambdas = compute_lambda_values(cost_values, costs,
+                                         self.config.cost_discount,
+                                         self.config.lambda_)
 
     def loss(params: hk.Params) -> float:
       values = self.safety_critic.apply(params, features[:, :-1])
-      return -(values.log_prob(lambda_values).astype(jnp.float32)).mean()
+      return -(values.log_prob(cost_lambdas).astype(jnp.float32)).mean()
 
     (loss_, grads) = jax.value_and_grad(loss)(state.params)
     new_state = self.safety_critic.grad_step(grads, state)
@@ -365,12 +380,26 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
       rhs, free_nats), lhs
 
 
-def estimate_upper_bound(trajectories: jnp.ndarray,
-                         values: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray]:
-  upper_bound_id = jnp.argmax(values.mean((1, 2)), axis=0)
-  value_upper_bound = values[upper_bound_id]
-  trajectories_upper_bound = trajectories[upper_bound_id]
-  return trajectories_upper_bound, value_upper_bound
+def estimate_upper_bound(
+    trajectories: jnp.ndarray, values: jnp.ndarray,
+    rewards: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+  ids = jnp.argmax(values.mean(2), axis=0)
+  value_upper_bound = jnp.take_along_axis(
+      values,
+      ids[None, :, None],
+      0,
+  ).squeeze(0)
+  rewards_upper_bound = jnp.take_along_axis(
+      rewards,
+      ids[None, :, None],
+      0,
+  ).squeeze(0)
+  trajectories_upper_bound = jnp.take_along_axis(
+      trajectories,
+      ids[None, :, None, None],
+      0,
+  ).squeeze(0)
+  return trajectories_upper_bound, value_upper_bound, rewards_upper_bound
 
 
 @partial(jax.jit, static_argnums=(3, 5))
