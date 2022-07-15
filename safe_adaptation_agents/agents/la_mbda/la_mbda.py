@@ -35,6 +35,12 @@ def compute_lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
 
+def discount_sequence(factor, length):
+  d = np.cumprod(factor * np.ones((length - 1,)))
+  d = np.concatenate([np.ones((1,)), d])
+  return d
+
+
 # First vmap the time horizon axis.
 compute_lambda_values = jax.vmap(compute_lambda_values, (0, 0, None, None))
 # Then merge the posterior samples axis and batch axis.
@@ -238,6 +244,8 @@ class LaMBDA(agent.Agent):
     # Flatten the features so that trajectory sampling starts from every
     # state in the model-inferred features.
     flattened_features = features.reshape((-1, features.shape[-1]))
+    discount = discount_sequence(self.config.discount,
+                                 self.config.sample_horizon - 1)
 
     def loss(params: hk.Params):
       trajectories, reward, cost = generate_trajectories(
@@ -248,7 +256,7 @@ class LaMBDA(agent.Agent):
                                              self.config.lambda_)
       optimistic_sample, reward_lambdas = estimate_upper_bound(
           trajectories, reward_lambdas)
-      loss_ = -reward_lambdas.mean()
+      loss_ = (-reward_lambdas * discount).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, :, 1:]).mean()
         cost_lambdas = compute_lambda_values(cost_values, cost[:, :, :-1],
