@@ -94,8 +94,8 @@ class SWAG(u.Learner):
     # number of times snapshots of weights have been taken (using max to
     # avoid negative values of num_snapshots).
     iterations = updated_state.opt_state[1].count
-    num_snapshots = jnp.maximum(
-        0, iterations - self._start_averaging // self._average_period)
+    num_snapshots = jnp.maximum(0, (iterations - self._start_averaging) //
+                                self._average_period)
 
     def compute_stats():
       # https://www.tensorflow.org/probability/api_docs/python/tfp/stats/assign_moving_mean_variance
