@@ -155,8 +155,6 @@ class LaMBDA(agent.Agent):
   def train(self):
     print("Updating world model and actor-critic.")
     # Use the critic params for the previous iteration to update to actor.
-    critic_params = self.critic.params
-    safety_critic_params = self.safety_critic.params
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
@@ -169,8 +167,8 @@ class LaMBDA(agent.Agent):
       else:
         model_posteriors = utils.pytrees_stack([self.model.params])
       self.actor.state, actor_report, aux = self.update_actor(
-          self.actor.state, features, model_posteriors, critic_params,
-          safety_critic_params, self.lagrangian.params, next(self.rng_seq))
+          self.actor.state, features, model_posteriors, self.critic.params,
+          self.safety_critic.params, self.lagrangian.params, next(self.rng_seq))
       self.critic.state, critic_report = self.update_critic(
           self.critic.state, aux.optimistic_sample, aux.reward_lambdas)
       if self.safe:
