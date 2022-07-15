@@ -377,17 +377,9 @@ def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
 
 def estimate_upper_bound(trajectories: jnp.ndarray,
                          values: jnp.ndarray) -> [jnp.ndarray, jnp.ndarray]:
-  ids = jnp.argmax(values.mean(2), axis=0)
-  value_upper_bound = jnp.take_along_axis(
-      values,
-      ids[None, :, None],
-      0,
-  ).squeeze(0)
-  trajectories_upper_bound = jnp.take_along_axis(
-      trajectories,
-      ids[None, :, None, None],
-      0,
-  ).squeeze(0)
+  upper_bound_id = jnp.argmax(values.mean((1, 2)), axis=0)
+  value_upper_bound = values[upper_bound_id]
+  trajectories_upper_bound = trajectories[upper_bound_id]
   return trajectories_upper_bound, value_upper_bound
 
 
