@@ -31,7 +31,7 @@ def test_run():
       '{capacity: 10, batch_size: 5, sequence_length: 8}', '--prefill', '100',
       '--update_steps', '2', '--train_every', '100', '--parallel_envs', '1',
       '--swag',
-      '{start_averaging: 1, average_period: 1, max_num_models: 1, decay: 0.8, scale: 1.}',
+      '{start_averaging: 1, average_period: 1, max_num_models: 1, decay: 0.8, scale: 1., learning_rate_factor: 5.}',
       '--action_repeat', '1', '--posterior_samples', '2'
   ])
   if not config.jit:

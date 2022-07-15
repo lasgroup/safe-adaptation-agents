@@ -28,7 +28,7 @@ class SWAGLearningState(NamedTuple):
 
   @property
   def iterations(self):
-    return self.learning_state.opt_state[1].count
+    return self.learning_state.opt_state[1][1].count
 
 
 def cyclic_learning_rate(initial_value: float, peak_value: float,
@@ -118,7 +118,7 @@ class SWAG(u.Learner):
     decay = self._decay
     # number of times snapshots of weights have been taken (using max to
     # avoid negative values of num_snapshots).
-    iterations = updated_state.opt_state[1].count
+    iterations = updated_state.opt_state[1][1].count
     num_snapshots = jnp.maximum(0, (iterations - self._start_averaging) //
                                 self._average_period)
 
