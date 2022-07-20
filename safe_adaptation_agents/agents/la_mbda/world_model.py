@@ -70,7 +70,7 @@ class WorldModel(hk.Module):
       initial_features: jnp.ndarray,
       actor: hk.Transformed,
       actor_params: hk.Params,
-      actions=None) -> Tuple[jnp.ndarray, tfd.Normal, tfd.Bernoulli]:
+      actions=None) -> [jnp.ndarray, tfd.Normal, tfd.Bernoulli]:
     features = self.rssm.generate_sequence(initial_features, actor,
                                            actor_params, actions)
     reward = self.reward(features)
@@ -79,12 +79,10 @@ class WorldModel(hk.Module):
 
   def observe_sequence(
       self, observations: jnp.ndarray, actions: jnp.ndarray
-  ) -> [
-      Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
-      jnp.ndarray, tfd.Normal, tfd.Normal, tfd.Bernoulli
-  ]:
-    observations = self.encoder(observations)
-    dists, features = self.rssm.observe_sequence(observations, actions)
+  ) -> [[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag], jnp.ndarray,
+        tfd.Normal, tfd.Normal, tfd.Bernoulli]:
+    embeddings = self.encoder(observations)
+    dists, features = self.rssm.observe_sequence(embeddings, actions)
     reward = self.reward(features)
     cost = self.cost(features)
     decoded = self.decode(features)
@@ -140,7 +138,7 @@ class Decoder(hk.Module):
         hk.Linear(
             32 * self._depth, w_init=nets.initializer(self._initialization)))(
                 features)
-    x = hk.Reshape((1, 1, 32 * self._depth), 2)(x)
+    x = x.reshape(-1, 1, 1, 32 * self._depth)
 
     def transpose_cnn(x):
       kwargs = {
@@ -148,13 +146,14 @@ class Decoder(hk.Module):
           'padding': 'VALID',
           'w_init': nets.initializer(self._initialization)
       }
-      for i, kernel in enumerate(self._kernels):
-        if i != len(self._kernels) - 1:
-          depth = 2**(len(self._kernels) - i - 2) * self._depth
-          x = jnn.relu(hk.Conv2DTranspose(depth, kernel, **kwargs)(x))
-        else:
-          x = hk.Conv2DTranspose(self._output_shape[-1], kernel, **kwargs)(x)
-      return x
+      layers = hk.Sequential([
+          hk.Conv2DTranspose(4 * self._depth, 5, **kwargs), jnn.relu,
+          hk.Conv2DTranspose(2 * self._depth, 5, **kwargs), jnn.relu,
+          hk.Conv2DTranspose(self._depth, 6, **kwargs), jnn.relu,
+          hk.Conv2DTranspose(self._output_shape[-1], 6, **kwargs)
+      ])
+      return layers(x)
 
-    out = hk.BatchApply(transpose_cnn)(x)
+    out = transpose_cnn(x)
+    out = out.reshape(*features.shape[:2] + tuple(self._output_shape))
     return tfd.Independent(tfd.Normal(out, 1.0), len(self._output_shape))

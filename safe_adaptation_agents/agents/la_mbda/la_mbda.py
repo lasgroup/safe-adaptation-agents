@@ -35,10 +35,13 @@ def lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
 
+def discount_sequence(factor, length):
+  d = np.cumprod(factor * np.ones((length,))) / factor
+  return d
+
+
 # First vmap the time horizon axis.
 lambda_values = jax.vmap(lambda_values, (0, 0, None, None))
-# Then merge the posterior samples axis and batch axis.
-batched_lambda_values = hk.BatchApply(lambda_values)
 
 
 class UpdateActorResult(NamedTuple):
@@ -72,9 +75,13 @@ class LaMBDA(agent.Agent):
     self.critic = utils.Learner(critic, next(self.rng_seq), config.critic_opt,
                                 self.precision,
                                 features_example[None].astype(dtype))
+    self.delayed_critic = critic.init(
+        next(self.rng_seq), features_example[None].astype(dtype))
     self.safety_critic = utils.Learner(safety_critic, next(self.rng_seq),
                                        config.safety_critic_opt, self.precision,
                                        features_example[None].astype(dtype))
+    self.delayed_safety_critic = safety_critic.init(
+        next(self.rng_seq), features_example[None].astype(dtype))
     self.lagrangian = utils.Learner(augmented_lagrangian, next(self.rng_seq),
                                     {}, self.precision, 1., 0.)
     self.replay_buffer = replay_buffer
@@ -149,15 +156,15 @@ class LaMBDA(agent.Agent):
   def train(self):
     print("Updating world model and actor-critic.")
     # Use the critic params for the previous iteration to update to actor.
-    critic_params = self.critic.params
-    safety_critic_params = self.safety_critic.params
+    critic_params = self.delayed_critic
+    safety_critic_params = self.delayed_safety_critic
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
         total=self.config.update_steps):
       self.model.state, model_report, features = self.update_model(
           self.model.state, batch, next(self.rng_seq))
-      if self.model.warm:
+      if self.model.warm and False:
         model_posteriors = self.model.posterior_samples(
             self.config.posterior_samples, next(self.rng_seq))
       else:
@@ -179,6 +186,8 @@ class LaMBDA(agent.Agent):
       # Average training metrics across update steps.
       for k, v in reports.items():
         self.logger[k] = v.mean()
+    self.delayed_critic = self.critic.params
+    self.delayed_safety_critic = self.safety_critic.params
     if self.config.evaluate_model:
       self.evaluate_model()
     self.logger.log_metrics(self.training_step)
@@ -193,8 +202,8 @@ class LaMBDA(agent.Agent):
       _, _, infer, _ = self.model.apply
       outputs_infer = infer(params, key, batch.o[:, 1:], batch.a)
       (prior, posterior), features, decoded, reward, cost = outputs_infer
-      kl_loss, kl = balanced_kl_loss(posterior, prior, config.free_kl,
-                                     config.kl_mix)
+      kl_loss = balanced_kl_loss(posterior, prior, config.free_kl,
+                                 config.kl_mix)
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).astype(jnp.float32).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
       # Generally costs can be greater than 1. (especially if we use
@@ -207,7 +216,7 @@ class LaMBDA(agent.Agent):
       posterior_entropy = posterior.entropy().astype(jnp.float32).mean()
       prior_entropy = prior.entropy().astype(jnp.float32).mean()
       return loss_, {
-          'agent/model/kl': kl,
+          'agent/model/kl': kl_loss,
           'agent/model/post_entropy': posterior_entropy,
           'agent/model/prior_entropy': prior_entropy,
           'agent/model/log_p_observation': -log_p_obs,
@@ -240,6 +249,8 @@ class LaMBDA(agent.Agent):
     # Flatten the features so that trajectory sampling starts from every
     # state in the model-inferred features.
     flattened_features = features.reshape((-1, features.shape[-1]))
+    # Then merge the posterior samples axis and batch axis.
+    batched_lambda_values = hk.BatchApply(lambda_values)
 
     def loss(params: hk.Params):
       trajectories, reward, cost = generate_trajectories(
@@ -250,7 +261,10 @@ class LaMBDA(agent.Agent):
                                              self.config.lambda_)
       optimistic_sample, reward_lambdas, reward = estimate_upper_bound(
           trajectories, reward_lambdas, reward)
-      loss_ = (-reward_lambdas).astype(jnp.float32).mean()
+      discount = discount_sequence(self.config.discount,
+                                   self.config.sample_horizon - 1)
+      objective = reward_lambdas * discount
+      loss_ = (-objective).astype(jnp.float32).mean()
       if self.safe:
         cost_values = cost_critic(trajectories[:, :, 1:]).mean()
         cost_lambdas = batched_lambda_values(cost_values, cost[:, :, :-1],
@@ -264,22 +278,28 @@ class LaMBDA(agent.Agent):
         cond = np.array([0.])
         pessimistic_sample = optimistic_sample
         cost_lambdas = jnp.zeros_like(reward_lambdas)
+        penalty = np.array([0.])
+      report = {
+          'agent/actor/pred_constraint': cost_lambdas.mean(),
+          'agent/actor/penalty': penalty,
+          'agent/actor/safety_cond': cond
+      }
       return loss_, (UpdateActorResult(optimistic_sample, pessimistic_sample,
-                                       reward, cost, cond), cost_lambdas)
+                                       reward, cost, cond), report)
 
     (loss_, aux), grads = jax.value_and_grad(loss, has_aux=True)(state.params)
     new_state = self.actor.grad_step(grads, state)
     return new_state, {
         'agent/actor/loss': loss_,
         'agent/actor/grads': optax.global_norm(grads),
-        'agent/actor/pred_constraint': aux[1].mean()
+        **aux[1]
     }, aux[0]
 
   @partial(jax.jit, static_argnums=0)
   def update_critic(self, state: LearningState, old_params: hk.Params,
                     trajectories: jnp.ndarray,
                     rewards: jnp.ndarray) -> Tuple[LearningState, dict]:
-    reward_values = self.critic.apply(old_params, trajectories[:, :1]).mean()
+    reward_values = self.critic.apply(old_params, trajectories[:, 1:]).mean()
     reward_lambdas = lambda_values(reward_values, rewards[:, :-1],
                                    self.config.discount, self.config.lambda_)
 
@@ -333,7 +353,10 @@ class LaMBDA(agent.Agent):
     })
     finite = jmp.all_finite(new_params)
     new_params = jmp.select_tree(finite, new_params, state.params)
-    report = {'agent/lagrangian': new_lagrangian, 'agent/penatly': new_penalty}
+    report = {
+        'agent/lagrangian/lagrangian': new_lagrangian,
+        'agent/lagrangian/penalty_multiplier': new_penalty
+    }
     return LearningState(new_params, state.opt_state), report
 
   def _generate_trajectories(
@@ -347,7 +370,8 @@ class LaMBDA(agent.Agent):
                                                      policy_params)
     # The cost decoder predicts an indicator ({0, 1}) but the total cost
     # is summed if `action_repeat` > 1
-    return trajectories, reward.mean(), cost.mode() * self.config.action_repeat
+    cost = cost.mean().astype(jnp.float32) * self.config.action_repeat
+    return trajectories, reward.mean(), cost
 
   @property
   def time_to_update(self):
@@ -370,13 +394,12 @@ class LaMBDA(agent.Agent):
 
 # https://github.com/danijar/dreamerv2/blob/259e3faa0e01099533e29b0efafdf240adeda4b5/common/nets.py#L130
 def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
-                     free_nats: float,
-                     mix: float) -> [jnp.ndarray, jnp.ndarray]:
+                     free_nats: float, mix: float) -> jnp.ndarray:
   sg = lambda x: jax.tree_map(jax.lax.stop_gradient, x)
   lhs = tfd.kl_divergence(posterior, sg(prior)).mean()
   rhs = tfd.kl_divergence(sg(posterior), prior).mean()
   return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
-      rhs, free_nats), lhs
+      rhs, free_nats)
 
 
 def estimate_upper_bound(
@@ -422,7 +445,10 @@ def evaluate_model(observations, actions, key, model, model_params, precision):
       actions=actions[:1, conditioning_length:])
   key, subkey = jax.random.split(key)
   generated_decoded = decode(model_params, subkey, generated)
-  prediction = generated_decoded.mean()
-  out = jnp.abs(observations[:1, conditioning_length + 1:] - prediction)
-  out = ((out + 0.5) * 255).astype(jnp.uint8)
+  y_hat = generated_decoded.mean()
+  y = observations[:1, conditioning_length + 1:]
+  error = jnp.abs(y - y_hat)
+  normalize = lambda image: ((image + 0.5) * 255).astype(jnp.uint8)
+  error = y + error
+  out = jnp.concatenate([normalize(x) for x in [y, y_hat, error]])
   return out
