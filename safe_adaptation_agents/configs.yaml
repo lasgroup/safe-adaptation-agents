@@ -146,6 +146,7 @@ rl2_cpo:
   margin_lr: 0.05
 
 la_mbda:
+  parallel_envs: 1
   precision: 32
   prefill: 5000
   train_every: 1000

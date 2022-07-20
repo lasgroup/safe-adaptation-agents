@@ -60,17 +60,17 @@ class SWAG(u.Learner):
                scale: float = 1.):
     super(SWAG, self).__init__(model, seed, optimizer_config, precision,
                                *input_example)
-    base_lr = optimizer_config.get('lr', 1e-3)
-    schedule = cyclic_learning_rate(base_lr, base_lr * learning_rate_factor,
-                                    average_period)
-    self.optimizer = optax.flatten(
-        optax.chain(
-            optax.clip_by_global_norm(
-                optimizer_config.get('clip', float('inf'))),
-            optax.adam(
-                learning_rate=schedule, eps=optimizer_config.get('eps', 1e-8)),
-        ))
-    self.opt_state = self.optimizer.init(self.params)
+    # base_lr = optimizer_config.get('lr', 1e-3)
+    # schedule = cyclic_learning_rate(base_lr, base_lr * learning_rate_factor,
+    #                                 average_period)
+    # self.optimizer = optax.flatten(
+    #     optax.chain(
+    #         optax.clip_by_global_norm(
+    #             optimizer_config.get('clip', float('inf'))),
+    #         optax.adam(
+    #             learning_rate=schedule, eps=optimizer_config.get('eps', 1e-8)),
+    #     ))
+    # self.opt_state = self.optimizer.init(self.params)
     self._start_averaging = start_averaging
     self._average_period = average_period
     self._max_num_models = max_num_models
@@ -99,18 +99,19 @@ class SWAG(u.Learner):
 
   @property
   def warm(self):
-    count = self.state.iterations
-    average_period = self._average_period
-    num_snapshots = max(0, (count - self._start_averaging) // average_period)
-    max_num_models = self._max_num_models
-    return count >= self._start_averaging and num_snapshots >= max_num_models
+    return False
+    # count = self.state.iterations
+    # average_period = self._average_period
+    # num_snapshots = max(0, (count - self._start_averaging) // average_period)
+    # max_num_models = self._max_num_models
+    # return count >= self._start_averaging and num_snapshots >= max_num_models
 
   def grad_step(self, grads, state: SWAGLearningState) -> SWAGLearningState:
     learning_state = super(SWAG, self).grad_step(grads, state.learning_state)
-    mu, variance, covariance = self._update_stats(learning_state, state.mu,
-                                                  state.variance,
-                                                  state.covariance)
-    return SWAGLearningState(learning_state, mu, variance, covariance)
+    # mu, variance, covariance = self._update_stats(learning_state, state.mu,
+    #                                               state.variance,
+    #                                               state.covariance)
+    return SWAGLearningState(learning_state, state.mu, state.variance, state.covariance)
 
   def _update_stats(self, updated_state: u.LearningState, mu: hk.Params,
                     variance: hk.Params,
