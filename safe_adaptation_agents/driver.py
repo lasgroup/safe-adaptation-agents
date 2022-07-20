@@ -34,6 +34,7 @@ def interact(agent: Agent,
   # Discard transitions from environments such that episodes always finish
   # after time_limit.
   discard = min(steps // environment.time_limit, environment.num_envs)
+  episode_steps = 0
   with tqdm(total=steps) as pbar:
     while step < steps:
       if render_episodes:
