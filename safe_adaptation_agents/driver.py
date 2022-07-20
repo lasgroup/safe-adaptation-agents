@@ -23,7 +23,7 @@ def interact(agent: Agent,
              steps: int,
              train: bool,
              adaptation_buffer: Optional[etb.EpisodicTrajectoryBuffer] = None,
-             on_episode_end: Optional[Callable[[EpisodeSummary, bool],
+             on_episode_end: Optional[Callable[[EpisodeSummary, bool, int],
                                                None]] = None,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
