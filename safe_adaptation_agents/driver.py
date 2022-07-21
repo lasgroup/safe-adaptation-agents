@@ -50,8 +50,8 @@ def interact(agent: Agent,
       if train:
         agent.observe(transition, adapt)
       # Append adaptation data if needed.
-      # if adaptation_buffer is not None:
-        # adaptation_buffer.add(transition)
+      if adaptation_buffer is not None:
+        adaptation_buffer.add(transition)
       observations = next_observations
       if transition.last:
         render_episodes = max(render_episodes - 1, 0)
@@ -128,12 +128,11 @@ class Driver:
             render_episodes=self.render_episodes,
             render_mode=self.render_mode)
         iter_adaptation_episodes[task_name] = adaptation_episodes
-        # TODO (yarden): PUT THIS BACK AFTER DEBUGGING
-        # assert self.adaptation_buffer.full, (
-        #     'Adaptation buffer should be full at this point. Episode id: {}, '
-        #     'transition idx: {}'.format(self.adaptation_buffer.episode_id,
-        #                                 self.adaptation_buffer.idx))
-        # agent.adapt(*self.adaptation_buffer.dump(), train)
+        assert self.adaptation_buffer.full, (
+            'Adaptation buffer should be full at this point. Episode id: {}, '
+            'transition idx: {}'.format(self.adaptation_buffer.episode_id,
+                                        self.adaptation_buffer.idx))
+        agent.adapt(*self.adaptation_buffer.dump(), train)
       if self.query_steps > 0:
         agent, query_episodes = interact(
             agent,
