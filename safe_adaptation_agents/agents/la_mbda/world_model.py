@@ -146,13 +146,13 @@ class Decoder(hk.Module):
           'padding': 'VALID',
           'w_init': nets.initializer(self._initialization)
       }
-      layers = hk.Sequential([
-          hk.Conv2DTranspose(4 * self._depth, 5, **kwargs), jnn.relu,
-          hk.Conv2DTranspose(2 * self._depth, 5, **kwargs), jnn.relu,
-          hk.Conv2DTranspose(self._depth, 6, **kwargs), jnn.relu,
-          hk.Conv2DTranspose(self._output_shape[-1], 6, **kwargs)
-      ])
-      return layers(x)
+      for i, kernel in enumerate(self._kernels):
+        if i != len(self._kernels) - 1:
+          depth = 2**(len(self._kernels) - i - 2) * self._depth
+          x = jnn.relu(hk.Conv2DTranspose(depth, kernel, **kwargs)(x))
+        else:
+          x = hk.Conv2DTranspose(self._output_shape[-1], kernel, **kwargs)(x)
+      return x
 
     out = transpose_cnn(x)
     out = out.reshape(*features.shape[:2] + tuple(self._output_shape))

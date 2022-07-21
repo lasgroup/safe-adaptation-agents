@@ -154,8 +154,8 @@ la_mbda:
   replay_buffer: {capacity: 1000, batch_size: 32, sequence_length: 50}
   # World Model
   rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
-  model_opt: {lr: 6e-4, eps: 1e-5, clip: 100}
-  swag: {start_averaging: 500, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1., learning_rate_factor: 1.}
+  model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
+  swag: {start_averaging: 500, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1., learning_rate_factor: 5.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
   decoder: {depth: 32, kernels: [5, 5, 6, 6]}
   reward: {layers: [400, 400]}
