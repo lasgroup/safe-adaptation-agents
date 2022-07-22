@@ -96,11 +96,13 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
         config.seed,
         **config.replay_buffer,
         precision=config.precision)
-    policy = utils.get_mixed_precision_policy(config.precision)
-    hk.mixed_precision.set_policy(world_model.WorldModel, policy)
-    hk.mixed_precision.set_policy(models.Actor, policy)
-    hk.mixed_precision.set_policy(models.DenseDecoder, policy)
-    hk.mixed_precision.set_policy(world_model.Decoder, policy)
+    policy_config = utils.get_mixed_precision_policy(config.precision)
+    policy_32 = utils.get_mixed_precision_policy(32)
+    hk.mixed_precision.set_policy(world_model.WorldModel, policy_config)
+    hk.mixed_precision.set_policy(models.Actor, policy_config)
+    # Set the critics' policy to 32 to stabilize their learning.
+    hk.mixed_precision.set_policy(models.DenseDecoder, policy_32)
+    hk.mixed_precision.set_policy(world_model.Decoder, policy_config)
     return la_mbda.LaMBDA(observation_space, action_space, logger, config,
                           model, actor, critic, safety_critic,
                           augmented_lagrangian, replay_buffer)

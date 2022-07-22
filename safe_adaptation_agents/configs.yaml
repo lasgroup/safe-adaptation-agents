@@ -146,7 +146,7 @@ rl2_cpo:
   margin_lr: 0.05
 
 la_mbda:
-  precision: 32
+  precision: 16
   prefill: 5000
   train_every: 1000
   update_steps: 100
@@ -155,7 +155,7 @@ la_mbda:
   # World Model
   rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
   model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
-  swag: {start_averaging: 500, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1., learning_rate_factor: 5.}
+  swag: {start_averaging: 1000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1., learning_rate_factor: 5.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
   decoder: {depth: 32, kernels: [5, 5, 6, 6]}
   reward: {layers: [400, 400]}
