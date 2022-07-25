@@ -50,7 +50,8 @@ def evaluation_summary(runs: List[driver.IterationSummary],
 
 
 def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
-                   logger: logging.TrainingLogger, train: bool, adapt: bool):
+                   logger: logging.TrainingLogger, train: bool, adapt: bool,
+                   episode_steps):
 
   def return_(arr):
     return np.asarray(arr).sum(0).mean()
@@ -66,7 +67,7 @@ def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
         f'training/{adapt_str}/{task_name}/episode_cost_return': cost_return
     }
     logger.log_summary(summary)
-    logger.step += np.asarray(episode['reward']).size
+    logger.step += episode_steps
 
 
 def log_videos(logger: logging.TrainingLogger, videos: Dict, epoch: int):
@@ -104,9 +105,10 @@ class Trainer:
 
   def __enter__(self):
     self.state_writer = logging.StateWriter(self.config.log_dir)
+    time_limit = self.config.time_limit // self.config.action_repeat
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs,
-                                                self.config.time_limit)
+                                                time_limit)
     _, task = next(self.tasks())
     if self.seeds is not None:
       self.env.reset(seed=self.seeds, options={'task': task})
@@ -134,16 +136,16 @@ class Trainer:
         action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
-        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
-            episode, task_name, logger, True, adapt))
+        on_episode_end=lambda episode, task_name, adapt, steps: on_episode_end(
+            episode, task_name, logger, True, adapt, steps))
     test_driver = driver.Driver(
         **config.test_driver,
         time_limit=config.time_limit,
         action_repeat=config.action_repeat,
         observation_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
-        on_episode_end=lambda episode, task_name, adapt: on_episode_end(
-            episode, task_name, logger, False, adapt),
+        on_episode_end=lambda episode, task_name, adapt, steps: on_episode_end(
+            episode, task_name, logger, False, adapt, steps),
         render_episodes=config.render_episodes)
     return train_driver, test_driver
 

@@ -42,20 +42,14 @@ class EpisodicAsync(VectorEnv):
                time_limit: int = 1000):
     self.env_fn = cloudpickle.dumps(ctor)
     self.time_limit = time_limit
-    if vector_size < 1:
-      self._env = TimeLimit(ctor(), time_limit)
-      self.observation_space = self._env.observation_space
-      self.action_space = self._env.action_space
-    else:
-      self._env = None
-      self.parents, self.processes = zip(
-          *[self._make_worker() for _ in range(vector_size)])
-      atexit.register(self.close)
-      for process in self.processes:
-        process.start()
-      self.observation_space = self.get_attr('observation_space')[0]
-      self.action_space = self.get_attr('action_space')[0]
-      self.num_envs = len(self.parents)
+    self.parents, self.processes = zip(
+        *[self._make_worker() for _ in range(vector_size)])
+    atexit.register(self.close)
+    for process in self.processes:
+      process.start()
+    self.observation_space = self.get_attr('observation_space')[0]
+    self.action_space = self.get_attr('action_space')[0]
+    self.num_envs = len(self.parents)
 
   def _make_worker(self):
     parent, child = mp.Pipe()
@@ -65,28 +59,17 @@ class EpisodicAsync(VectorEnv):
 
   @functools.lru_cache
   def get_attr(self, name):
-    if self._env is not None:
-      return getattr(self._env, name)
     for parent in self.parents:
       parent.send((Protocol.ACCESS, name))
     return self._receive()
 
   def set_attr(self, name, values):
-    if self._env is not None:
-      setattr(self._env, name, values)
-    else:
-      for parent, value in zip(self.parents, values):
-        payload = name, value
-        parent.send((Protocol.SET, payload))
+    for parent, value in zip(self.parents, values):
+      payload = name, value
+      parent.send((Protocol.SET, payload))
     return self._receive()
 
   def close(self):
-    if self._env is not None:
-      try:
-        self._env.close()
-      except AttributeError:
-        pass
-      return
     try:
       for parent in self.parents:
         parent.send((Protocol.CLOSE, None))
@@ -127,8 +110,6 @@ class EpisodicAsync(VectorEnv):
         dones, dtype=bool), infos
 
   def call_async(self, name, *args, **kwargs):
-    if self._env is not None:
-      return functools.partial(getattr(self._env, name), *args, **kwargs)
     payload = name, args, kwargs
     for parent in self.parents:
       parent.send((Protocol.CALL, payload))
@@ -140,8 +121,6 @@ class EpisodicAsync(VectorEnv):
     name = 'render'
     args = (mode,)
     kwargs = dict()
-    if self._env is not None:
-      return functools.partial(getattr(self._env, name), *args, **kwargs)
     payload = name, args, kwargs
     self.parents[0].send((Protocol.CALL, payload))
     return np.asarray(self._receive(self.parents[:1]))
