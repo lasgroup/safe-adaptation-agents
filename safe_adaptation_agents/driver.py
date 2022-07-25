@@ -1,14 +1,10 @@
-from functools import partial
-
 from collections import defaultdict
-
 from typing import (Callable, Optional, Dict, List, DefaultDict, Iterable,
                     Tuple)
 
 import numpy as np
-from tqdm import tqdm
-
 from safe_adaptation_gym import tasks as sagt
+from tqdm import tqdm
 
 from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents.agents import Agent, Transition

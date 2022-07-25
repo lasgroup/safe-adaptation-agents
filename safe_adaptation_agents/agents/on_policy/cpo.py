@@ -1,16 +1,14 @@
-from typing import Callable
-from types import SimpleNamespace
 from functools import partial
+from types import SimpleNamespace
+from typing import Callable
 
 import chex
-import numpy as np
-from gym.spaces import Space
-
+import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
+from gym.spaces import Space
 from jax.scipy import sparse
-import haiku as hk
-
 from tensorflow_probability.substrates import jax as tfp
 
 from safe_adaptation_agents.agents.on_policy import safe_vpg
@@ -20,13 +18,13 @@ from safe_adaptation_agents.utils import LearningState
 tfd = tfp.distributions
 
 
-class Cpo(safe_vpg.SafeVanillaPolicyGradients):
+class CPO(safe_vpg.SafeVanillaPolicyGradients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(Cpo, self).__init__(observation_space, action_space, config, logger,
+    super(CPO, self).__init__(observation_space, action_space, config, logger,
                               actor, critic, safety_critic)
     self.margin = 0.
 

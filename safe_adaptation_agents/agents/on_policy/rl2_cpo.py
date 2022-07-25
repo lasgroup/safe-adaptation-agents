@@ -1,28 +1,26 @@
-from typing import Optional, NamedTuple, Sequence
-from types import SimpleNamespace
 from functools import partial
+from types import SimpleNamespace
+from typing import Optional, NamedTuple, Sequence
 
+import haiku as hk
 import jax.lax
+import jax.nn as jnn
+import jax.numpy as jnp
 import numpy as np
 import optax
 from gym.spaces import Space
-
-import jax.numpy as jnp
-import jax.nn as jnn
-import haiku as hk
-
 from tensorflow_probability.substrates import jax as tfp
 
+from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents import models
 from safe_adaptation_agents import nets
+from safe_adaptation_agents import utils
 from safe_adaptation_agents.agents import Transition
-from safe_adaptation_agents.logging import TrainingLogger
+from safe_adaptation_agents.agents.on_policy import cpo
 from safe_adaptation_agents.agents.on_policy import safe_vpg
 from safe_adaptation_agents.agents.on_policy import vpg
-from safe_adaptation_agents.agents.on_policy import cpo
-from safe_adaptation_agents import utils
-from safe_adaptation_agents import episodic_trajectory_buffer as etb
 from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
+from safe_adaptation_agents.logging import TrainingLogger
 
 tfd = tfp.distributions
 

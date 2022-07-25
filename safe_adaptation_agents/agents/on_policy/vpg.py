@@ -2,19 +2,18 @@ import functools
 from types import SimpleNamespace
 from typing import Optional
 
+import haiku as hk
+import jax
+import jax.numpy as jnp
 import numpy as np
 import optax
 from gym.spaces import Space
 
-import jax
-import jax.numpy as jnp
-import haiku as hk
-
-from safe_adaptation_agents.agents import Agent, Transition
-from safe_adaptation_agents.logging import TrainingLogger
-from safe_adaptation_agents.episodic_trajectory_buffer import (
-    EpisodicTrajectoryBuffer, TrajectoryData)
 from safe_adaptation_agents import utils
+from safe_adaptation_agents.agents import Agent, Transition
+from safe_adaptation_agents.episodic_trajectory_buffer import (
+  EpisodicTrajectoryBuffer, TrajectoryData)
+from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
 
 discounted_cumsum = jax.vmap(utils.discounted_cumsum, in_axes=[0, None])

@@ -1,20 +1,15 @@
-import sys
+import atexit
 import functools
+import multiprocessing as mp
+import sys
+import traceback
+from enum import Enum
 from typing import Optional, Union, List, Callable
 
-import atexit
-import traceback
-
 import cloudpickle
-
-import multiprocessing as mp
-
-from enum import Enum
-
 import numpy as np
-
-from gym.vector import VectorEnv
 from gym import Env
+from gym.vector import VectorEnv
 from gym.wrappers import TimeLimit
 
 

@@ -1,21 +1,20 @@
 import abc
-from typing import NamedTuple
-from types import SimpleNamespace
 import functools
+from types import SimpleNamespace
+from typing import NamedTuple
 
-import numpy as np
-from gym.spaces import Space
-
-import optax
+import haiku as hk
 import jax
 import jax.numpy as jnp
-import haiku as hk
+import numpy as np
+import optax
+from gym.spaces import Space
 
-from safe_adaptation_agents.agents.on_policy import vpg
-from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents import utils
-from safe_adaptation_agents.utils import LearningState
+from safe_adaptation_agents.agents.on_policy import vpg
 from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
+from safe_adaptation_agents.logging import TrainingLogger
+from safe_adaptation_agents.utils import LearningState
 
 
 class Evaluation(NamedTuple):

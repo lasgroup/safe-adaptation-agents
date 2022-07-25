@@ -1,23 +1,22 @@
-from typing import Optional
-from types import SimpleNamespace
 from functools import partial
+from types import SimpleNamespace
+from typing import Optional
 
+import haiku as hk
+import jax
+import jax.nn as jnn
+import jax.numpy as jnp
 import numpy as np
+import optax
 from gym.spaces import Space
 
-import jax
-import jax.numpy as jnp
-import jax.nn as jnn
-import haiku as hk
-import optax
-
+from safe_adaptation_agents import episodic_trajectory_buffer as etb
+from safe_adaptation_agents import utils
 from safe_adaptation_agents.agents.on_policy import ppo_lagrangian, vpg
 from safe_adaptation_agents.agents.on_policy.safe_vpg import Evaluation
+from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
 from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
-from safe_adaptation_agents import utils
-from safe_adaptation_agents import episodic_trajectory_buffer as etb
-from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
 
 
 class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):

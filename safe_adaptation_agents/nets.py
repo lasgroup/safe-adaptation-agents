@@ -1,8 +1,8 @@
 from typing import Callable, Tuple
 
 import haiku as hk
-import jax.numpy as jnp
 import jax.nn as jnn
+import jax.numpy as jnp
 
 
 def initializer(name: str) -> hk.initializers.Initializer:

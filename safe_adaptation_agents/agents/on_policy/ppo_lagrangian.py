@@ -1,20 +1,19 @@
-from types import SimpleNamespace
 import functools
+from types import SimpleNamespace
 
+import haiku as hk
+import jax
+import jax.nn as jnn
+import jax.numpy as jnp
 import numpy as np
+import optax
 from gym.spaces import Space
 
-import optax
-import jax
-import jax.numpy as jnp
-import jax.nn as jnn
-import haiku as hk
-
-from safe_adaptation_agents.agents.on_policy import safe_vpg
-from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents import utils
-from safe_adaptation_agents.utils import LearningState
+from safe_adaptation_agents.agents.on_policy import safe_vpg
 from safe_adaptation_agents.episodic_trajectory_buffer import TrajectoryData
+from safe_adaptation_agents.logging import TrainingLogger
+from safe_adaptation_agents.utils import LearningState
 
 
 class PpoLagrangian(safe_vpg.SafeVanillaPolicyGradients):

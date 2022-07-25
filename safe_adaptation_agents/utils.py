@@ -1,11 +1,11 @@
 from typing import Callable, Tuple, Union, Any, Dict, NamedTuple
 
+import chex
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import jmp
 import optax
-import chex
 
 PRNGKey = jnp.ndarray
 

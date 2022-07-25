@@ -1,5 +1,6 @@
-from types import SimpleNamespace
 from copy import deepcopy
+from types import SimpleNamespace
+
 from safe_adaptation_agents.agents.agent import Agent, Transition
 
 __all__ = ['Agent', 'Transition', 'make']
@@ -47,7 +48,7 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
         hk.transform(lambda x: models.DenseDecoder(
             **config.critic, output_size=(1,))(x)))
     safety_critic = deepcopy(critic)
-    return cpo.Cpo(observation_space, action_space, config, logger, actor,
+    return cpo.CPO(observation_space, action_space, config, logger, actor,
                    critic, safety_critic)
   elif config.agent == 'maml_ppo_lagrangian':
     from safe_adaptation_agents.agents.on_policy import maml_ppo_lagrangian
