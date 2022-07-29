@@ -1,16 +1,14 @@
-from typing import Callable
-from types import SimpleNamespace
 from functools import partial
+from types import SimpleNamespace
+from typing import Callable
 
 import chex
-import numpy as np
-from gym.spaces import Space
-
+import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
+from gym.spaces import Space
 from jax.scipy import sparse
-import haiku as hk
-
 from tensorflow_probability.substrates import jax as tfp
 
 from safe_adaptation_agents.agents.on_policy import safe_vpg
@@ -20,13 +18,13 @@ from safe_adaptation_agents.utils import LearningState
 tfd = tfp.distributions
 
 
-class Cpo(safe_vpg.SafeVanillaPolicyGradients):
+class CPO(safe_vpg.SafeVanillaPolicyGradients):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(Cpo, self).__init__(observation_space, action_space, config, logger,
+    super(CPO, self).__init__(observation_space, action_space, config, logger,
                               actor, critic, safety_critic)
     self.margin = 0.
 
@@ -36,9 +34,14 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
                                       trajectory_data.o, trajectory_data.r,
                                       trajectory_data.c)
     constraint = trajectory_data.c.sum(1).mean()
+    # https://github.com/openai/safety-starter-agents/blob/4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
+    c = (constraint - self.config.cost_limit)
+    self.margin = max(0, self.margin + self.config.margin_lr * c)
+    c += self.margin
+    c /= (self.config.time_limit + 1e-8)
     self.actor.state, actor_report = self.update_actor(
         self.actor.state, trajectory_data.o[:, :-1], trajectory_data.a,
-        eval_.advantage, eval_.cost_advantage, constraint)
+        eval_.advantage, eval_.cost_advantage, c)
     self.critic.state, critic_report = self.update_critic(
         self.critic.state, trajectory_data.o[:, :-1], eval_.return_)
     if self.safe:
@@ -51,15 +54,9 @@ class Cpo(safe_vpg.SafeVanillaPolicyGradients):
 
   @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
-    observation, action, advantage, cost_advantage, constraint = args
+    observation, action, advantage, cost_advantage, c = args
     old_pi = self.actor.apply(state.params, observation)
     old_pi_logprob = old_pi.log_prob(action)
-    # https://github.com/openai/safety-starter-agents/blob
-    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
-    c = (constraint - self.config.cost_limit)
-    self.margin = max(0, self.margin + self.config.margin_lr * c)
-    c += self.margin
-    c /= (self.config.time_limit + 1e-8)
     g, b, old_pi_loss, old_surrogate_cost = self._cpo_grads(
         state.params, observation, action, advantage, cost_advantage,
         old_pi_logprob)

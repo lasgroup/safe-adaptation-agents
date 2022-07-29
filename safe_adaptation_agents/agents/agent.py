@@ -1,7 +1,6 @@
 import abc
-
-from typing import Dict, NamedTuple, Optional, Tuple
 from types import SimpleNamespace
+from typing import Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 

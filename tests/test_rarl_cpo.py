@@ -18,12 +18,12 @@ def test_not_safe():
     return env
 
   config = options.load_config([
-      '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
+      '--configs', 'defaults', 'no_adaptation', '--agent', 'rarl_cpo',
       '--num_trajectories', '300', '--time_limit', '150', '--vf_iters', '10',
       '--eval_trials', '1', '--train_driver.adaptation_steps', '45000',
-      '--render_episodes', '0', '--test_driver.adaptation_steps', '1500',
+      '--render_episodes', '0', '--test_driver.query_steps', '1500',
       '--lambda_', '0.95', '--epochs', '100', '--safe', 'False', '--log_dir',
-      'results/test_cpo_not_safe'
+      'results/test_rarl_cpo_not_safe'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -52,10 +52,10 @@ def test_safe():
     return env
 
   config = options.load_config([
-      '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
+      '--configs', 'defaults', 'no_adaptation', '--agent', 'rarl_cpo',
       '--num_trajectories', '30', '--eval_trials', '1', '--render_episodes',
       '0', '--train_driver.adaptation_steps', '30000', '--epochs', '334',
-      '--safe', 'True', '--log_dir', 'results/test_cpo_safe'
+      '--safe', 'True', '--log_dir', 'results/test_rarl_cpo_safe'
   ])
   if not config.jit:
     from jax.config import config as jax_config

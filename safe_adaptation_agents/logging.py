@@ -1,18 +1,13 @@
 import json
 import os
-
-from typing import Optional
 from collections import defaultdict
-
 from queue import Queue
 from threading import Thread
+from typing import Optional
 
 import cloudpickle
-
 import numpy as np
-
 from tensorboardX import SummaryWriter
-
 from tensorflow import metrics
 
 

@@ -1,12 +1,9 @@
 from typing import Sequence, Optional, Callable, Union
 
-import jax.random
-
-import jax.numpy as jnp
-import jax.nn as jnn
-
 import haiku as hk
-
+import jax.nn as jnn
+import jax.numpy as jnp
+import jax.random
 from tensorflow_probability.substrates import jax as tfp
 
 from safe_adaptation_agents import nets
