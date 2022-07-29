@@ -98,10 +98,11 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
                             action_space)
   elif config.agent == 'la_mbda':
     from safe_adaptation_agents import utils
-    from safe_adaptation_agents.agents.la_mbda import world_model
-    from safe_adaptation_agents.agents.la_mbda import augmented_lagrangian as al
-    from safe_adaptation_agents.agents.la_mbda import replay_buffer as rb
-    from safe_adaptation_agents.agents.la_mbda import la_mbda
+    from safe_adaptation_agents.agents.model_based.la_mbda import world_model
+    from safe_adaptation_agents.agents.model_based.la_mbda import \
+      augmented_lagrangian as al
+    from safe_adaptation_agents.agents.model_based import replay_buffer as rb
+    from safe_adaptation_agents.agents.model_based.la_mbda import la_mbda
     model = world_model.create_model(config, observation_space)
     actor = hk.without_apply_rng(
         hk.transform(lambda x: models.Actor(
