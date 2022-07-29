@@ -88,12 +88,14 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
       safety_critic = deepcopy(critic)
       return cpo.CPO(observation_space, action_space, config, logger, actor,
                      critic, safety_critic)
+
     protagonist = make_cpo(config)
     adversary_config = vars(config)
     adversary_config['safe'] = False
     adversary_config = SimpleNamespace(**adversary_config)
     adversary = make_cpo(adversary_config)
-    return rarl_cpo.RARLCPO(config, logger, protagonist, adversary)
+    return rarl_cpo.RARLCPO(config, logger, protagonist, adversary,
+                            action_space)
   elif config.agent == 'la_mbda':
     from safe_adaptation_agents import utils
     from safe_adaptation_agents.agents.la_mbda import world_model
