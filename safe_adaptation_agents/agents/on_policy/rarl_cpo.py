@@ -2,6 +2,8 @@ from typing import Optional
 from types import SimpleNamespace
 import numpy as np
 
+from gym import spaces
+
 from safe_adaptation_agents.agents.on_policy import cpo
 from safe_adaptation_agents.agents import agent, Transition
 from safe_adaptation_agents.logging import TrainingLogger
@@ -26,7 +28,8 @@ class Alternate:
 class RARLCPO(agent.Agent):
 
   def __init__(self, config: SimpleNamespace, logger: TrainingLogger,
-               protagonist: cpo.CPO, adversary: cpo.CPO):
+               protagonist: cpo.CPO, adversary: cpo.CPO,
+               action_space: spaces.Box):
     super(RARLCPO, self).__init__(config, logger)
     self.protagonist = protagonist
     self.adversary = adversary
@@ -36,6 +39,7 @@ class RARLCPO(agent.Agent):
     self._adversary_acs = None
     self._alternate = Alternate(config.protagonist_iters,
                                 config.adversary_iters)
+    self._env_action_space = action_space
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -53,8 +57,11 @@ class RARLCPO(agent.Agent):
       self._adversary_acs = None
       return protagonist_acs
     adversary_acs = self.adversary(observation, train, adapt)
-    adversary_acs *= self.config.adversasary_scale
     self._adversary_acs = adversary_acs
+    scale = self.config.adversary_scale
+    adversary_acs *= scale
+    np.clip(adversary_acs, self._env_action_space.low * scale,
+            self._env_action_space.high * scale)
     return protagonist_acs + adversary_acs
 
   def observe(self, transition: Transition, adapt: bool):
