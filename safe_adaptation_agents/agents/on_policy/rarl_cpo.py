@@ -44,11 +44,9 @@ class RARLCPO(agent.Agent):
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
     if self.protagonist.time_to_update and train:
-      print('Training protagonist')
       self.protagonist.train(self.protagonist.buffer.dump())
       self._alternate.tick()
     elif self.adversary.time_to_update and train:
-      print('Training advesary')
       self.adversary.train(self.adversary.buffer.dump())
       self._alternate.tick()
     protagonist_acs = self.protagonist(observation, train, adapt)
