@@ -13,6 +13,8 @@ def test_not_safe():
     import gym
     env = gym.make('HalfCheetah-v2')
     env._max_episode_steps = config.time_limit
+    env = gym.wrappers.RescaleAction(env, -10.0, 10.0)
+    env = gym.wrappers.ClipAction(env)
     return env
 
   config = options.load_config([

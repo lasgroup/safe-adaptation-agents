@@ -13,12 +13,14 @@ def test_not_safe():
     import gym
     env = gym.make('HalfCheetah-v2')
     env._max_episode_steps = config.time_limit
+    env = gym.wrappers.RescaleAction(env, -10.0, 10.0)
+    env = gym.wrappers.ClipAction(env)
     return env
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'cpo',
       '--num_trajectories', '300', '--time_limit', '150', '--vf_iters', '10',
-      '--eval_trials', '0', '--train_driver.adaptation_steps', '45000',
+      '--eval_trials', '1', '--train_driver.adaptation_steps', '45000',
       '--render_episodes', '0', '--test_driver.adaptation_steps', '1500',
       '--lambda_', '0.95', '--epochs', '100', '--safe', 'False', '--log_dir',
       'results/test_cpo_not_safe'

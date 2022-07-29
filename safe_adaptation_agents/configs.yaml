@@ -144,6 +144,7 @@ rarl_cpo:
   margin_lr: 0.05
   protagonist_iters: 1
   adversary_iters: 1
+  adversary_scale: 1e-2
 
 la_mbda:
   precision: 16

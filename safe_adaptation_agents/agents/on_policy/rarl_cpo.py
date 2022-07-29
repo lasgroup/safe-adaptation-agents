@@ -40,9 +40,11 @@ class RARLCPO(agent.Agent):
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
     if self.protagonist.time_to_update and train:
+      print('Training protagonist')
       self.protagonist.train(self.protagonist.buffer.dump())
       self._alternate.tick()
     elif self.adversary.time_to_update and train:
+      print('Training advesary')
       self.adversary.train(self.adversary.buffer.dump())
       self._alternate.tick()
     protagonist_acs = self.protagonist(observation, train, adapt)
@@ -51,6 +53,7 @@ class RARLCPO(agent.Agent):
       self._adversary_acs = None
       return protagonist_acs
     adversary_acs = self.adversary(observation, train, adapt)
+    adversary_acs *= self.config.adversasary_scale
     self._adversary_acs = adversary_acs
     return protagonist_acs + adversary_acs
 
@@ -64,9 +67,10 @@ class RARLCPO(agent.Agent):
     else:
       # The adversary tries to maximize the cost return, thus making the
       # protagonist unsafe.
+      reward = transition.cost if self.config.safe else -transition.reward
       transition = Transition(transition.observation,
                               transition.next_observation, self._adversary_acs,
-                              transition.cost, transition.cost, transition.done,
+                              reward, transition.cost, transition.done,
                               transition.info)
       self.adversary.observe(transition, adapt)
 
