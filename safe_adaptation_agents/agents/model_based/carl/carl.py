@@ -17,6 +17,7 @@ from safe_adaptation_agents.agents import agent, Transition
 from safe_adaptation_agents import logging, utils
 from safe_adaptation_agents.agents.model_based import replay_buffer as rb
 from safe_adaptation_agents.agents.model_based.carl import model
+from safe_adaptation_agents.agents.model_based.carl import cem
 
 
 class EnsembleLearner(utils.Learner):
@@ -60,6 +61,7 @@ class CARL(agent.Agent):
             minval=-1.,
             maxval=1.),
         device=jax.devices("cpu")[0])
+    self.action_shape = action_space.shape
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -67,7 +69,39 @@ class CARL(agent.Agent):
       return self._prefill_policy(observation)
     if self.time_to_update and train:
       self.train()
-    return 0.
+    action = self.policy(observation, self.model.params, next(self.rng_seq))
+    return action
+
+  @partial(jax.jit, static_argnums=0)
+  @partial(jax.vmap, in_axes=[None, 0, None, None])
+  def policy(self, observation: jnp.ndarray, model_params: hk.Params,
+             key: jnp.ndarray) -> jnp.ndarray:
+
+    def rollout_action_sequence(model_params, action_sequence):
+      model_ = lambda o, a: self.model.apply(model_params, o, a)
+      _, reward, cost = model.sample_trajectories(model_, observation,
+                                                  action_sequence, key)
+      return reward.mean(), cost.mean()
+
+    # vmap over the ensemble axis
+    rollout_action_sequence = jax.vmap(rollout_action_sequence, [0, None])
+
+    def objective(sample: jnp.ndarray) -> jnp.ndarray:
+      reward, cost = rollout_action_sequence(model_params, sample)
+      # Average sum along the time horizon, average along the ensemble axis
+      objective_, constraint = [x.sum(1).mean(0) for x in (reward, cost)]
+      constraint -= self.config.cost_limit
+      return objective_ - self.config.lambda_ * constraint
+
+    key, subkey = jax.random.split(key)
+    horizon = self.config.plan_horizon
+    initial_guess = jax.random.uniform(subkey,
+                                       (horizon, jnp.prod(self.action_shape)))
+    key, subkey = jax.random.split(key)
+    optimized_action_sequence = cem.cross_entropy_method(
+        objective, initial_guess, subkey, self.config.num_particles,
+        self.config.num_iters, self.config.num_elite)
+    return optimized_action_sequence[0]
 
   def observe(self, transition: Transition, adapt: bool):
     self.training_step += sum(transition.steps)

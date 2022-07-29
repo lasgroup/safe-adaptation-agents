@@ -79,9 +79,8 @@ class WorldModel(hk.Module):
 def sample_trajectories(
     model: Model,
     init_state: Observation,
-    horizon: int,
+    actions: Action,
     key: jax.random.PRNGKey,
-    actions: Optional[Action],
 ) -> Tuple[tfd.Distribution, tfd.Distribution, tfd.Distribution]:
 
   def step(carry, ins):
@@ -93,12 +92,10 @@ def sample_trajectories(
     carry = seed, next_obs.sample(seed=model_seed)
     outs = next_obs, reward, cost
     return carry, outs
-
-  assert actions.shape[1] == horizon
   # `jax.lax.scan` scans over the first dimension, transpose the inputs.
   ins = actions.swapaxes(0, 1)
   carry = (key, init_state)
-  _, outs = jax.lax.scan(step, carry, ins, length=horizon)
+  _, outs = jax.lax.scan(step, carry, ins)
   # Transpose back such that batch_dim is the leading dimension.
   outs = jax.tree_map(lambda x: x.swapaxes(0, 1), outs)
   return tuple(outs)  # noqa

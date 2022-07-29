@@ -6,9 +6,9 @@ import jax
 
 def cross_entropy_method(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],
                          initial_guess: jnp.ndarray,
-                         num_iters: int,
                          key: jnp.ndarray,
                          num_particles: int,
+                         num_iters: int,
                          num_elite: int,
                          stop_cond: float = 0.1):
   mu = initial_guess
