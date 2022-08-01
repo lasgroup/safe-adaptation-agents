@@ -7,7 +7,7 @@ from tensorflow_probability.substrates import jax as tfp
 
 from safe_adaptation_agents import models
 from safe_adaptation_agents import nets
-from safe_adaptation_agents.agents.la_mbda import rssm
+from safe_adaptation_agents.agents.model_based.la_mbda import rssm
 
 tfd = tfp.distributions
 

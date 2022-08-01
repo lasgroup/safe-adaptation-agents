@@ -15,9 +15,9 @@ from tqdm import tqdm
 
 import safe_adaptation_agents.utils as utils
 from safe_adaptation_agents.agents import agent
-from safe_adaptation_agents.agents.la_mbda import replay_buffer as rb
-from safe_adaptation_agents.agents.la_mbda import swag
-from safe_adaptation_agents.agents.la_mbda.rssm import init_state
+from safe_adaptation_agents.agents.model_based.la_mbda import swag
+from safe_adaptation_agents.agents.model_based import replay_buffer as rb
+from safe_adaptation_agents.agents.model_based.la_mbda.rssm import init_state
 from safe_adaptation_agents.logging import TrainingLogger
 
 PRNGKey = jnp.ndarray
