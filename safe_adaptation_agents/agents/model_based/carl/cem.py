@@ -4,13 +4,13 @@ import jax.numpy as jnp
 import jax
 
 
-def cross_entropy_method(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],
-                         initial_guess: jnp.ndarray,
-                         key: jnp.ndarray,
-                         num_particles: int,
-                         num_iters: int,
-                         num_elite: int,
-                         stop_cond: float = 0.1):
+def solve(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],
+          initial_guess: jnp.ndarray,
+          key: jnp.ndarray,
+          num_particles: int,
+          num_iters: int,
+          num_elite: int,
+          stop_cond: float = 0.1):
   mu = initial_guess
   stddev = jnp.ones_like(initial_guess)
 
@@ -22,11 +22,12 @@ def cross_entropy_method(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],
     key, iter, mu, stddev = val
     key, subkey = jax.random.split(key)
     eps = jax.random.normal(subkey, (num_particles,) + mu.shape)
-    sample = eps * stddev + mu
+    sample = eps * stddev[None] + mu[None]
     scores = objective_fn(sample)
     elite_ids = jnp.argsort(scores)[-num_elite:]
     elite = sample[elite_ids]
-    mu, stddev = elite.mean(), elite.stddev()
+    # Moment matching on the `particles` axis
+    mu, stddev = elite.mean(0), elite.stddev(0)
     return key, iter + 1, mu, stddev
 
   _, _, mu, _ = jax.lax.while_loop(cond, body, (key, 0, mu, stddev))

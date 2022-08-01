@@ -1,3 +1,4 @@
+import copy
 from typing import Optional, Union, Dict, Any
 from types import SimpleNamespace
 from functools import partial
@@ -6,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 
 from gym import spaces
+from gym.wrappers.normalize import RunningMeanStd
 
 import jax
 from jax import numpy as jnp
@@ -38,10 +40,9 @@ class EnsembleLearner(utils.Learner):
 
 class CARL(agent.Agent):
 
-  def __init__(self, observation_space: spaces.Space,
-               action_space: spaces.Space, config: SimpleNamespace,
-               model: hk.Transformed, logger: logging.TrainingLogger,
-               replay_buffer: rb.ReplayBuffer):
+  def __init__(self, observation_space: spaces.Box, action_space: spaces.Box,
+               config: SimpleNamespace, model: hk.Transformed,
+               logger: logging.TrainingLogger, replay_buffer: rb.ReplayBuffer):
     super(CARL, self).__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.model = EnsembleLearner(
@@ -61,7 +62,9 @@ class CARL(agent.Agent):
             minval=-1.,
             maxval=1.),
         device=jax.devices("cpu")[0])
-    self.action_shape = action_space.shape
+    self.action_space = action_space
+    self.adapted_model_params = None
+    self.obs_moments_tracker = RunningMeanStd(shape=observation_space.shape)
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -69,7 +72,9 @@ class CARL(agent.Agent):
       return self._prefill_policy(observation)
     if self.time_to_update and train:
       self.train()
-    action = self.policy(observation, self.model.params, next(self.rng_seq))
+    params = self.model.params if adapt else self.adapted_model_params
+    normalized_obs = self.normalize(observation)
+    action = self.policy(normalized_obs, params, next(self.rng_seq))
     return action
 
   @partial(jax.jit, static_argnums=0)
@@ -78,6 +83,8 @@ class CARL(agent.Agent):
              key: jnp.ndarray) -> jnp.ndarray:
 
     def rollout_action_sequence(model_params, action_sequence):
+      action_sequence = jnp.clip(action_sequence, self.action_space.low,
+                                 self.action_space.high)
       model_ = lambda o, a: self.model.apply(model_params, o, a)
       _, reward, cost = model.sample_trajectories(model_, observation,
                                                   action_sequence, key)
@@ -91,21 +98,36 @@ class CARL(agent.Agent):
       # Average sum along the time horizon, average along the ensemble axis
       objective_, constraint = [x.sum(1).mean(0) for x in (reward, cost)]
       constraint -= self.config.cost_limit
-      return objective_ - self.config.lambda_ * constraint
+      if self.safe:
+        return objective_ - jnp.maximum(self.config.lambda_ * constraint, 0.)
+      else:
+        return objective_
 
     key, subkey = jax.random.split(key)
     horizon = self.config.plan_horizon
-    initial_guess = jax.random.uniform(subkey,
-                                       (horizon, jnp.prod(self.action_shape)))
+    initial_guess = jax.random.uniform(
+        subkey, (horizon, jnp.prod(self.action_space.shape)),
+        minval=self.action_space.low,
+        maxval=self.action_space.high)
     key, subkey = jax.random.split(key)
-    optimized_action_sequence = cem.cross_entropy_method(
-        objective, initial_guess, subkey, self.config.num_particles,
-        self.config.num_iters, self.config.num_elite)
+    optimized_action_sequence = cem.solve(objective, initial_guess, subkey,
+                                          self.config.num_particles,
+                                          self.config.num_iters,
+                                          self.config.num_elite)
     return optimized_action_sequence[0]
 
   def observe(self, transition: Transition, adapt: bool):
     self.training_step += sum(transition.steps)
-    self.replay_buffer.add(transition)
+    self.obs_moments_tracker.update(transition.observation)
+    normalized_transition = Transition(
+        self.normalize(transition.observation),
+        self.normalize(transition.next_observation), transition.action,
+        transition.reward, transition.cost, transition.done, transition.info)
+    self.replay_buffer.add(normalized_transition)
+
+  def normalize(self, observation: np.ndarray):
+    diff = observation - self.obs_moments_tracker.mean
+    return diff / np.sqrt(self.obs_moments_tracker.var + 1e-8)
 
   def train(self):
     for batch in tqdm(
@@ -129,15 +151,14 @@ class CARL(agent.Agent):
           map(
               lambda d, x: d.log_prob(x),
               preds,
-              (batch.o[:, 1:], batch.r, batch.c),
+              (batch.o[:, 1:], batch.r, batch.c > 0.),
           ))
       log_probs = sum(log_probs)
       return -log_probs.mean()
 
     # vmap to get the loss of each model in the ensemble.
     loss = jax.vmap(loss)
-    # Summing along the ensemble axis would give each member of ther ensemble
-    # its correct gradients.
+    # Taking mean along the ensemble.
     loss, grads = jax.value_and_grad(lambda p: loss(p).mean())(state.params)
     return self.model.grad_step(grads, state), {'agent/model/loss': loss}
 
@@ -146,7 +167,22 @@ class CARL(agent.Agent):
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
-    pass
+    reshape = lambda x: x.reshape(-1, x.shape[-1])
+    o = reshape(observation[:, :-1])
+    next_o = reshape(observation[:, 1:])
+    a = reshape(action)
+    r = reshape(reward)
+    c = reshape(cost)
+    state = copy.deepcopy(self.model.state)
+    # TODO (yarden): find a better parameter
+    for _ in range(max(self.config.update_steps // 10, 1)):
+      ids = self.replay_buffer.rs.choice(a.shape[0],
+                                         self.config.replay_buffer.batch_size)
+      batch = rb.etb.TrajectoryData(
+          np.stack([o[ids], next_o[ids]], 1), a[ids], r[ids], c[ids])
+      state, report = self.update_model(self.model.state, batch,
+                                        next(self.rng_seq))
+    self.adapted_model_params = state.params
 
   @property
   def time_to_update(self):
