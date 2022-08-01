@@ -180,4 +180,19 @@ la_mbda:
   sample_horizon: 15
   evaluate_model: True
 
+carl:
+  model:
+    hidden_size: 400
+    state_decoder_config: {init_stddev: 1., min_stddev: 0.1, max_stddev: 5., stddev_scale: 0.01}
+    reward_decoder_config: {layers: [400]}
+    cost_decoder_config: {layers: [400]}
+  prefill: 1000
+  lambda_: 100000.
+  plan_horizon: 15
+  num_particles: 100
+  num_iters: 10
+  num_elite: 15
+  update_steps: 1000
+  action_repeat: 4
+
 

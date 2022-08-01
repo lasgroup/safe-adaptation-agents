@@ -131,5 +131,21 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
     return la_mbda.LaMBDA(observation_space, action_space, logger, config,
                           model, actor, critic, safety_critic,
                           augmented_lagrangian, replay_buffer)
+  elif config.agent == 'carl':
+    from safe_adaptation_agents.agents.model_based.carl import carl
+    from safe_adaptation_agents.agents.model_based.carl import model as m
+    from safe_adaptation_agents.agents.model_based import replay_buffer as rb
+    model = hk.without_apply_rng(
+        hk.transform(lambda o, a: m.WorldModel(observation_space.shape, **config
+                                               .model)(o, a)))
+    replay_buffer = rb.ReplayBuffer(
+        observation_space.shape,
+        action_space.shape,
+        config.time_limit // config.action_repeat,
+        config.seed,
+        **config.replay_buffer,
+        precision=config.precision)
+    return carl.CARL(observation_space, action_space, config, logger, model,
+                     replay_buffer)
   else:
     raise ValueError('Could not find the requested agent.')

@@ -50,7 +50,7 @@ class WorldModel(hk.Module):
     x = jnp.concatenate([observation, action], -1)
     x = jnn.elu(hk.Linear(self.hidden_size)(x))
     reward = models.DenseDecoder((1,), **self.reward_config)(x)
-    cost = models.DenseDecoder((1,), **self.cost_config)(x)
+    cost = models.DenseDecoder((1,), **self.cost_config, dist='bernoulli')(x)
     outs = nets.mlp(
         x,
         output_sizes=tuple(self.state_decoder_config['layers'] +

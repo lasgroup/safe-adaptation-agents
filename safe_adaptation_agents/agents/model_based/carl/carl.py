@@ -41,8 +41,8 @@ class EnsembleLearner(utils.Learner):
 class CARL(agent.Agent):
 
   def __init__(self, observation_space: spaces.Box, action_space: spaces.Box,
-               config: SimpleNamespace, model: hk.Transformed,
-               logger: logging.TrainingLogger, replay_buffer: rb.ReplayBuffer):
+               config: SimpleNamespace, logger: logging.TrainingLogger,
+               model: hk.Transformed, replay_buffer: rb.ReplayBuffer):
     super(CARL, self).__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
     self.model = EnsembleLearner(
