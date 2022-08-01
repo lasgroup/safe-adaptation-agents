@@ -175,8 +175,8 @@ class CARL(agent.Agent):
     state = copy.deepcopy(self.model.state)
     # TODO (yarden): find a better parameter
     for _ in range(max(self.config.update_steps // 10, 1)):
-      ids = self.replay_buffer.rs.choice(a.shape[0],
-                                         self.config.replay_buffer.batch_size)
+      ids = self.replay_buffer.rs.choice(
+          a.shape[0], self.config.replay_buffer['batch_size'])
       batch = rb.etb.TrajectoryData(
           np.stack([o[ids], next_o[ids]], 1), a[ids], r[ids], c[ids])
       state, report = self.update_model(self.model.state, batch)

@@ -48,7 +48,7 @@ class WorldModel(hk.Module):
   def __call__(self, observation: Observation,
                action: Action) -> [tfd.Distribution, ...]:
     x = jnp.concatenate([observation, action], -1)
-    x = jnn.elu(hk.Linear(self.hidden_size)(x))
+    x = jnn.relu(hk.Linear(self.hidden_size)(x))
     reward = models.DenseDecoder((1,), **self.reward_config, dist='normal')(x)
     cost = models.DenseDecoder((1,), **self.cost_config, dist='bernoulli')(x)
     outs = nets.mlp(
