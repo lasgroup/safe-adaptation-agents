@@ -133,7 +133,6 @@ class CARL(agent.Agent):
   def train(self):
     for batch in tqdm(
         self.replay_buffer.sample(self.config.update_steps),
-        leave=False,
         total=self.config.update_steps):
       self.model.state, report = self.update_model(self.model.state, batch)
       for k, v in report.items():
