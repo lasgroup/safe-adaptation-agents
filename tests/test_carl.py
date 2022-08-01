@@ -12,19 +12,28 @@ def test_not_safe():
   def make_env(config):
     import gym
     from safe_adaptation_agents import wrapppers
-    env = gym.make('HalfCheetah-v2')
+    env = gym.make('InvertedPendulum-v2')
+    old_step = env.step
+
+    def non_terminating_step(action):
+      ob, reward, terminated, info = old_step(action)
+      if terminated:
+        reward = 0.
+      return ob, reward, False, info
+
+    env.step = non_terminating_step
     env._max_episode_steps = config.time_limit
-    env = gym.wrappers.RescaleAction(env, -10.0, 10.0)
+    env = gym.wrappers.RescaleAction(env, -1.0, 1.0)
     env = gym.wrappers.ClipAction(env)
     env = wrapppers.ActionRepeat(env, config.action_repeat)
     return env
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'carl',
-      '--time_limit', '150', '--eval_trials', '1', '--train_every', '750',
+      '--time_limit', '150', '--eval_trials', '1', '--train_every', '1500',
       '--train_driver.adaptation_steps', '45000', '--render_episodes', '0',
       '--test_driver.query_steps', '1500', '--epochs', '100', '--safe', 'False',
-      '--log_dir', 'results/test_carl_not_safe', '--action_repeat', '3'
+      '--log_dir', 'results/test_carl_not_safe', '--action_repeat', '5'
   ])
   if not config.jit:
     from jax.config import config as jax_config
@@ -34,7 +43,7 @@ def test_not_safe():
       config=config, make_agent=agents.make,
       make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
-  assert objective[config.task] >= 15.
+  assert objective[config.task] >= 100.
   assert constraint[config.task] == 0.
 
 
