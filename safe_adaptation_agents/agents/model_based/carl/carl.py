@@ -131,9 +131,7 @@ class CARL(agent.Agent):
     return diff / np.sqrt(self.obs_moments_tracker.var + 1e-8)
 
   def train(self):
-    for batch in tqdm(
-        self.replay_buffer.sample(self.config.update_steps),
-        total=self.config.update_steps):
+    for batch in self.replay_buffer.sample(self.config.update_steps):
       self.model.state, report = self.update_model(self.model.state, batch)
       for k, v in report.items():
         self.logger[k] = v.mean()
