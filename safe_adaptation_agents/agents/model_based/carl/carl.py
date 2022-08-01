@@ -105,17 +105,18 @@ class CARL(agent.Agent):
       else:
         return objective_
 
-    key, subkey = jax.random.split(key)
     horizon = self.config.plan_horizon
-    initial_guess = jax.random.uniform(
-        subkey, (horizon, np.prod(self.action_space.shape)),
-        minval=self.action_space.low,
-        maxval=self.action_space.high)
+    low, high = self.action_space.low, self.action_space.high
+    initial_guess = jnp.zeros((horizon, np.prod(self.action_space.shape)))
     key, subkey = jax.random.split(key)
-    optimized_action_sequence = cem.solve(objective, initial_guess, subkey,
-                                          self.config.num_particles,
-                                          self.config.num_iters,
-                                          self.config.num_elite)
+    optimized_action_sequence = cem.solve(
+        objective,
+        initial_guess,
+        subkey,
+        self.config.num_particles,
+        self.config.num_iters,
+        self.config.num_elite,
+        initial_stddev=(high - low))
     return optimized_action_sequence[0]
 
   def observe(self, transition: Transition, adapt: bool):
@@ -145,7 +146,7 @@ class CARL(agent.Agent):
       batch: rb.etb.TrajectoryData) -> [utils.LearningState, dict, jnp.ndarray]:
 
     def loss(params):
-      preds = self.model.apply(params, batch.o[:, :1], batch.a)
+      preds = self.model.apply(params, batch.o[:, :-1], batch.a)
       log_probs = tuple(
           map(
               lambda d, x: d.log_prob(x),
