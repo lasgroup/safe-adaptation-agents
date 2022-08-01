@@ -135,8 +135,7 @@ class CARL(agent.Agent):
         self.replay_buffer.sample(self.config.update_steps),
         leave=False,
         total=self.config.update_steps):
-      self.model.state, report = self.update_model(self.model.state, batch,
-                                                   next(self.rng_seq))
+      self.model.state, report = self.update_model(self.model.state, batch)
       for k, v in report.items():
         self.logger[k] = v.mean()
     self.logger.log_metrics(self.training_step)
@@ -181,8 +180,7 @@ class CARL(agent.Agent):
                                          self.config.replay_buffer.batch_size)
       batch = rb.etb.TrajectoryData(
           np.stack([o[ids], next_o[ids]], 1), a[ids], r[ids], c[ids])
-      state, report = self.update_model(self.model.state, batch,
-                                        next(self.rng_seq))
+      state, report = self.update_model(self.model.state, batch)
     self.adapted_model_params = state.params
 
   @property
