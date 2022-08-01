@@ -59,6 +59,7 @@ class WorldModel(hk.Module):
             self.state_decoder_config.get('initializer', 'glorot')),
         activation=self.state_decoder_config.get('activation', jnn.relu))
     mu, stddev = jnp.split(outs, 2, -1)
+    mu += jax.lax.stop_gradient(observation)
     init_stddev = utils.inv_softplus(self.state_decoder_config['init_stddev'])
     stddev = jnn.softplus(stddev + init_stddev)
     min_stddev, max_stddev = map(
