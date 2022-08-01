@@ -86,7 +86,8 @@ class CARL(agent.Agent):
       action_sequence = jnp.clip(action_sequence, self.action_space.low,
                                  self.action_space.high)
       model_ = lambda o, a: self.model.apply(model_params, o, a)
-      _, reward, cost = model.sample_trajectories(model_, observation,
+      tiled_obs = jnp.tile(observation, [self.config.num_particles, 1])
+      _, reward, cost = model.sample_trajectories(model_, tiled_obs,
                                                   action_sequence, key)
       return reward.mean(), cost.mean()
 
@@ -106,7 +107,7 @@ class CARL(agent.Agent):
     key, subkey = jax.random.split(key)
     horizon = self.config.plan_horizon
     initial_guess = jax.random.uniform(
-        subkey, (horizon, jnp.prod(self.action_space.shape)),
+        subkey, (horizon, np.prod(self.action_space.shape)),
         minval=self.action_space.low,
         maxval=self.action_space.high)
     key, subkey = jax.random.split(key)

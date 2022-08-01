@@ -27,7 +27,7 @@ def solve(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],
     elite_ids = jnp.argsort(scores)[-num_elite:]
     elite = sample[elite_ids]
     # Moment matching on the `particles` axis
-    mu, stddev = elite.mean(0), elite.stddev(0)
+    mu, stddev = elite.mean(0), elite.std(0)
     return key, iter + 1, mu, stddev
 
   _, _, mu, _ = jax.lax.while_loop(cond, body, (key, 0, mu, stddev))

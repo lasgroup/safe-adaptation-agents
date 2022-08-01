@@ -49,7 +49,7 @@ class WorldModel(hk.Module):
                action: Action) -> [tfd.Distribution, ...]:
     x = jnp.concatenate([observation, action], -1)
     x = jnn.elu(hk.Linear(self.hidden_size)(x))
-    reward = models.DenseDecoder((1,), **self.reward_config)(x)
+    reward = models.DenseDecoder((1,), **self.reward_config, dist='normal')(x)
     cost = models.DenseDecoder((1,), **self.cost_config, dist='bernoulli')(x)
     outs = nets.mlp(
         x,
@@ -82,6 +82,7 @@ def sample_trajectories(
     actions: Action,
     key: jax.random.PRNGKey,
 ) -> Tuple[tfd.Distribution, tfd.Distribution, tfd.Distribution]:
+  assert init_state.shape[0] == actions.shape[0]
 
   def step(carry, ins):
     seed = carry[0]
