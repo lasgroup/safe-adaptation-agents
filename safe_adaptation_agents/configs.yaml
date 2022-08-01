@@ -184,7 +184,7 @@ carl:
   train_every: 1000
   model:
     hidden_size: 128
-    state_decoder_config: {init_stddev: 1., min_stddev: 0.1, max_stddev: 5., stddev_scale: 0.01, layers: [400, 400]}
+    state_decoder_config: {init_stddev: 1., min_stddev: 0.1, max_stddev: 5., stddev_scale: 0.01, layers: [128, 128]}
     reward_decoder_config: {layers: [128, 128]}
     cost_decoder_config: {layers: [128, 128]}
   model_opt: {lr: 1e-3, eps: 1e-5, clip: 100}

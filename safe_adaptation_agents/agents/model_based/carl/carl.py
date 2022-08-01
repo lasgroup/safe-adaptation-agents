@@ -97,7 +97,8 @@ class CARL(agent.Agent):
     def objective(sample: jnp.ndarray) -> jnp.ndarray:
       reward, cost = rollout_action_sequence(model_params, sample)
       # Average sum along the time horizon, average along the ensemble axis
-      objective_, constraint = [x.sum(1).mean(0) for x in (reward, cost)]
+      objective_, constraint = [x.sum(-1).mean(0) for x in (reward, cost)]
+      constraint *= self.config.action_repeat
       constraint -= self.config.cost_limit
       if self.safe:
         return objective_ - jnp.maximum(self.config.lambda_ * constraint, 0.)
@@ -131,6 +132,7 @@ class CARL(agent.Agent):
     return diff / np.sqrt(self.obs_moments_tracker.var + 1e-8)
 
   def train(self):
+    print('Updating model')
     for batch in self.replay_buffer.sample(self.config.update_steps):
       self.model.state, report = self.update_model(self.model.state, batch)
       for k, v in report.items():
