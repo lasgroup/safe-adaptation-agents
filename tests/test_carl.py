@@ -24,7 +24,7 @@ def test_not_safe():
       '--time_limit', '150', '--eval_trials', '1', '--train_every', '750',
       '--train_driver.adaptation_steps', '45000', '--render_episodes', '0',
       '--test_driver.query_steps', '1500', '--epochs', '100', '--safe', 'False',
-      '--log_dir', 'results/test_carl_not_safe'
+      '--log_dir', 'results/test_carl_not_safe', '--action_repeat', '3'
   ])
   if not config.jit:
     from jax.config import config as jax_config

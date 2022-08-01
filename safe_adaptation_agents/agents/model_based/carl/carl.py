@@ -167,11 +167,9 @@ class CARL(agent.Agent):
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
     reshape = lambda x: x.reshape(-1, x.shape[-1])
-    o = reshape(observation[:, :-1])
-    next_o = reshape(observation[:, 1:])
-    a = reshape(action)
-    r = reshape(reward)
-    c = reshape(cost)
+    o = reshape(observation[:, :, :-1])
+    next_o = reshape(observation[:, :, 1:])
+    a, r, c = reshape(action), reshape(reward), reshape(cost)
     state = copy.deepcopy(self.model.state)
     # TODO (yarden): find a better parameter
     for _ in range(max(self.config.update_steps // 10, 1)):
