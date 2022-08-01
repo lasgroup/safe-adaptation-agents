@@ -19,13 +19,13 @@ from safe_adaptation_agents.logging import TrainingLogger
 from safe_adaptation_agents.utils import LearningState
 
 
-class MamlPpoLagrangian(ppo_lagrangian.PpoLagrangian):
+class MamlPPOLagrangian(ppo_lagrangian.PPOLagrangian):
 
   def __init__(self, observation_space: Space, action_space: Space,
                config: SimpleNamespace, logger: TrainingLogger,
                actor: hk.Transformed, critic: hk.Transformed,
                safety_critic: hk.Transformed):
-    super(MamlPpoLagrangian,
+    super(MamlPPOLagrangian,
           self).__init__(observation_space, action_space, config, logger, actor,
                          critic, safety_critic)
     num_steps = self.config.time_limit // self.config.action_repeat
