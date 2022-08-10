@@ -64,20 +64,21 @@ class RARLCPO(agent.Agent):
 
   def observe(self, transition: Transition, adapt: bool):
     if self._alternate.protagonist_turn:
-      transition = Transition(transition.observation,
-                              transition.next_observation,
-                              self._protagonist_acs, transition.reward,
-                              transition.cost, transition.done, transition.info)
-      self.protagonist.observe(transition, adapt)
+      new_transition = Transition(transition.observation,
+                                  transition.next_observation,
+                                  self._protagonist_acs, transition.reward,
+                                  transition.cost, transition.done,
+                                  transition.info)
+      self.protagonist.observe(new_transition, adapt)
     else:
       # The adversary tries to maximize the cost return, thus making the
       # protagonist unsafe.
       reward = transition.cost if self.config.safe else -transition.reward
-      transition = Transition(transition.observation,
-                              transition.next_observation, self._adversary_acs,
-                              reward, transition.cost, transition.done,
-                              transition.info)
-      self.adversary.observe(transition, adapt)
+      new_transition = Transition(transition.observation,
+                                  transition.next_observation,
+                                  self._adversary_acs, reward, transition.cost,
+                                  transition.done, transition.info)
+      self.adversary.observe(new_transition, adapt)
 
   def observe_task_id(self, task_id: Optional[str] = None):
     pass
