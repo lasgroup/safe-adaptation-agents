@@ -170,7 +170,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
     if self.safe:
       self.margin = max(0., self.margin + self.config.margin_lr * c)
       c += self.margin
-    c /= (self.config.time_limit + 1e-8)
+    c /= (self.config.time_limit * self.config.episodes_per_task + 1e-8)
     self.actor.state, info = self.update_actor(self.actor.state,
                                                trajectory_data, eval_.advantage,
                                                eval_.cost_advantage, c)
