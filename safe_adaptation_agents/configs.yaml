@@ -114,7 +114,7 @@ rl2_cpo:
   discount: 0.99
   lambda_: 0.97
   cost_discount: 0.99
-  num_trajectories: 20
+  num_trajectories: 10
   episodes_per_task: 2
   hidden_size: 256
   actor_opt: {}
@@ -134,7 +134,6 @@ rarl_cpo:
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 10
-  hidden_size: 256
   actor_opt: {}
   critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
   target_kl: 0.01
