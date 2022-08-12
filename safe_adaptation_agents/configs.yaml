@@ -119,10 +119,10 @@ rl2_cpo:
   hidden_size: 128
   actor_opt: {}
   critic_opt: {lr: 1e-3, eps: 1e-5, clip: 0.5}
-  target_kl: 0.01
+  target_kl: 0.1
   backtrack_coeff: 0.8
   backtrack_iters: 10
-  damping_coeff: 0.1
+  damping_coeff: 1e-5
   margin_lr: 0.05
 
 rarl_cpo:

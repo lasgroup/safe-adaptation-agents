@@ -35,7 +35,7 @@ class CPO(safe_vpg.SafeVanillaPolicyGradients):
                                       trajectory_data.c)
     constraint = trajectory_data.c.sum(1).mean()
     # https://github.com/openai/safety-starter-agents/blob/4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/agents.py#L260
-    c = (constraint - self.config.cost_limit)
+    c = constraint - self.config.cost_limit
     self.margin = max(0, self.margin + self.config.margin_lr * c)
     c += self.margin
     c /= (self.config.time_limit + 1e-8)
@@ -146,14 +146,14 @@ def step_direction(g: chex.ArrayTree,
     A = q - r**2 / s
     B = 2. * target_kl - c**2 / s
     optim_case = jax.lax.cond(
-        jax.lax.bitwise_and(c < 0, B < 0), lambda: 3, lambda: 0)
+        jax.lax.bitwise_and(c < 0., B < 0.), lambda: 3, lambda: 0)
     optim_case = jax.lax.cond(
         jax.lax.bitwise_and(
             jax.lax.bitwise_and(optim_case == 0, c < 0.), B >= 0.), lambda: 2,
         lambda: 0)
     optim_case = jax.lax.cond(
         jax.lax.bitwise_and(
-            jax.lax.bitwise_and(optim_case == 0, c >= 0.), B >= 0), lambda: 1,
+            jax.lax.bitwise_and(optim_case == 0, c >= 0.), B >= 0.), lambda: 1,
         lambda: 0)
     return optim_case, w, r, s, A, B
 
