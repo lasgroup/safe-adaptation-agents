@@ -90,7 +90,7 @@ def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
                      critic, safety_critic)
 
     protagonist = make_cpo(config)
-    adversary_config = vars(config)
+    adversary_config = vars(config).copy()
     adversary_config['safe'] = False
     adversary_config = SimpleNamespace(**adversary_config)
     adversary = make_cpo(adversary_config)
