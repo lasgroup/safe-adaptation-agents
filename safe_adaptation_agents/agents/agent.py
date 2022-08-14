@@ -30,6 +30,7 @@ class Agent(abc.ABC):
   def __init__(self, config: SimpleNamespace, logger: TrainingLogger):
     self.config = config
     self.logger = logger
+    self.training_step = 0
 
   @abc.abstractmethod
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
@@ -73,3 +74,4 @@ class Agent(abc.ABC):
     """
     self.__dict__.update(state)
     self.logger = TrainingLogger(self.config.log_dir)
+    self.logger.step = self.training_step

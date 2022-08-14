@@ -88,7 +88,6 @@ class LaMBDA(agent.Agent):
     self.state = (self.init_state,
                   jnp.zeros((self.config.parallel_envs,) + action_space.shape,
                             self.precision.compute_dtype))
-    self.training_step = 0
     self._prefill_policy = lambda x: jax.device_put(
         jax.random.uniform(
             next(self.rng_seq), (x.shape[0],) + action_space.shape,

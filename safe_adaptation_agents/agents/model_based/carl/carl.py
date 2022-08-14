@@ -55,7 +55,6 @@ class CARL(agent.Agent):
         action_space.sample()[None],
     )
     self.replay_buffer = replay_buffer
-    self.training_step = 0
     self._prefill_policy = lambda x: jax.device_put(
         jax.random.uniform(
             next(self.rng_seq), (x.shape[0],) + action_space.shape,

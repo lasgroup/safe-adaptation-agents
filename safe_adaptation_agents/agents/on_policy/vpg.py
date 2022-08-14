@@ -26,7 +26,6 @@ class VanillaPolicyGrandients(Agent):
                actor: hk.Transformed, critic: hk.Transformed):
     super().__init__(config, logger)
     self.rng_seq = hk.PRNGSequence(config.seed)
-    self.training_step = 0
     num_steps = self.config.time_limit // self.config.action_repeat
     self.buffer = EpisodicTrajectoryBuffer(self.config.num_trajectories,
                                            num_steps, observation_space.shape,
