@@ -29,26 +29,28 @@ def resolve_agent(remaining, config_names, configs):
   if '--agent' in remaining:
     idx = remaining.index('--agent')
     agent_name = remaining[idx + 1]
-    return configs[agent_name]
+    return agent_name
   else:
+    agent_name = configs['defaults']['agent']
     for name in reversed(config_names):
-      if 'agent' in configs[name]:
-        agent_name = configs[name]['agent']
-        return configs[agent_name]
-  return 'ppo_lagrangian'
+      if name in configs:
+        agent_name = name
+        break
+    return agent_name
 
 
 def resolve_benchmark(remaining, config_names, configs):
   if '--benchmark' in remaining:
     idx = remaining.index('--benchmark')
     benchmark_name = remaining[idx + 1]
-    return configs[benchmark_name]
+    return benchmark_name
   else:
+    benchmark_name = configs['defaults']['benchmark']
     for name in reversed(config_names):
-      if 'benchmark' in configs[name]:
-        benchmark_name = configs[name]['benchmark']
-        return configs[benchmark_name]
-  return 'no_adaptation'
+      if name in configs:
+        benchmark_name = name
+        break
+    return benchmark_name
 
 
 # Acknowledgement: https://github.com/danijar
@@ -64,8 +66,12 @@ def load_config(args: Optional[List[AnyStr]] = None):
   defaults = {}
   for name in args.configs:
     defaults.update(configs[name])
-  defaults.update(resolve_agent(remaining, args.configs, configs))
-  defaults.update(resolve_benchmark(remaining, args.configs, configs))
+  agent_name = resolve_agent(remaining, args.configs, configs)
+  defaults['agent'] = agent_name
+  defaults.update(configs[agent_name])
+  benchmark_name = resolve_benchmark(remaining, args.configs, configs)
+  defaults['benchmark'] = benchmark_name
+  defaults.update(configs[benchmark_name])
   updated_remaining = []
   # Collect all the user inputs that override the default parameters.
   for idx in range(0, len(remaining), 2):

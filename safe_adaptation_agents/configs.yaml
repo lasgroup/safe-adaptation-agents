@@ -20,6 +20,7 @@ defaults:
   precision: 32
   parallel_envs: 10
   task_batch_size: 10
+  benchmark: no_adaptation
 
 no_adaptation:
   task: go_to_goal
