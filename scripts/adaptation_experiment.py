@@ -26,7 +26,7 @@ def main():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   task_sampler = benchmark.make(
-      'domain_randomization', batch_size=config.task_batch_size)
+      config.benchmark, batch_size=config.task_batch_size)
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config,
       make_agent=agents.make,
