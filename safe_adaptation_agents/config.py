@@ -38,6 +38,19 @@ def resolve_agent(remaining, config_names, configs):
   return 'ppo_lagrangian'
 
 
+def resolve_benchmark(remaining, config_names, configs):
+  if '--benchmark' in remaining:
+    idx = remaining.index('--benchmark')
+    benchmark_name = remaining[idx + 1]
+    return configs[benchmark_name]
+  else:
+    for name in reversed(config_names):
+      if 'benchmark' in configs[name]:
+        benchmark_name = configs[name]['benchmark']
+        return configs[benchmark_name]
+  return 'no_adaptation'
+
+
 # Acknowledgement: https://github.com/danijar
 def load_config(args: Optional[List[AnyStr]] = None):
   import argparse
@@ -52,6 +65,7 @@ def load_config(args: Optional[List[AnyStr]] = None):
   for name in args.configs:
     defaults.update(configs[name])
   defaults.update(resolve_agent(remaining, args.configs, configs))
+  defaults.update(resolve_benchmark(remaining, args.configs, configs))
   updated_remaining = []
   # Collect all the user inputs that override the default parameters.
   for idx in range(0, len(remaining), 2):
