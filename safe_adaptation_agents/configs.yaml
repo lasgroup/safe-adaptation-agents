@@ -82,7 +82,7 @@ multitask:
   test_driver: {adaptation_steps: 10000, query_steps: 10000}
   eval_trials: 1
   task_batch_size: 10
-  epochs: 500
+  epochs: 750
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
