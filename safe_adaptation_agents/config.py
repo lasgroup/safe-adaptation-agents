@@ -17,10 +17,6 @@ def validate_config(config):
       'Time limit should be a factor of adaptation steps')
   assert config.test_driver['adaptation_steps'] % config.time_limit == 0, (
       'Time limit should be a factor of adaptation steps')
-  assert config.train_driver['query_steps'] % config.time_limit == 0, (
-      'Time limit should be a factor of query steps')
-  assert config.test_driver['query_steps'] % config.time_limit == 0, (
-      'Time limit should be a factor of query steps')
   assert config.eval_every > 0, 'Eval every should be a positive number.'
   return config
 
