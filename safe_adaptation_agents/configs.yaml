@@ -156,7 +156,7 @@ rarl_cpo:
   adversary_scale: 0.25
 
 la_mbda:
-  rgb_observation: False
+  rgb_observation: True
   precision: 16
   prefill: 5000
   train_every: 10000
