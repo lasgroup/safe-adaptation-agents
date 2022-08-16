@@ -11,6 +11,7 @@ def make_env(config):
   env = safe_adaptation_gym.make(
       config.robot,
       config.task,
+      rgb_observation=config.rgb_observation,
       config={
           'obstacles_size_noise_scale': 0.,
           'robot_ctrl_range_scale': 0.

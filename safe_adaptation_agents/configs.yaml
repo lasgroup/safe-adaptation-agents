@@ -16,6 +16,7 @@ defaults:
   render_options: {camera_id: 'fixedfar'}
   render_lidar_and_collision: False
   render_mode: rgb_array
+  rgb_observation: False
   jit: True
   precision: 32
   parallel_envs: 10
@@ -155,6 +156,7 @@ rarl_cpo:
   adversary_scale: 0.25
 
 la_mbda:
+  rgb_observation: False
   precision: 16
   prefill: 5000
   train_every: 10000

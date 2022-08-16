@@ -12,6 +12,7 @@ def make_env(config):
   from safe_adaptation_agents import wrapppers
   env = safe_adaptation_gym.make(
       config.robot,
+      rgb_observation=config.rgb_observation,
       render_options=config.render_options,
       render_lidar_and_collision=config.render_lidar_and_collision)
   env = wrapppers.ActionRepeat(env, config.action_repeat)
