@@ -1,7 +1,5 @@
 import os
 
-from gym.wrappers import TimeLimit
-
 from safe_adaptation_agents import agents
 from safe_adaptation_agents import config as options
 from safe_adaptation_agents.trainer import Trainer
@@ -9,7 +7,6 @@ from safe_adaptation_agents.trainer import Trainer
 
 def make_env(config):
   import safe_adaptation_gym
-  from safe_adaptation_agents import wrapppers
   env = safe_adaptation_gym.make(
       config.robot,
       config.task,
@@ -18,8 +15,6 @@ def make_env(config):
           'robot_ctrl_range_scale': 0.
       },
       render_options=config.render_options)
-  env = TimeLimit(env, config.time_limit)
-  env = wrapppers.ActionRepeat(env, config.action_repeat)
   return env
 
 

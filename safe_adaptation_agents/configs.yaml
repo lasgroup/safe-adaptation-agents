@@ -206,7 +206,7 @@ carl:
   num_iters: 10
   num_elite: 15
   update_steps: 500
-  action_repeat: 5
+  action_repeat: 10
   replay_buffer: {capacity: 1000, batch_size: 128, sequence_length: 1}
 
 

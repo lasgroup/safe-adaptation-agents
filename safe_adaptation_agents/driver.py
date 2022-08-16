@@ -24,12 +24,10 @@ def interact(agent: Agent,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
-  step = 0
   episodes = [defaultdict(list, {'observation': [observations]})]
   adapt = adaptation_buffer is not None
   episode_steps = 0
-  steps = num_episodes * environment.time_limit
-  with tqdm(total=steps) as pbar:
+  with tqdm() as pbar:
     while len(episodes) < num_episodes + 1:
       if render_episodes:
         frames = environment.render(render_mode)
@@ -39,6 +37,8 @@ def interact(agent: Agent,
       costs = np.array([info.get('cost', 0) for info in infos])
       transition = Transition(observations, next_observations, actions, rewards,
                               costs, dones, infos)
+      transition_steps = sum(transition.steps)
+      episode_steps += transition_steps
       episodes[-1] = _append(transition, episodes[-1])
       if train:
         agent.observe(transition, adapt)
@@ -53,9 +53,6 @@ def interact(agent: Agent,
         episode_steps = 0
         observations = environment.reset()
         episodes.append(defaultdict(list, {'observation': [observations]}))
-      transition_steps = sum(transition.steps)
-      step += transition_steps
-      episode_steps += transition_steps
       pbar.update(transition_steps)
   return agent, episodes
 
