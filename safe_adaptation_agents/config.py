@@ -31,9 +31,10 @@ def resolve_agent(remaining, config_names, configs):
     agent_name = remaining[idx + 1]
     return agent_name
   else:
+    from safe_adaptation_agents import agents
     agent_name = configs['defaults']['agent']
     for name in reversed(config_names):
-      if name in configs:
+      if name in configs and name in agents.AGENTS:
         agent_name = name
         break
     return agent_name
@@ -45,9 +46,10 @@ def resolve_benchmark(remaining, config_names, configs):
     benchmark_name = remaining[idx + 1]
     return benchmark_name
   else:
+    from safe_adaptation_gym.benchmark import BENCHMARKS
     benchmark_name = configs['defaults']['benchmark']
     for name in reversed(config_names):
-      if name in configs:
+      if name in configs and name in BENCHMARKS:
         benchmark_name = name
         break
     return benchmark_name

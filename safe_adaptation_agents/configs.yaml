@@ -78,11 +78,21 @@ cpo:
   margin_lr: 0.05
 
 multitask:
-  train_driver: {adaptation_steps: 10000, query_steps: 10000}
-  test_driver: {adaptation_steps: 10000, query_steps: 10000}
   eval_trials: 1
   task_batch_size: 10
   epochs: 750
+
+on_policy:
+  eval_every: 5
+  train_driver: {adaptation_steps: 10000, query_episodes: 10000}
+  test_driver: {adaptation_steps: 10000, query_episodes: 10000}
+  epochs: 750
+
+model_based:
+  eval_every: 2
+  train_driver: {adaptation_steps: 1000, query_episodes: 1000}
+  test_driver: {adaptation_steps: 1000, query_episodes: 1000}
+  epochs: 100
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
