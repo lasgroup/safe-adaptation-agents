@@ -11,11 +11,13 @@ from safe_adaptation_agents.trainer import Trainer
 
 def make_env(config):
   import safe_adaptation_gym
+  from safe_adaptation_agents import wrapppers
   env = safe_adaptation_gym.make(
       config.robot,
       render_options=config.render_options,
       render_lidar_and_collision=config.render_lidar_and_collision)
   env = TimeLimit(env, config.time_limit)
+  env = wrapppers.ActionRepeat(env, config.action_repeat)
   return env
 
 

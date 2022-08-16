@@ -105,10 +105,9 @@ class Trainer:
 
   def __enter__(self):
     self.state_writer = logging.StateWriter(self.config.log_dir)
-    time_limit = self.config.time_limit // self.config.action_repeat
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs,
-                                                time_limit)
+                                                self.config.time_limit)
     _, task = next(self.tasks())
     if self.seeds is not None:
       self.env.reset(seed=self.seeds, options={'task': task})

@@ -30,7 +30,7 @@ def interact(agent: Agent,
   episode_steps = 0
   steps = num_episodes * environment.time_limit
   with tqdm(total=steps) as pbar:
-    while len(episodes) < num_episodes:
+    while len(episodes) < num_episodes + 1:
       if render_episodes:
         frames = environment.render(render_mode)
         episodes[-1]['frames'].append(frames)
@@ -57,8 +57,6 @@ def interact(agent: Agent,
       step += transition_steps
       episode_steps += transition_steps
       pbar.update(transition_steps)
-    if not episodes[-1] or len(episodes[-1]['reward']) == 0:
-      episodes.pop()
   return agent, episodes
 
 
