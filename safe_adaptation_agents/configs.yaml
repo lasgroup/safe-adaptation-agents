@@ -81,17 +81,15 @@ multitask:
   eval_trials: 1
   task_batch_size: 10
   epochs: 750
+  train_driver: {adaptation_steps: 10000, query_steps: 10000}
+  test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 on_policy:
   eval_every: 5
-  train_driver: {adaptation_steps: 10000, query_episodes: 10000}
-  test_driver: {adaptation_steps: 10000, query_episodes: 10000}
   epochs: 750
 
 model_based:
   eval_every: 2
-  train_driver: {adaptation_steps: 1000, query_episodes: 1000}
-  test_driver: {adaptation_steps: 1000, query_episodes: 1000}
   epochs: 100
 
 maml_ppo_lagrangian:
@@ -159,8 +157,8 @@ rarl_cpo:
 la_mbda:
   precision: 16
   prefill: 5000
-  train_every: 1000
-  update_steps: 100
+  train_every: 10000
+  update_steps: 500
   action_repeat: 2
   replay_buffer: {capacity: 1000, batch_size: 32, sequence_length: 50}
   # World Model
@@ -191,7 +189,7 @@ la_mbda:
   evaluate_model: True
 
 carl:
-  train_every: 1000
+  train_every: 10000
   model:
     hidden_size: 128
     state_decoder_config: {init_stddev: 1e-3, min_stddev: 1e-3, max_stddev: 5., stddev_scale: 0.1, layers: [128, 128]}
