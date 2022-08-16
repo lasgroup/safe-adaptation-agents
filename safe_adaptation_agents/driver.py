@@ -24,36 +24,41 @@ def interact(agent: Agent,
              render_episodes: int = 0,
              render_mode: str = 'rgb_array') -> [Agent, List[EpisodeSummary]]:
   observations = environment.reset()
+  step = 0
   episodes = [defaultdict(list, {'observation': [observations]})]
   adapt = adaptation_buffer is not None
   episode_steps = 0
-  for _ in tqdm(range(num_episodes)):
-    if render_episodes:
-      frames = environment.render(render_mode)
-      episodes[-1]['frames'].append(frames)
-    actions = agent(observations, train, adapt)
-    next_observations, rewards, dones, infos = environment.step(actions)
-    costs = np.array([info.get('cost', 0) for info in infos])
-    transition = Transition(observations, next_observations, actions, rewards,
-                            costs, dones, infos)
-    episodes[-1] = _append(transition, episodes[-1])
-    if train:
-      agent.observe(transition, adapt)
-    # Append adaptation data if needed.
-    if adaptation_buffer is not None:
-      adaptation_buffer.add(transition)
-    observations = next_observations
-    if transition.last:
-      render_episodes = max(render_episodes - 1, 0)
-      if on_episode_end:
-        on_episode_end(episodes[-1], adapt, episode_steps)
-      episode_steps = 0
-      observations = environment.reset()
-      episodes.append(defaultdict(list, {'observation': [observations]}))
-    transition_steps = sum(transition.steps)
-    episode_steps += transition_steps
-  if not episodes[-1] or len(episodes[-1]['reward']) == 0:
-    episodes.pop()
+  steps = num_episodes * environment.time_limit
+  with tqdm(total=steps) as pbar:
+    while len(episodes) < num_episodes:
+      if render_episodes:
+        frames = environment.render(render_mode)
+        episodes[-1]['frames'].append(frames)
+      actions = agent(observations, train, adapt)
+      next_observations, rewards, dones, infos = environment.step(actions)
+      costs = np.array([info.get('cost', 0) for info in infos])
+      transition = Transition(observations, next_observations, actions, rewards,
+                              costs, dones, infos)
+      episodes[-1] = _append(transition, episodes[-1])
+      if train:
+        agent.observe(transition, adapt)
+      # Append adaptation data if needed.
+      if adaptation_buffer is not None:
+        adaptation_buffer.add(transition)
+      observations = next_observations
+      if transition.last:
+        render_episodes = max(render_episodes - 1, 0)
+        if on_episode_end:
+          on_episode_end(episodes[-1], adapt, episode_steps)
+        episode_steps = 0
+        observations = environment.reset()
+        episodes.append(defaultdict(list, {'observation': [observations]}))
+      transition_steps = sum(transition.steps)
+      step += transition_steps
+      episode_steps += transition_steps
+      pbar.update(transition_steps)
+    if not episodes[-1] or len(episodes[-1]['reward']) == 0:
+      episodes.pop()
   return agent, episodes
 
 
@@ -84,7 +89,7 @@ class Driver:
     self.adaptation_buffer = etb.EpisodicTrajectoryBuffer(
         adaptation_episodes, time_limit, observation_shape, action_shape)
     self.num_adaptation_episodes = adaptation_episodes
-    self.num_query_steps = query_episodes
+    self.num_query_episodes = query_episodes
     self.episode_callback = on_episode_end
     self.render_episodes = render_episodes
     self.render_mode = render_mode
@@ -118,11 +123,11 @@ class Driver:
             'transition idx: {}'.format(self.adaptation_buffer.episode_id,
                                         self.adaptation_buffer.idx))
         agent.adapt(*self.adaptation_buffer.dump(), train)
-      if self.num_query_steps > 0:
+      if self.num_query_episodes > 0:
         agent, query_episodes = interact(
             agent,
             env,
-            self.num_query_steps,
+            self.num_query_episodes,
             train=train,
             on_episode_end=callback,
             render_episodes=self.render_episodes,

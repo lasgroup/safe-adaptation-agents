@@ -13,6 +13,11 @@ from safe_adaptation_agents.logging import TrainingLogger
 
 from safe_adaptation_agents import models
 
+AGENTS = {
+    'vanilla_policy_grandiens', 'ppo_lagrangian', 'cpo', 'maml_ppo_lagrangian',
+    'rl2_cpo', 'rarl_cpo', 'la_mbda', 'carl'
+}
+
 
 def make(config: SimpleNamespace, observation_space: Space, action_space: Space,
          logger: TrainingLogger):
