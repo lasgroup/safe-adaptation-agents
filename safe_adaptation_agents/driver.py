@@ -45,6 +45,10 @@ def interact(agent: Agent,
       episodes[-1] = _append(transition, episodes[-1])
       if train:
         agent.observe(transition, adapt)
+      transition_steps = sum(transition.steps)
+      step += transition_steps
+      episode_steps += transition_steps
+      pbar.update(transition_steps)
       # Append adaptation data if needed.
       if adaptation_buffer is not None:
         adaptation_buffer.add(transition)
@@ -56,10 +60,6 @@ def interact(agent: Agent,
         episode_steps = 0
         observations = environment.reset()
         episodes.append(defaultdict(list, {'observation': [observations]}))
-      transition_steps = sum(transition.steps)
-      step += transition_steps
-      episode_steps += transition_steps
-      pbar.update(transition_steps)
     if not episodes[-1] or len(episodes[-1]['reward']) == 0:
       episodes.pop()
   return agent, episodes
