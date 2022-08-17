@@ -92,8 +92,8 @@ on_policy:
 model_based:
   eval_every: 2
   epochs: 100
-  train_driver: {adaptation_steps: 1000, query_steps: 1000}
-  test_driver: {adaptation_steps: 1000, query_steps: 1000}
+  train_driver: {adaptation_steps: 3000, query_steps: 3000}
+  test_driver: {adaptation_steps: 3000, query_steps: 3000}
   parallel_envs: 3
 
 maml_ppo_lagrangian:
