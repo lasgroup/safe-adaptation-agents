@@ -66,4 +66,3 @@ def test_fill(buffer_and_env):
                                EPISODE_LENGTH + 1) + env.observation_space.shape
   # Make sure that all needed episodes were filled.
   assert all((reward[:, i] != 0).all() for i in range(2))
-

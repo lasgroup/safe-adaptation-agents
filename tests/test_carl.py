@@ -40,8 +40,7 @@ def test_not_safe():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
   assert objective[config.task] >= 100.
   assert constraint[config.task] == 0.
@@ -75,8 +74,7 @@ def test_safe():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
   assert objective[config.task] >= 7.
   assert constraint[config.task] < config.cost_limit

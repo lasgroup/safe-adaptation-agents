@@ -28,8 +28,7 @@ def main():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     trainer.train()
 
 

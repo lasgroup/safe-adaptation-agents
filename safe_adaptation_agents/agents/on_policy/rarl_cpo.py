@@ -1,11 +1,11 @@
-from typing import Optional
 from types import SimpleNamespace
-import numpy as np
+from typing import Optional
 
+import numpy as np
 from gym import spaces
 
-from safe_adaptation_agents.agents.on_policy import cpo
 from safe_adaptation_agents.agents import agent, Transition
+from safe_adaptation_agents.agents.on_policy import cpo
 from safe_adaptation_agents.logging import TrainingLogger
 
 

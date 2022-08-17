@@ -1,12 +1,9 @@
 from typing import (
-    Sequence,
-    Optional,
-    Callable,
-    Union,
-    Dict,
-    Any,
-    NamedTuple,
-    Tuple,
+  Sequence,
+  Callable,
+  Dict,
+  NamedTuple,
+  Tuple,
 )
 
 import haiku as hk

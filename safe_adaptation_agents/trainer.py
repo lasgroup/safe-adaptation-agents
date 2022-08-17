@@ -7,7 +7,6 @@ from typing import Optional, List, Dict, Callable
 import cloudpickle
 import numpy as np
 from gym import Env
-from gym.spaces import Space
 from safe_adaptation_gym import benchmark
 
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
@@ -83,17 +82,11 @@ class Trainer:
   def __init__(self,
                config: SimpleNamespace,
                make_env: Callable[[], Env],
-               make_agent: Optional[Callable[
-                   [SimpleNamespace, Space, Space, logging.TrainingLogger],
-                   agents.Agent]] = None,
                agent: Optional[agents.Agent] = None,
                task_sampler: Optional[benchmark.Benchmark] = None,
                start_epoch: int = 0,
                seeds: Optional[List[int]] = None):
     self.config = config
-    assert not (agent is not None and make_agent is not None), (
-        'agent and make_agent parameters are mutually exclusive.')
-    self.make_agent = make_agent
     self.agent = agent
     self.make_env = make_env
     self.tasks_sampler = task_sampler
@@ -110,14 +103,15 @@ class Trainer:
                                                 self.config.parallel_envs,
                                                 time_limit)
     _, task = next(self.tasks())
+    agents.set_precision(self.config.agent, self.config.precision)
     if self.seeds is not None:
       self.env.reset(seed=self.seeds, options={'task': task})
     else:
       self.env.reset(seed=self.config.seed, options={'task': task})
-    if self.make_agent is not None:
+    if self.agent is None:
       self.logger = logging.TrainingLogger(self.config.log_dir)
-      self.agent = self.make_agent(self.config, self.env.observation_space,
-                                   self.env.action_space, self.logger)
+      self.agent = agents.make(self.config, self.env.observation_space,
+                               self.env.action_space, self.logger)
     else:
       self.logger = self.agent.logger
     return self

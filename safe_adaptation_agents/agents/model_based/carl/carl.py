@@ -1,25 +1,22 @@
 import copy
-from typing import Optional, Union, Dict, Any
-from types import SimpleNamespace
 from functools import partial
-from tqdm import tqdm
+from types import SimpleNamespace
+from typing import Optional, Union, Dict, Any
 
+import chex
+import haiku as hk
+import jax
+import jmp
 import numpy as np
-
 from gym import spaces
 from gym.wrappers.normalize import RunningMeanStd
-
-import jax
 from jax import numpy as jnp
-import haiku as hk
-import jmp
-import chex
 
-from safe_adaptation_agents.agents import agent, Transition
 from safe_adaptation_agents import logging, utils
+from safe_adaptation_agents.agents import agent, Transition
 from safe_adaptation_agents.agents.model_based import replay_buffer as rb
-from safe_adaptation_agents.agents.model_based.carl import model
 from safe_adaptation_agents.agents.model_based.carl import cem
+from safe_adaptation_agents.agents.model_based.carl import model
 
 
 class EnsembleLearner(utils.Learner):

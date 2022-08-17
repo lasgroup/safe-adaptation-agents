@@ -24,9 +24,9 @@ def test_run():
 
   config = options.load_config([
       '--configs', 'defaults', 'no_adaptation', '--agent', 'la_mbda',
-      '--eval_trials', '1', '--render_episodes', '0',
+      '--eval_trials', '0', '--render_episodes', '0',
       '--train_driver.adaptation_steps', '200', '--test_driver.query_steps',
-      '200', '--epochs', '1', '--safe', 'True', '--log_dir',
+      '200', '--epochs', '2', '--safe', 'True', '--log_dir',
       'results/test_lambda_safe', '--time_limit', '100', '--replay_buffer',
       '{capacity: 10, batch_size: 5, sequence_length: 8}', '--prefill', '100',
       '--update_steps', '2', '--train_every', '100', '--parallel_envs', '1',
@@ -39,8 +39,7 @@ def test_run():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
   assert objective[config.task] >= 15.
   assert constraint[config.task] == 0.
@@ -74,8 +73,7 @@ def test_not_safe():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
   assert objective[config.task] >= 15.
   assert constraint[config.task] == 0.
@@ -109,8 +107,7 @@ def test_safe():
     jax_config.update('jax_disable_jit', True)
   path = os.path.join(config.log_dir, 'state.pkl')
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
-      config=config, make_agent=agents.make,
-      make_env=lambda: make_env(config)) as trainer:
+      config=config, make_env=lambda: make_env(config)) as trainer:
     objective, constraint = trainer.train()
   assert objective[config.task] >= 7.
   assert constraint[config.task] < config.cost_limit

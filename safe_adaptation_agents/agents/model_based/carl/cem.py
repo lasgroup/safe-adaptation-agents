@@ -1,7 +1,7 @@
 from typing import Callable
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 
 
 def solve(objective_fn: Callable[[jnp.ndarray], jnp.ndarray],

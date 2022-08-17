@@ -82,16 +82,19 @@ multitask:
   eval_trials: 1
   task_batch_size: 10
   epochs: 750
-  train_driver: {adaptation_steps: 10000, query_steps: 10000}
-  test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 on_policy:
   eval_every: 5
   epochs: 750
+  train_driver: {adaptation_steps: 10000, query_steps: 10000}
+  test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 model_based:
   eval_every: 2
   epochs: 100
+  train_driver: {adaptation_steps: 1000, query_steps: 1000}
+  test_driver: {adaptation_steps: 1000, query_steps: 1000}
+  parallel_envs: 3
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
@@ -162,20 +165,20 @@ la_mbda:
   train_every: 10000
   update_steps: 500
   action_repeat: 2
-  replay_buffer: {capacity: 1000, batch_size: 32, sequence_length: 50}
+  replay_buffer: {capacity: 2000, batch_size: 32, sequence_length: 50}
   # World Model
   rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
   model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
-  swag: {start_averaging: 1000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1., learning_rate_factor: 5.}
+  swag: {start_averaging: 1000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 0.1, learning_rate_factor: 5.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
   decoder: {depth: 32, kernels: [5, 5, 6, 6]}
   reward: {layers: [400, 400]}
   cost: {layers: [400, 400]}
   free_kl: 3.0
-  kl_scale: 1.0
+  kl_scale: 0.1
   kl_mix: 0.8
   # Actor-Critic
-  posterior_samples: 1
+  posterior_samples: 5
   actor: {layers: [400, 400, 400, 400], min_stddev: 1e-4, max_stddev: 10., activation: jnn.elu, initialization: glorot, squash: True, heteroscedastic: True}
   critic: {layers: [400, 400, 400], dist: normal, activation: jnn.elu, name: 'critic', initialization: glorot}
   actor_opt: {lr: 8e-5, eps: 1e-5, clip: 5.}
@@ -185,10 +188,10 @@ la_mbda:
   penalty_power_factor: 1e-5
   cost_weight: 100.
   discount: 0.99
-  cost_discount: 0.995
+  cost_discount: 0.99
   lambda_: 0.95
   sample_horizon: 15
-  evaluate_model: True
+  evaluate_model: False
 
 carl:
   train_every: 10000

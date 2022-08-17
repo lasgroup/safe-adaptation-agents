@@ -29,7 +29,6 @@ def main():
       config.benchmark, batch_size=config.task_batch_size)
   with Trainer.from_pickle(config) if os.path.exists(path) else Trainer(
       config=config,
-      make_agent=agents.make,
       make_env=lambda: make_env(config),
       task_sampler=task_sampler) as trainer:
     trainer.train()
