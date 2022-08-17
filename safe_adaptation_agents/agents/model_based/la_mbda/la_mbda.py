@@ -395,8 +395,8 @@ class LaMBDA(agent.Agent):
 def balanced_kl_loss(posterior: tfd.Distribution, prior: tfd.Distribution,
                      free_nats: float, mix: float) -> jnp.ndarray:
   sg = lambda x: jax.tree_map(jax.lax.stop_gradient, x)
-  lhs = tfd.kl_divergence(posterior, sg(prior)).mean()
-  rhs = tfd.kl_divergence(sg(posterior), prior).mean()
+  lhs = tfd.kl_divergence(posterior, sg(prior)).astype(jnp.float32).mean()
+  rhs = tfd.kl_divergence(sg(posterior), prior).astype(jnp.float32).mean()
   return (1. - mix) * jnp.maximum(lhs, free_nats) + mix * jnp.maximum(
       rhs, free_nats)
 
