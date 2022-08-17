@@ -162,8 +162,8 @@ la_mbda:
   rgb_observation: True
   precision: 16
   prefill: 5000
-  train_every: 10000
-  update_steps: 500
+  train_every: 3000
+  update_steps: 150
   action_repeat: 2
   replay_buffer: {capacity: 2000, batch_size: 32, sequence_length: 50}
   # World Model
