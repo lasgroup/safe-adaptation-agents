@@ -90,7 +90,7 @@ on_policy:
   test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 model_based:
-  eval_every: 2
+  eval_every: 4
   epochs: 100
   train_driver: {adaptation_steps: 5000, query_steps: 5000}
   test_driver: {adaptation_steps: 5000, query_steps: 5000}
@@ -169,7 +169,7 @@ la_mbda:
   # World Model
   rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
   model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
-  swag: {start_averaging: 1000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 0.1, learning_rate_factor: 5.}
+  swag: {start_averaging: 1000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1.0, learning_rate_factor: 5.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
   decoder: {depth: 32, kernels: [5, 5, 6, 6]}
   reward: {layers: [400, 400]}
