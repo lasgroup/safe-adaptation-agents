@@ -75,7 +75,8 @@ class LaMBDA(agent.Agent):
                            self.precision,
                            observation_space.sample()[None, None].astype(dtype),
                            action_space.sample()[None, None].astype(dtype),
-                           **config.swag)
+                           np.zeros((1, 1, 1), dtype=dtype),
+                           np.zeros((1, 1, 1), dtype=dtype), **config.swag)
     features_example = jnp.concatenate(self.init_state, -1)
     self.actor = utils.Learner(actor, next(self.rng_seq), config.actor_opt,
                                self.precision, features_example.astype(dtype))
@@ -134,11 +135,12 @@ class LaMBDA(agent.Agent):
     filter_, *_ = self.model.apply
     key, subkey = jax.random.split(key)
     batch_shape = observation.shape[0]
-    prev_state = LaMBDAState(*map(lambda x: x[:batch_shape], prev_state))
+    prev_state = jax.tree_map(lambda x: x[:batch_shape], prev_state)
     observation = observation.astype(self.precision.compute_dtype)
     observation = rb.preprocess(observation)
     _, current_state = filter_(model_params, subkey, prev_state.rssm_state,
-                               prev_state.action, prev_state.cost, observation)
+                               prev_state.action, prev_state.reward,
+                               prev_state.cost, observation)
     features = jnp.concatenate(current_state, -1)
     policy = self.actor.apply(actor_params, features)
     key, subkey = jax.random.split(key)

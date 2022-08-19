@@ -164,7 +164,7 @@ la_mbda:
   prefill: 5000
   train_every: 5000
   update_steps: 250
-  epiodes_per_task: 2
+  episodes_per_task: 2
   action_repeat: 2
   replay_buffer: {capacity: 2000, batch_size: 32, sequence_length: 50}
   # World Model

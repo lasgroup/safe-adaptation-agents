@@ -17,21 +17,23 @@ def create_model(config, observation_space):
   def model():
     _model = WorldModel(observation_space, config)
 
-    def filter_state(prev_state, prev_action, observation):
-      return _model(prev_state, prev_action, observation)
+    def filter_state(prev_state, prev_action, prev_reward, prev_cost,
+                     observation):
+      return _model(prev_state, prev_action, prev_reward, prev_cost,
+                    observation)
 
     def generate_sequence(initial_state, policy, policy_params, actions=None):
       return _model.generate_sequence(initial_state, policy, policy_params,
                                       actions)
 
-    def observe_sequence(observations, actions):
-      return _model.observe_sequence(observations, actions)
+    def observe_sequence(observations, actions, rewards, costs):
+      return _model.observe_sequence(observations, actions, rewards, costs)
 
     def decode(feature):
       return _model.decode(feature)
 
-    def init(observations, actions):
-      return _model.observe_sequence(observations, actions)
+    def init(observations, actions, rewards, costs):
+      return _model.observe_sequence(observations, actions, rewards, costs)
 
     return init, (filter_state, generate_sequence, observe_sequence, decode)
 
@@ -59,8 +61,7 @@ class WorldModel(hk.Module):
 
   def __call__(
       self, prev_state: rssm.State, prev_action: jnp.ndarray,
-      prev_reward: jnp.ndarray, prev_cost: jnp.ndarray,
-      observation: jnp.ndarray
+      prev_reward: jnp.ndarray, prev_cost: jnp.ndarray, observation: jnp.ndarray
   ) -> Tuple[Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
              rssm.State]:
     embeddings = jnp.squeeze(self.encoder(observation[:, None]), 1)
@@ -80,12 +81,16 @@ class WorldModel(hk.Module):
     return features, reward, cost
 
   def observe_sequence(
-      self, observations: jnp.ndarray, actions: jnp.ndarray,
-      rewards: jnp.ndarray, costs: jnp.ndarray,
+      self,
+      observations: jnp.ndarray,
+      actions: jnp.ndarray,
+      rewards: jnp.ndarray,
+      costs: jnp.ndarray,
   ) -> [[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag], jnp.ndarray,
         tfd.Normal, tfd.Normal, tfd.Bernoulli]:
     embeddings = self.encoder(observations)
-    embeddings = jnp.concatenate([embeddings, rewards, costs], -1)
+    embeddings = jnp.concatenate(
+        [embeddings, rewards[..., None], costs[..., None]], -1)
     dists, features = self.rssm.observe_sequence(embeddings, actions)
     reward = self.reward(features)
     cost = self.cost(features)
