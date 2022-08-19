@@ -10,6 +10,7 @@ class TrajectoryData(NamedTuple):
   a: np.ndarray
   r: np.ndarray
   c: np.ndarray
+  d: np.ndarray
 
 
 class EpisodicTrajectoryBuffer:
@@ -98,7 +99,7 @@ class EpisodicTrajectoryBuffer:
     self._full = False
     if self.observation.shape[0] == 1:
       o, a, r, c = map(lambda x: x.squeeze(0), (o, a, r, c))
-    return TrajectoryData(o, a, r, c)
+    return TrajectoryData(o, a, r, c, np.zeros_like(c))
 
   @property
   def full(self):
