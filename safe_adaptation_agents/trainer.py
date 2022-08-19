@@ -11,7 +11,8 @@ from safe_adaptation_gym import benchmark
 
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
-
+# TODO (yarden): re-write this function: no need for n runs (I nver use it).
+# Use the agreed safety evaluation.
 def evaluation_summary(runs: List[driver.IterationSummary],
                        prefix: str = 'evaluation') -> [Dict, Dict, Dict, Dict]:
   reward_returns = defaultdict(float)

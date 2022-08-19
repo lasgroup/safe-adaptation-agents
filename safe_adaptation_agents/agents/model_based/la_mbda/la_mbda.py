@@ -94,6 +94,7 @@ class LaMBDA(agent.Agent):
             minval=-1.,
             maxval=1.),
         device=jax.devices("cpu")[0])
+    self.episodes_count = 0
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -109,7 +110,7 @@ class LaMBDA(agent.Agent):
     return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
-    pass
+    self.state = (self.init_state, jnp.zeros_like(self.state[-1]))
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
@@ -140,9 +141,20 @@ class LaMBDA(agent.Agent):
 
   def observe(self, transition: agent.Transition, adapt: bool):
     self.training_step += sum(transition.steps)
-    self.replay_buffer.add(transition)
     if transition.last:
-      self.state = (self.init_state, jnp.zeros_like(self.state[-1]))
+      self.episodes_count += 1
+      if self.episodes_count == self.config.episodes_per_task:
+        self.episodes_count = 0
+      else:
+        # Avoid flagging this transition as the last so that the trajectory
+        # buffer will proceed with a single concatenated episode. See
+        # Zintgraf et al. https://arxiv.org/pdf/1910.08348.pdf
+        done = np.zeros_like(transition.done)
+        transition = agent.Transition(transition.observation,
+                                      transition.next_observation,
+                                      transition.action, transition.reward,
+                                      transition.cost, done, transition.info)
+    self.replay_buffer.add(transition)
 
   @property
   def init_state(self):
