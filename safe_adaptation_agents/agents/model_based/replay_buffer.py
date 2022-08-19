@@ -34,10 +34,6 @@ class ReplayBuffer:
         capacity,
         max_length,
     ), dtype=self.dtype)
-    self.done = np.zeros((
-        capacity,
-        max_length,
-    ), dtype=self.dtype)
     self._valid_episodes = 0
     self.rs = np.random.RandomState(seed)
     example = next(
@@ -54,9 +50,9 @@ class ReplayBuffer:
     # Discard data if batch size overflows capacity.
     end = min(self.episode_id + batch_size, capacity)
     episode_slice = slice(self.episode_id, end)
-    for data, val in zip((self.action, self.reward, self.cost, self.done),
-                         (transition.action, transition.reward, transition.cost,
-                          transition.done)):
+    for data, val in zip(
+        (self.action, self.reward, self.cost),
+        (transition.action, transition.reward, transition.cost)):
       data[episode_slice, self.idx] = val[:batch_size].astype(self.dtype)
     observation = transition.observation[:batch_size].astype(self.obs_dtype)
     self.observation[episode_slice, self.idx] = observation
@@ -87,14 +83,17 @@ class ReplayBuffer:
       # Sample a sequence of length H for the actions, rewards and costs,
       # and a length of H + 1 for the observations (which is needed for
       # bootstrapping)
-      a, r, c, d = [
-          x[episode_ids[:, None], timestep_ids[:, :-1]]
-          for x in (self.action, self.reward, self.cost, self.done)
+      a, r, c = [
+          x[episode_ids[:, None], timestep_ids[:, :-1]] for x in (
+              self.action,
+              self.reward,
+              self.cost,
+          )
       ]
       o = self.observation[episode_ids[:, None], timestep_ids]
       if self.obs_dtype == np.uint8:
         o = preprocess(o).astype(self.dtype)
-      yield o, a, r, c, d
+      yield o, a, r, c
 
   def sample(self, n_batches: int) -> Iterator[etb.TrajectoryData]:
     if self.empty:

@@ -29,9 +29,8 @@ LearningState = utils.LearningState
 
 
 def lambda_values(next_values: jnp.ndarray, rewards: jnp.ndarray,
-                  done: jnp.ndarray, discount: float,
-                  lambda_: float) -> jnp.ndarray:
-  tds = rewards + (1. - lambda_) * discount * (1. - done) * next_values
+                  discount: float, lambda_: float) -> jnp.ndarray:
+  tds = rewards + (1. - lambda_) * discount * next_values
   tds = tds.at[-1].add(lambda_ * discount * next_values[-1])
   return utils.discounted_cumsum(tds, lambda_ * discount)
 
@@ -42,7 +41,7 @@ def discount_sequence(factor, length):
 
 
 # First vmap the time horizon axis.
-lambda_values = jax.vmap(lambda_values, (0, 0, 0, None, None))
+lambda_values = jax.vmap(lambda_values, (0, 0, None, None))
 
 
 class UpdateActorResult(NamedTuple):
@@ -58,7 +57,6 @@ class LaMBDAState(NamedTuple):
   action: jnp.ndarray
   reward: jnp.ndarray
   cost: jnp.ndarray
-  done: jnp.ndarray
 
 
 class LaMBDA(agent.Agent):
@@ -94,15 +92,16 @@ class LaMBDA(agent.Agent):
     self.lagrangian = utils.Learner(augmented_lagrangian, next(self.rng_seq),
                                     {}, self.precision, 1., 0.)
     self.replay_buffer = replay_buffer
-    self.state = (self.init_state,
-                  jnp.zeros((self.config.parallel_envs,) + action_space.shape,
-                            self.precision.compute_dtype))
+    init = jnp.zeros((self.config.parallel_envs,) + action_space.shape,
+                     self.precision.compute_dtype)
+    self.state = LaMBDAState(self.init_state, init, init, init)
     self._prefill_policy = lambda x: jax.device_put(
         jax.random.uniform(
             next(self.rng_seq), (x.shape[0],) + action_space.shape,
             minval=-1.,
             maxval=1.),
         device=jax.devices("cpu")[0])
+    self.episodes_count = 0
 
   def __call__(self, observation: np.ndarray, train: bool, adapt: bool, *args,
                **kwargs) -> np.ndarray:
@@ -113,7 +112,8 @@ class LaMBDA(agent.Agent):
     action, current_state = self.policy(self.state, observation,
                                         self.model.params, self.actor.params,
                                         next(self.rng_seq), train)
-    self.state = (current_state, action)
+    self.state = LaMBDAState(current_state, action, self.state.reward,
+                             self.state.cost)
     return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
@@ -121,7 +121,7 @@ class LaMBDA(agent.Agent):
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
-    pass
+    self.state = jax.tree_map(jnp.zeros_like, self.state)
 
   @partial(jax.jit, static_argnums=(0, 6))
   def policy(self,
@@ -138,8 +138,7 @@ class LaMBDA(agent.Agent):
     observation = observation.astype(self.precision.compute_dtype)
     observation = rb.preprocess(observation)
     _, current_state = filter_(model_params, subkey, prev_state.rssm_state,
-                               prev_state.action, prev_state.cost,
-                               prev_state.done, observation)
+                               prev_state.action, prev_state.cost, observation)
     features = jnp.concatenate(current_state, -1)
     policy = self.actor.apply(actor_params, features)
     key, subkey = jax.random.split(key)
@@ -148,9 +147,23 @@ class LaMBDA(agent.Agent):
 
   def observe(self, transition: agent.Transition, adapt: bool):
     self.training_step += sum(transition.steps)
-    self.replay_buffer.add(transition)
+    self.state = LaMBDAState(self.state.rssm_state, self.state.action,
+                             transition.reward[:, None], transition.cost[:,
+                                                                         None])
     if transition.last:
-      self.state = (self.init_state, jnp.zeros_like(self.state[-1]))
+      self.episodes_count += 1
+      if self.episodes_count == self.config.episodes_per_task:
+        self.episodes_count = 0
+      else:
+        # Avoid flagging this transition as the last so that the trajectory
+        # buffer will proceed with a single concatenated episode. See
+        # Zintgraf et al. https://arxiv.org/pdf/1910.08348.pdf
+        done = np.zeros_like(transition.done)
+        transition = agent.Transition(transition.observation,
+                                      transition.next_observation,
+                                      transition.action, transition.reward,
+                                      transition.cost, done, transition.info)
+    self.replay_buffer.add(transition)
 
   @property
   def init_state(self):
@@ -181,7 +194,7 @@ class LaMBDA(agent.Agent):
           self.safety_critic.params, self.lagrangian.params, next(self.rng_seq))
       self.critic.state, critic_report = self.update_critic(
           self.critic.state, critic_params, aux.optimistic_sample,
-          aux.optimistic_reward, aux)
+          aux.optimistic_reward)
       if self.safe:
         self.lagrangian.state, lagrangian_report = self.update_lagrangian(
             self.lagrangian.state, aux.cond)
@@ -208,22 +221,19 @@ class LaMBDA(agent.Agent):
     def loss(params: hk.Params) -> Tuple[float, dict]:
       _, _, infer, _ = self.model.apply
       outputs_infer = infer(params, key, batch.o[:, 1:], batch.a, batch.r,
-                            batch.c, batch.d)
-      (prior, posterior), features, decoded, reward, cost, done = outputs_infer
+                            batch.c)
+      (prior, posterior), features, decoded, reward, cost = outputs_infer
       kl_loss = balanced_kl_loss(posterior, prior, config.free_kl,
                                  config.kl_mix)
       log_p_obs = decoded.log_prob(batch.o[:, 1:]).astype(jnp.float32).mean()
       log_p_rews = reward.log_prob(batch.r).mean()
-      log_p_done = done.log_prob(batch.d).mean()
       # Generally costs can be greater than 1. (especially if we use
       # ActionRepeat). However, since the cost is modeled as an indicator,
       # we transform it back to a continuous variable.
       log_p_cost = cost.log_prob(batch.c > 0.)
       log_p_cost = jnp.where(batch.c > 0., log_p_cost * self.config.cost_weight,
                              log_p_cost).mean()
-      loss_ = (
-          config.kl_scale * kl_loss - log_p_obs - log_p_rews - log_p_cost -
-          log_p_done)
+      loss_ = config.kl_scale * kl_loss - log_p_obs - log_p_rews - log_p_cost
       posterior_entropy = posterior.entropy().astype(jnp.float32).mean()
       prior_entropy = prior.entropy().astype(jnp.float32).mean()
       return loss_, {
@@ -264,11 +274,10 @@ class LaMBDA(agent.Agent):
     batched_lambda_values = hk.BatchApply(lambda_values)
 
     def loss(params: hk.Params):
-      trajectories, reward, cost, done = generate_trajectories(
+      trajectories, reward, cost = generate_trajectories(
           params, flattened_features, key)
       reward_values = reward_critic(trajectories[:, :, 1:]).mean()
       reward_lambdas = batched_lambda_values(reward_values, reward[:, :, :-1],
-                                             done[:, :, :-1],
                                              self.config.discount,
                                              self.config.lambda_)
       optimistic_sample, reward_lambdas, reward = estimate_upper_bound(
@@ -280,7 +289,6 @@ class LaMBDA(agent.Agent):
       if self.safe:
         cost_values = cost_critic(trajectories[:, :, 1:]).mean()
         cost_lambdas = batched_lambda_values(cost_values, cost[:, :, :-1],
-                                             done[:, :, :-1],
                                              self.config.cost_discount,
                                              self.config.lambda_)
         pessimistic_sample, cost_lambdas, cost = estimate_upper_bound(
@@ -310,12 +318,11 @@ class LaMBDA(agent.Agent):
 
   @partial(jax.jit, static_argnums=0)
   def update_critic(self, state: LearningState, old_params: hk.Params,
-                    trajectories: jnp.ndarray, rewards: jnp.ndarray,
-                    dones: jnp.ndarray) -> Tuple[LearningState, dict]:
+                    trajectories: jnp.ndarray,
+                    rewards: jnp.ndarray) -> Tuple[LearningState, dict]:
     reward_values = self.critic.apply(old_params, trajectories[:, 1:]).mean()
     reward_lambdas = lambda_values(reward_values, rewards[:, :-1],
-                                   dones[:, :-1], self.config.discount,
-                                   self.config.lambda_)
+                                   self.config.discount, self.config.lambda_)
 
     def loss(params: hk.Params) -> float:
       values = self.critic.apply(params, trajectories[:, :-1])
@@ -330,13 +337,13 @@ class LaMBDA(agent.Agent):
 
   @partial(jax.jit, static_argnums=0)
   def update_safety_critic(self, state: LearningState, old_params: hk.Params,
-                           trajectories: jnp.ndarray, costs: jnp.ndarray,
-                           dones: jnp.ndarray) -> Tuple[LearningState, dict]:
+                           trajectories: jnp.ndarray,
+                           costs: jnp.ndarray) -> Tuple[LearningState, dict]:
     cost_values = self.safety_critic.apply(
         old_params,
         trajectories[:, 1:],
     ).mean()
-    cost_lambdas = lambda_values(cost_values, costs[:, :-1], dones[:, :-1],
+    cost_lambdas = lambda_values(cost_values, costs[:, :-1],
                                  self.config.cost_discount, self.config.lambda_)
 
     def loss(params: hk.Params) -> float:

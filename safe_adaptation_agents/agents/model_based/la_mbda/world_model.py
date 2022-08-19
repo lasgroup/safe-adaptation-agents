@@ -59,13 +59,12 @@ class WorldModel(hk.Module):
 
   def __call__(
       self, prev_state: rssm.State, prev_action: jnp.ndarray,
-      prev_reward: jnp.ndarray, prev_cost: jnp.ndarray, prev_done: jnp.ndarray,
+      prev_reward: jnp.ndarray, prev_cost: jnp.ndarray,
       observation: jnp.ndarray
   ) -> Tuple[Tuple[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag],
              rssm.State]:
     embeddings = jnp.squeeze(self.encoder(observation[:, None]), 1)
-    embeddings = jnp.concatenate(
-        [embeddings, prev_reward, prev_cost, prev_done], -1)
+    embeddings = jnp.concatenate([embeddings, prev_reward, prev_cost], -1)
     return self.rssm(prev_state, prev_action, embeddings)
 
   def generate_sequence(
@@ -82,11 +81,11 @@ class WorldModel(hk.Module):
 
   def observe_sequence(
       self, observations: jnp.ndarray, actions: jnp.ndarray,
-      rewards: jnp.ndarray, costs: jnp.ndarray, dones: jnp.ndarray
+      rewards: jnp.ndarray, costs: jnp.ndarray,
   ) -> [[tfd.MultivariateNormalDiag, tfd.MultivariateNormalDiag], jnp.ndarray,
         tfd.Normal, tfd.Normal, tfd.Bernoulli]:
     embeddings = self.encoder(observations)
-    embeddings = jnp.concatenate([embeddings, rewards, costs, dones], -1)
+    embeddings = jnp.concatenate([embeddings, rewards, costs], -1)
     dists, features = self.rssm.observe_sequence(embeddings, actions)
     reward = self.reward(features)
     cost = self.cost(features)
