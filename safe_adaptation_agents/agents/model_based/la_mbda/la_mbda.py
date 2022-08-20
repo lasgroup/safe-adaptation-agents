@@ -75,8 +75,8 @@ class LaMBDA(agent.Agent):
                            self.precision,
                            observation_space.sample()[None, None].astype(dtype),
                            action_space.sample()[None, None].astype(dtype),
-                           np.zeros((1, 1, 1), dtype=dtype),
-                           np.zeros((1, 1, 1), dtype=dtype), **config.swag)
+                           np.zeros((1, 1), dtype=dtype),
+                           np.zeros((1, 1), dtype=dtype), **config.swag)
     features_example = jnp.concatenate(self.init_state, -1)
     self.actor = utils.Learner(actor, next(self.rng_seq), config.actor_opt,
                                self.precision, features_example.astype(dtype))
