@@ -118,11 +118,11 @@ class LaMBDA(agent.Agent):
     return action
 
   def observe_task_id(self, task_id: Optional[str] = None):
-    pass
+    self.state = jax.tree_map(jnp.zeros_like, self.state)
 
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
-    self.state = jax.tree_map(jnp.zeros_like, self.state)
+    pass
 
   @partial(jax.jit, static_argnums=(0, 6))
   def policy(self,
