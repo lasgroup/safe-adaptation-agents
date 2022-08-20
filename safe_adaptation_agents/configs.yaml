@@ -92,9 +92,9 @@ on_policy:
 model_based:
   eval_every: 4
   epochs: 100
-  train_driver: {adaptation_steps: 5000, query_steps: 5000}
-  test_driver: {adaptation_steps: 5000, query_steps: 5000}
-  parallel_envs: 5
+  train_driver: {adaptation_steps: 10000, query_steps: 10000}
+  test_driver: {adaptation_steps: 10000, query_steps: 10000}
+  parallel_envs: 10
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.
@@ -162,8 +162,8 @@ la_mbda:
   rgb_observation: True
   precision: 16
   prefill: 5000
-  train_every: 5000
-  update_steps: 250
+  train_every: 10000
+  update_steps: 500
   episodes_per_task: 2
   action_repeat: 2
   replay_buffer: {capacity: 2000, batch_size: 32, sequence_length: 50}
@@ -176,7 +176,7 @@ la_mbda:
   reward: {layers: [400, 400]}
   cost: {layers: [400, 400]}
   free_kl: 3.0
-  kl_scale: 0.1
+  kl_scale: 1.0
   kl_mix: 0.8
   # Actor-Critic
   posterior_samples: 5
