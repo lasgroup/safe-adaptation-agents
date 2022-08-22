@@ -1,6 +1,5 @@
 import os
 
-from safe_adaptation_agents import agents
 from safe_adaptation_agents import config as options
 from safe_adaptation_agents.trainer import Trainer
 

@@ -17,6 +17,7 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   reward_returns = defaultdict(float)
   cost_returns = defaultdict(float)
   summary = defaultdict(float)
+  task_count = defaultdict(int)
   task_vids = {}
 
   def return_(arr):
@@ -27,15 +28,19 @@ def evaluation_summary(runs: List[driver.IterationSummary],
 
   for i, run in enumerate(runs):
     for task_name, task in run.items():
+      task_bound = task[0]['info'][0]['bound']
       reward_return = return_([episode['reward'] for episode in task])
-      cost_return = return_([episode['cost'] for episode in task])
+      cost_return = return_([episode['cost'] for episode in task]) - task_bound
+      count = task_count[task_name]
       reward_returns[task_name] = average(reward_returns[task_name],
-                                          reward_return, i)
-      cost_returns[task_name] = average(cost_returns[task_name], cost_return, i)
+                                          reward_return, count)
+      cost_returns[task_name] = average(cost_returns[task_name], cost_return,
+                                        count)
       reward_id = f'{prefix}/{task_name}/reward_return'
       cost_id = f'{prefix}/{task_name}/cost_return'
       summary[reward_id] = reward_returns[task_name]
       summary[cost_id] = cost_returns[task_name]
+      task_count[task_name] += 1
       if i == 0:
         if frames := task[0].get('frames', []):
           task_vids[f'{prefix}/{task_name}'] = frames
@@ -43,6 +48,8 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   task_average_cost_retrun = np.asarray(list(cost_returns.values())).mean()
   summary[f'{prefix}/average_reward_return'] = task_average_reward_return
   summary[f'{prefix}/average_cost_return'] = task_average_cost_retrun
+  summary[f'{prefix}/average_feasibilty'] = (np.asarray(
+      list(cost_returns.values())) <= 0.).mean()
   reward_returns['average'] = task_average_reward_return
   cost_returns['average'] = task_average_reward_return
   return summary, reward_returns, cost_returns, task_vids
