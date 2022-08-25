@@ -91,7 +91,7 @@ on_policy:
 
 model_based:
   eval_every: 2
-  epochs: 100
+  epochs: 50
   train_driver: {adaptation_steps: 10000, query_steps: 10000}
   test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
@@ -166,7 +166,7 @@ la_mbda:
   action_repeat: 2
   replay_buffer: {capacity: 1000, batch_size: 32, sequence_length: 50}
   # World Model
-  rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 30}
+  rssm: {hidden: 200, deterministic_size: 200, stochastic_size: 60}
   model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
   swag: {start_averaging: 4000, average_period: 200, max_num_models: 20, decay: 0.8, scale: 1.0, learning_rate_factor: 5.}
   encoder: {depth: 32, kernels: [4, 4, 4, 4]}
@@ -174,7 +174,7 @@ la_mbda:
   reward: {layers: [400, 400]}
   cost: {layers: [400, 400]}
   free_kl: 3.0
-  kl_scale: 1.0
+  kl_scale: 2.0
   kl_mix: 0.8
   # Actor-Critic
   posterior_samples: 5
