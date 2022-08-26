@@ -26,6 +26,8 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   def average(old_val, new_val, i):
     return (old_val * i + new_val) / (i + 1)
 
+  objective, cost, feasibility = 0., 0., 0.
+  total_count = 0
   for i, run in enumerate(runs):
     for task_name, task in run.items():
       task_bound = task[0]['info'][0][0]['bound']
@@ -44,14 +46,15 @@ def evaluation_summary(runs: List[driver.IterationSummary],
       if i == 0:
         if frames := task[0].get('frames', []):
           task_vids[f'{prefix}/{task_name}'] = frames
-  task_average_reward_return = np.asarray(list(reward_returns.values())).mean()
-  task_average_cost_retrun = np.asarray(list(cost_returns.values())).mean()
-  summary[f'{prefix}/average_reward_return'] = task_average_reward_return
-  summary[f'{prefix}/average_cost_return'] = task_average_cost_retrun
-  summary[f'{prefix}/average_feasibilty'] = (np.asarray(
-      list(cost_returns.values())) <= 0.).mean()
-  reward_returns['average'] = task_average_reward_return
-  cost_returns['average'] = task_average_reward_return
+      objective += reward_return
+      cost += cost_return
+      feasibility += (cost_return <= 0.)
+      total_count += 1
+  summary[f'{prefix}/average_reward_return'] = objective / total_count
+  summary[f'{prefix}/average_cost_return'] = cost / total_count
+  summary[f'{prefix}/average_feasibilty'] = feasibility / total_count
+  reward_returns['average'] = objective / total_count
+  cost_returns['average'] = cost / total_count
   return summary, reward_returns, cost_returns, task_vids
 
 
