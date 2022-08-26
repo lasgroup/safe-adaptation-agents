@@ -79,6 +79,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
         self.config.num_trajectories, num_steps * self.config.episodes_per_task,
         observation_space.shape, action_space.shape,
         self.config.task_batch_size)
+    self.training_step = 0
     parallel_envs = self.config.parallel_envs
     hidden_state = _initial_hidden_state(parallel_envs, self.config.hidden_size)
     zeros = jnp.zeros((parallel_envs, 1))
