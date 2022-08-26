@@ -79,7 +79,7 @@ cpo:
   margin_lr: 0.05
 
 multitask:
-  eval_trials: 1
+  eval_trials: 3
   task_batch_size: 10
   epochs: 750
 
