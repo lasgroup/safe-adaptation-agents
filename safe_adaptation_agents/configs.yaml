@@ -81,11 +81,10 @@ cpo:
 multitask:
   eval_trials: 3
   task_batch_size: 10
-  epochs: 750
 
 on_policy:
   eval_every: 5
-  epochs: 750
+  epochs: 500
   train_driver: {adaptation_steps: 10000, query_steps: 10000}
   test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
