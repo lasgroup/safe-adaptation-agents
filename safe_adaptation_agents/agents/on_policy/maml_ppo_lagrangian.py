@@ -97,6 +97,7 @@ class MamlPPOLagrangian(ppo_lagrangian.PPOLagrangian):
                            utils.pytrees_stack(self.pi_posteriors))
     info['agent/lagrangian_lr'] = jnn.softplus(self.inner_lrs.params[0])
     info['agent/policy_lr'] = jnn.softplus(self.inner_lrs.params[1])
+    info['agent/on_policy_constraint'] = query.c.sum(2).mean()
     for k, v in info.items():
       self.logger[k] = v.mean()
 

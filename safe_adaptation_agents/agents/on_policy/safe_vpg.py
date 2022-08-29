@@ -88,8 +88,7 @@ class SafeVanillaPolicyGradients(vpg.VanillaPolicyGrandients):
     cost_advantage = vpg.discounted_cumsum(
         diff, self.config.lambda_ * self.config.cost_discount)
     # Centering advantage, but not normalize, as in
-    # https://github.com/openai/safety-starter-agents/blob
-    # /4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/buffer.py#L71
+    # https://github.com/openai/safety-starter-agents/blob/4151a283967520ee000f03b3a79bf35262ff3509/safe_rl/pg/buffer.py#L71
     cost_advantage -= cost_advantage.mean()
     return Evaluation(advantage, return_, cost_advantage, cost_return)
 
