@@ -177,7 +177,7 @@ class RL2CPO(safe_vpg.SafeVanillaPolicyGradients):
                                                trajectory_data, eval_.advantage,
                                                eval_.cost_advantage, c)
     info['agent/margin'] = self.margin
-    info['agent/on_policy_constraint'] = constraint
+    info['agent/on_policy_constraint'] = constraint - self.config.cost_limit
     for k, v in info.items():
       self.logger[k] = float(v)
 
