@@ -35,7 +35,7 @@ class TrainingLogger:
     step = step if step is not None else self.step
     for k, v in summary.items():
       self._writer.add_scalar(k, float(v), step)
-    with open(os.path.join(self.log_dir, 'summary.json'), 'a') as file:
+    with open(os.path.join(self.log_dir, 'summary.jsonl'), 'a') as file:
       file.write(json.dumps({'step': step, **summary}) + '\n')
     if flush:
       self._writer.flush()
