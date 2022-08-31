@@ -134,3 +134,6 @@ dmypy.json
 
 # Results
 results/
+
+# Jupyter Notebooks
+*.ipynb
