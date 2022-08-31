@@ -11,7 +11,7 @@ from safe_adaptation_agents.agents import Agent, Transition
 from safe_adaptation_agents.episodic_async_env import EpisodicAsync
 
 EpisodeSummary = Dict[str, List]
-IterationSummary = Dict[str, List[EpisodeSummary]]
+IterationSummary = List[Tuple[str, List[EpisodeSummary]]]
 
 
 def interact(agent: Agent,
@@ -104,7 +104,7 @@ class Driver:
   def run(self, agent: Agent, env: EpisodicAsync,
           tasks: Iterable[Tuple[str, sagt.Task]],
           train: bool) -> [IterationSummary, IterationSummary]:
-    iter_adaptation_episodes, iter_query_episodes = {}, {}
+    iter_adaptation_episodes, iter_query_episodes = [], []
     for i, (task_name, task) in enumerate(tasks):
       if self.episode_callback is not None:
         callback = lambda summary, adapt, steps: self.episode_callback(
@@ -123,7 +123,7 @@ class Driver:
             on_episode_end=callback,
             render_episodes=self.render_episodes,
             render_mode=self.render_mode)
-        iter_adaptation_episodes[task_name] = adaptation_episodes
+        iter_adaptation_episodes.append((task_name, adaptation_episodes))
         assert self.adaptation_buffer.full, (
             'Adaptation buffer should be full at this point. Episode id: {}, '
             'transition idx: {}'.format(self.adaptation_buffer.episode_id,
@@ -138,5 +138,5 @@ class Driver:
             on_episode_end=callback,
             render_episodes=self.render_episodes,
             render_mode=self.render_mode)
-        iter_query_episodes[task_name] = query_episodes
+        iter_query_episodes.append((task_name, query_episodes))
     return iter_adaptation_episodes, iter_query_episodes

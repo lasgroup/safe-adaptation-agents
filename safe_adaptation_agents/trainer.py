@@ -29,7 +29,7 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   objective, cost, feasibility = 0., 0., 0.
   total_count = 0
   for i, run in enumerate(runs):
-    for task_name, task in run.items():
+    for task_name, task in run:
       task_bound = task[0]['info'][0][0]['bound']
       reward_return = return_([episode['reward'] for episode in task])
       cost_return = return_([episode['cost'] for episode in task]) - task_bound
