@@ -164,17 +164,17 @@ class CARL(agent.Agent):
   def adapt(self, observation: np.ndarray, action: np.ndarray,
             reward: np.ndarray, cost: np.ndarray, train: bool):
     reshape = lambda x: x.reshape(-1, x.shape[-1])
-    o = reshape(observation[:, :, :-1])
-    next_o = reshape(observation[:, :, 1:])
-    a, r, c = reshape(action), reshape(reward), reshape(cost)
+    o = reshape(observation[:, :-1])
+    next_o = reshape(observation[:, 1:])
+    a = reshape(action)
+    r, c = reshape(reward[..., None]), reshape(cost[..., None])
     state = copy.deepcopy(self.model.state)
-    # TODO (yarden): find a better parameter
     for _ in range(max(self.config.update_steps // 10, 1)):
       ids = self.replay_buffer.rs.choice(
           a.shape[0], self.config.replay_buffer['batch_size'])
       batch = rb.etb.TrajectoryData(
-          np.stack([o[ids], next_o[ids]], 1), a[ids], r[ids], c[ids])
-      state, report = self.update_model(self.model.state, batch)
+          np.stack([o[ids], next_o[ids]], 1), a[ids][:, None], r[ids], c[ids])
+      state, report = self.update_model(state, batch)
     self.adapted_model_params = state.params
 
   @property
