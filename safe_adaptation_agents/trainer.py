@@ -2,7 +2,7 @@ import os
 from collections import defaultdict
 from itertools import repeat
 from types import SimpleNamespace
-from typing import Optional, List, Dict, Callable
+from typing import Optional, List, Dict, Callable, Tuple
 
 import cloudpickle
 import numpy as np
@@ -12,7 +12,8 @@ from safe_adaptation_gym import benchmark
 from safe_adaptation_agents import agents, logging, driver, episodic_async_env
 
 
-def evaluation_summary(runs: List[driver.IterationSummary],
+def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
+                                        driver.IterationSummary]],
                        prefix: str = 'evaluation') -> [Dict, Dict, Dict, Dict]:
   reward_returns = defaultdict(float)
   cost_returns = defaultdict(float)
@@ -23,16 +24,22 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   def return_(arr):
     return np.asarray(arr).sum(1).mean()
 
+  def rate(arr):
+    return np.asarray(arr).mean()
+
   def average(old_val, new_val, i):
     return (old_val * i + new_val) / (i + 1)
 
-  objective, cost, feasibility = 0., 0., 0.
+  objective, cost, cost_rate, feasibility = 0., 0., 0., 0.
   total_count = 0
   for i, run in enumerate(runs):
-    for task_name, task in run:
-      task_bound = task[0]['info'][0][0]['bound']
-      reward_return = return_([episode['reward'] for episode in task])
-      cost_return = return_([episode['cost'] for episode in task]) - task_bound
+    for (task_name, adaptation_task), (_, query_task) in zip(*run):
+      task_bound = query_task[0]['info'][0][0]['bound']
+      reward_return = return_([episode['reward'] for episode in query_task])
+      cost_return = return_([episode['cost'] for episode in query_task])
+      cost_return -= task_bound
+      cost_rate += rate([episode['cost'] for episode in query_task] +
+                        [episode['cost'] for episode in adaptation_task])
       count = task_count[task_name]
       reward_returns[task_name] = average(reward_returns[task_name],
                                           reward_return, count)
@@ -44,7 +51,7 @@ def evaluation_summary(runs: List[driver.IterationSummary],
       summary[cost_id] = cost_returns[task_name]
       task_count[task_name] += 1
       if i == 0:
-        if frames := task[0].get('frames', []):
+        if frames := query_task[0].get('frames', []):
           task_vids[f'{prefix}/{task_name}'] = frames
       objective += reward_return
       cost += cost_return
@@ -53,6 +60,7 @@ def evaluation_summary(runs: List[driver.IterationSummary],
   summary[f'{prefix}/average_reward_return'] = objective / total_count
   summary[f'{prefix}/average_cost_return'] = cost / total_count
   summary[f'{prefix}/average_feasibilty'] = feasibility / total_count
+  summary[f'{prefix}/cost_rate'] = cost_rate / total_count
   reward_returns['average'] = objective / total_count
   cost_returns['average'] = cost / total_count
   return summary, reward_returns, cost_returns, task_vids
@@ -160,15 +168,17 @@ class Trainer:
     train_driver, test_driver = self.make_drivers()
     for epoch in range(epoch, epochs or config.epochs):
       print('Training epoch #{}'.format(epoch))
-      _, results = train_driver.run(agent, env, self.tasks(train=True), True)
-      if results:
-        summary, *_ = evaluation_summary([results], 'on_policy_evaluation')
+      adaptation_results, query_results = train_driver.run(
+          agent, env, self.tasks(train=True), True)
+      if query_results:
+        summary, *_ = evaluation_summary([adaptation_results, query_results],
+                                         'on_policy_evaluation')
         logger.log_summary(summary, epoch)
       if config.eval_trials and epoch % config.eval_every == 0:
         print('Evaluating...')
-        results = self.evaluate(test_driver)
+        query_results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
-            results)
+            query_results)
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
                                                   cost_returns.items()):
           objective[task_name] = max(objective[task_name], reward)
@@ -186,7 +196,7 @@ class Trainer:
     results = []
     for _ in range(self.config.eval_trials):
       results.append(
-          test_driver.run(self.agent, self.env, self.tasks(False), False)[1])
+          test_driver.run(self.agent, self.env, self.tasks(False), False))
     return results
 
   def get_env_random_state(self):
