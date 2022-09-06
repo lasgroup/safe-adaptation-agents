@@ -172,14 +172,14 @@ class Trainer:
           agent, env, self.tasks(train=True), True)
       self.epoch = epoch + 1
       if query_results:
-        summary, *_ = evaluation_summary([adaptation_results, query_results],
+        summary, *_ = evaluation_summary([(adaptation_results, query_results)],
                                          'on_policy_evaluation')
         logger.log_summary(summary, epoch)
       if config.eval_trials and epoch % config.eval_every == 0:
         print('Evaluating...')
-        query_results = self.evaluate(test_driver)
+        results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
-            query_results)
+            results)
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
                                                   cost_returns.items()):
           objective[task_name] = max(objective[task_name], reward)
