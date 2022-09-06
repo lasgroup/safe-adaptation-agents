@@ -26,10 +26,11 @@ defaults:
 no_adaptation:
   task: go_to_goal
   train_driver: {adaptation_steps: 30000, query_steps: 0}
-  test_driver: {adaptation_steps: 0, query_steps: 10000}
+  test_driver: {adaptation_steps: 0, query_steps: 300000}
   eval_trials: 1
+  eval_every: 66
   task_batch_size: 1
-  epochs: 334
+  epochs: 3330
 
 vanilla_policy_gradients:
   entropy_regularization: 0.
