@@ -57,12 +57,13 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
       cost += cost_return
       feasibility += (cost_return <= 0.)
       total_count += 1
-  summary[f'{prefix}/average_reward_return'] = objective / total_count
-  summary[f'{prefix}/average_cost_return'] = cost / total_count
-  summary[f'{prefix}/average_feasibilty'] = feasibility / total_count
-  summary[f'{prefix}/cost_rate'] = cost_rate / total_count
-  reward_returns['average'] = objective / total_count
-  cost_returns['average'] = cost / total_count
+  if total_count > 0:
+    summary[f'{prefix}/average_reward_return'] = objective / total_count
+    summary[f'{prefix}/average_cost_return'] = cost / total_count
+    summary[f'{prefix}/average_feasibilty'] = feasibility / total_count
+    summary[f'{prefix}/cost_rate'] = cost_rate / total_count
+    reward_returns['average'] = objective / total_count
+    cost_returns['average'] = cost / total_count
   return summary, reward_returns, cost_returns, task_vids
 
 
