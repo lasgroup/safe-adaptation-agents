@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from itertools import repeat
+from itertools import repeat, zip_longest
 from types import SimpleNamespace
 from typing import Optional, List, Dict, Callable, Tuple
 
@@ -33,7 +33,8 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
   objective, cost, cost_rate, feasibility = 0., 0., 0., 0.
   total_count = 0
   for i, run in enumerate(runs):
-    for (task_name, adaptation_task), (_, query_task) in zip(*run):
+    for (_, adaptation_task), (task_name,
+                               query_task) in zip_longest(*run, ('', [])):
       task_bound = query_task[0]['info'][0][0]['bound']
       reward_return = return_([episode['reward'] for episode in query_task])
       cost_return = return_([episode['cost'] for episode in query_task])
@@ -171,12 +172,11 @@ class Trainer:
       print('Training epoch #{}'.format(epoch))
       adaptation_results, query_results = train_driver.run(
           agent, env, self.tasks(train=True), True)
-      self.epoch = epoch + 1
       if query_results:
         summary, *_ = evaluation_summary([(adaptation_results, query_results)],
                                          'on_policy_evaluation')
-        logger.log_summary(summary, epoch)
-      if config.eval_trials and epoch % config.eval_every == 0:
+        logger.log_summary(summary, epoch + 1)
+      if config.eval_trials and (epoch + 1) % config.eval_every == 0:
         print('Evaluating...')
         results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
@@ -185,8 +185,9 @@ class Trainer:
                                                   cost_returns.items()):
           objective[task_name] = max(objective[task_name], reward)
           constraint[task_name] = min(constraint[task_name], cost)
-        logger.log_summary(summary, epoch)
-        log_videos(logger, videos, epochs)
+        logger.log_summary(summary, epoch + 1)
+        log_videos(logger, videos, epochs + 1)
+      self.epoch = epoch + 1
       state_writer.write(self.state)
     logger.flush()
     return objective, constraint
