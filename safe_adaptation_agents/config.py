@@ -55,6 +55,15 @@ def resolve_benchmark(remaining, config_names, configs):
     return benchmark_name
 
 
+def _update(d, keys, value):
+  assert keys[0] in d, 'Parameter not defined.'
+  if len(keys) > 1:
+    d[keys[0]] = _update(d[keys[0]], keys[1:], value)
+  else:
+    d[keys[0]] = value
+  return d
+
+
 # Acknowledgement: https://github.com/danijar
 def load_config(args: Optional[List[AnyStr]] = None):
   import argparse
@@ -80,9 +89,9 @@ def load_config(args: Optional[List[AnyStr]] = None):
     stripped = remaining[idx].strip('-')
     # Allow the user to override specific values within dictionaries.
     if '.' in stripped:
-      params_group, key = stripped.split('.')
+      keys = stripped.split('.')
       # Override the default value within a dictionary.
-      defaults[params_group][key] = yaml.safe_load(remaining[idx + 1])
+      defaults = _update(defaults, keys, yaml.safe_load(remaining[idx + 1]))
     else:
       updated_remaining.append(remaining[idx])
       updated_remaining.append(remaining[idx + 1])
