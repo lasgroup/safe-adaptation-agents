@@ -83,8 +83,8 @@ def on_episode_end(episode: driver.EpisodeSummary, task_name: str,
         f'training/{adapt_str}/{task_name}/episode_return': episode_return,
         f'training/{adapt_str}/{task_name}/episode_cost_return': cost_return
     }
-    logger.log_summary(summary)
     logger.step += episode_steps
+    logger.log_summary(summary)
 
 
 def log_videos(logger: logging.TrainingLogger, videos: Dict, epoch: int):
@@ -170,6 +170,7 @@ class Trainer:
       print('Training epoch #{}'.format(epoch))
       adaptation_results, query_results = train_driver.run(
           agent, env, self.tasks(train=True), True)
+      self.epoch = epoch + 1
       if query_results:
         summary, *_ = evaluation_summary([adaptation_results, query_results],
                                          'on_policy_evaluation')
@@ -185,7 +186,6 @@ class Trainer:
           constraint[task_name] = min(constraint[task_name], cost)
         logger.log_summary(summary, epoch)
         log_videos(logger, videos, epochs)
-      self.epoch = epoch + 1
       state_writer.write(self.state)
     logger.flush()
     return objective, constraint
