@@ -33,8 +33,8 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
   objective, cost, cost_rate, feasibility = 0., 0., 0., 0.
   total_count = 0
   for i, run in enumerate(runs):
-    for (_, adaptation_task), (task_name,
-                               query_task) in zip_longest(*run, ('', [])):
+    for (_, adaptation_task), (task_name, query_task) in zip_longest(
+        *run, fillvalue=('', [])):
       task_bound = query_task[0]['info'][0][0]['bound']
       reward_return = return_([episode['reward'] for episode in query_task])
       cost_return = return_([episode['cost'] for episode in query_task])
