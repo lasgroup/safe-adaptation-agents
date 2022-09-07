@@ -186,7 +186,7 @@ class Trainer:
           objective[task_name] = max(objective[task_name], reward)
           constraint[task_name] = min(constraint[task_name], cost)
         logger.log_summary(summary, epoch + 1)
-        log_videos(logger, videos, epochs + 1)
+        log_videos(logger, videos, epoch + 1)
       self.epoch = epoch + 1
       state_writer.write(self.state)
     logger.flush()
