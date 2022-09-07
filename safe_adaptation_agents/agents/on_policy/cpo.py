@@ -49,6 +49,7 @@ class CPO(safe_vpg.SafeVanillaPolicyGradients):
           self.safety_critic.state, trajectory_data.o[:, :-1],
           eval_.cost_return)
       critic_report.update(safety_report)
+    info['agent/margin'] = self.margin
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 
@@ -88,7 +89,6 @@ class CPO(safe_vpg.SafeVanillaPolicyGradients):
                                     self.config.backtrack_iters,
                                     self.config.backtrack_coeff,
                                     self.config.target_kl)
-    info['agent/margin'] = self.margin
     return LearningState(new_params, self.actor.opt_state), info
 
   def _cpo_grads(self, pi_params: hk.Params, observation: jnp.ndarray,
