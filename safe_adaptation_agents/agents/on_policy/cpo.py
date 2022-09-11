@@ -49,7 +49,7 @@ class CPO(safe_vpg.SafeVanillaPolicyGradients):
           self.safety_critic.state, trajectory_data.o[:, :-1],
           eval_.cost_return)
       critic_report.update(safety_report)
-    info['agent/margin'] = self.margin
+    actor_report['agent/margin'] = self.margin
     for k, v in {**actor_report, **critic_report}.items():
       self.logger[k] = v.mean()
 

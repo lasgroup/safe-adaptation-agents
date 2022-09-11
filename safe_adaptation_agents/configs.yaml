@@ -199,7 +199,7 @@ carl:
     state_decoder_config: {init_stddev: 1e-3, min_stddev: 1e-3, max_stddev: 5., stddev_scale: 0.1, layers: [128, 128]}
     reward_decoder_config: {layers: [128, 128]}
     cost_decoder_config: {layers: [128, 128]}
-  model_opt: {lr: 1e-3, eps: 1e-5, clip: 100}
+  model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
   num_models: 5
   prefill: 1000
   lambda_: 100000.
