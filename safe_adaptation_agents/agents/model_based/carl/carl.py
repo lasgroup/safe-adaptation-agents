@@ -95,7 +95,9 @@ class CARL(agent.Agent):
       # Average sum along the time horizon, average along the ensemble axis
       objective_, constraint = [x.sum(-1).mean(0) for x in (reward, cost)]
       constraint *= self.config.action_repeat
-      constraint -= self.config.cost_limit
+      # The cost limit is defined for a whole episode, normalize it
+      # with the plan horizon to measure if the next steps are safe.
+      constraint -= (self.config.cost_limit / self.config.plan_horizon)
       if self.safe:
         return objective_ - jnp.maximum(self.config.lambda_ * constraint, 0.)
       else:
