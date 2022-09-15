@@ -22,7 +22,10 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
   task_vids = {}
 
   def return_(arr):
-    return np.asarray(arr).sum(1).mean()
+    if arr:
+      return np.asarray(arr).sum(1).mean()
+    else:
+      return 0.
 
   def rate(arr):
     return np.asarray(arr).mean()
@@ -41,8 +44,10 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
           [episode['reward'] for episode in query_task])
       post_cost_return = return_([episode['cost'] for episode in query_task])
       post_cost_return -= task_bound
-      pre_reward_return = return_([episode['reward'] for episode in query_task])
-      pre_cost_return = return_([episode['cost'] for episode in query_task])
+      pre_reward_return = return_(
+          [episode['reward'] for episode in adaptation_task])
+      pre_cost_return = return_(
+          [episode['cost'] for episode in adaptation_task])
       pre_cost_return -= task_bound
       cost_rate += rate([episode['cost'] for episode in query_task] +
                         [episode['cost'] for episode in adaptation_task])
