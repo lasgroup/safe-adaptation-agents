@@ -30,22 +30,27 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
   def average(old_val, new_val, i):
     return (old_val * i + new_val) / (i + 1)
 
-  objective, cost, cost_rate, feasibility = 0., 0., 0., 0.
+  post_objective, post_cost, cost_rate, feasibility = 0., 0., 0., 0.
+  pre_objective, pre_cost = 0., 0.
   total_count = 0
   for i, run in enumerate(runs):
     for (_, adaptation_task), (task_name, query_task) in zip_longest(
         *run, fillvalue=('', [])):
       task_bound = query_task[0]['info'][0][0]['bound']
-      reward_return = return_([episode['reward'] for episode in query_task])
-      cost_return = return_([episode['cost'] for episode in query_task])
-      cost_return -= task_bound
+      post_reward_return = return_(
+          [episode['reward'] for episode in query_task])
+      post_cost_return = return_([episode['cost'] for episode in query_task])
+      post_cost_return -= task_bound
+      pre_reward_return = return_([episode['reward'] for episode in query_task])
+      pre_cost_return = return_([episode['cost'] for episode in query_task])
+      pre_cost_return -= task_bound
       cost_rate += rate([episode['cost'] for episode in query_task] +
                         [episode['cost'] for episode in adaptation_task])
       count = task_count[task_name]
       reward_returns[task_name] = average(reward_returns[task_name],
-                                          reward_return, count)
-      cost_returns[task_name] = average(cost_returns[task_name], cost_return,
-                                        count)
+                                          post_reward_return, count)
+      cost_returns[task_name] = average(cost_returns[task_name],
+                                        post_cost_return, count)
       reward_id = f'{prefix}/{task_name}/reward_return'
       cost_id = f'{prefix}/{task_name}/cost_return'
       summary[reward_id] = reward_returns[task_name]
@@ -54,17 +59,23 @@ def evaluation_summary(runs: List[Tuple[driver.IterationSummary,
       if i == 0:
         if frames := query_task[0].get('frames', []):
           task_vids[f'{prefix}/{task_name}'] = frames
-      objective += reward_return
-      cost += cost_return
-      feasibility += (cost_return <= 0.)
+      post_objective += post_reward_return
+      post_cost += post_cost_return
+      pre_cost += pre_cost_return
+      pre_objective += pre_reward_return
+      feasibility += (post_cost_return <= 0.)
       total_count += 1
   if total_count > 0:
-    summary[f'{prefix}/average_reward_return'] = objective / total_count
-    summary[f'{prefix}/average_cost_return'] = cost / total_count
+    summary[f'{prefix}/average_reward_return'] = post_objective / total_count
+    summary[f'{prefix}/average_cost_return'] = post_cost / total_count
+    summary[
+        f'{prefix}/pre_adaptation/average_reward_return'] = pre_objective / total_count
+    summary[
+        f'{prefix}/pre_adaptation/average_cost_return'] = pre_cost / total_count
     summary[f'{prefix}/average_feasibilty'] = feasibility / total_count
     summary[f'{prefix}/cost_rate'] = cost_rate / total_count
-    reward_returns['average'] = objective / total_count
-    cost_returns['average'] = cost / total_count
+    reward_returns['average'] = post_objective / total_count
+    cost_returns['average'] = post_cost / total_count
   return summary, reward_returns, cost_returns, task_vids
 
 

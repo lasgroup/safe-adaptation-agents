@@ -94,10 +94,12 @@ class CARL(agent.Agent):
       reward, cost = rollout_action_sequence(model_params, sample)
       # Average sum along the time horizon, average along the ensemble axis
       objective_, constraint = [x.sum(-1).mean(0) for x in (reward, cost)]
-      constraint *= self.config.action_repeat
       # The cost limit is defined for a whole episode, normalize it
       # with the plan horizon to measure if the next steps are safe.
-      constraint -= (self.config.cost_limit / self.config.plan_horizon)
+      config = self.config
+      scaling = config.action_repeat * config.time_limit / config.plan_horizon
+      constraint *= scaling
+      constraint -= self.config.cost_limit
       if self.safe:
         return objective_ - jnp.maximum(self.config.lambda_ * constraint, 0.)
       else:
