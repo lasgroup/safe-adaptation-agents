@@ -51,7 +51,7 @@ class CPO(safe_vpg.SafeVanillaPolicyGradients):
       critic_report.update(safety_report)
     actor_report['agent/margin'] = self.margin
     for k, v in {**actor_report, **critic_report}.items():
-      self.logger[k] = v.mean()
+      self.logger[k] = np.asarray(v).mean()
 
   @partial(jax.jit, static_argnums=0)
   def update_actor(self, state: LearningState, *args) -> [LearningState, dict]:
