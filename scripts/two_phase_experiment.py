@@ -60,7 +60,7 @@ def main():
                                make_env=lambda: make_env(config),
                                task_sampler=task_sampler,
                                namespace='second_phase') as trainer:
-    trainer.train(config.second_phase_epochs)
+    trainer.train(config.epochs // 2)
 
 
 if __name__ == '__main__':

@@ -79,9 +79,6 @@ no_adaptation:
   task_batch_size: 1
   epochs: 3330
 
-two_phase:
-  second_phase_epochs: 5
-
 task_adaptation:
   eval_trials: 3
   task_batch_size: 10
