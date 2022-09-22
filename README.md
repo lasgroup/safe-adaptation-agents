@@ -31,7 +31,7 @@ In our experiments, we used `cpo` as our agent.
 More generally, every parameter in the `configs.yaml` file can be easily changed when running either `scripts/no_adaptation_experiment.py` or `scripts/adaptation_experiment.py` by appending `--parameter` when running the script.
 
 ## Benchamrk
-We provide the results for our experiments in the `benchmark` folder. The following code snippet can be used to extract the results 
+We provide the results for our experiments and a jupyter-notebook that summarizes them in the `benchmark` folder.
 
 
 
