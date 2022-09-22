@@ -79,6 +79,10 @@ cpo:
   damping_coeff: 0.1
   margin_lr: 0.05
 
+task_adaptation:
+  eval_trials: 3
+  task_batch_size: 10
+
 multitask:
   eval_trials: 3
   task_batch_size: 10
