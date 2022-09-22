@@ -67,7 +67,7 @@ cpo:
   vf_iters: 80
   actor: {layers: [256, 256], min_stddev: 0.01, max_stddev: 10., activation: jnn.tanh, initialization: glorot, squash: False, heteroscedastic: False}
   critic: {layers: [256, 256], dist: normal, activation: jnn.tanh, name: 'critic', initialization: glorot}
-  discount: 0.99
+  discount: 0.995
   lambda_: 0.97
   cost_discount: 0.99
   num_trajectories: 30
@@ -202,7 +202,7 @@ carl:
   model_opt: {lr: 1e-4, eps: 1e-5, clip: 100}
   num_models: 5
   prefill: 1000
-  lambda_: 100000.
+  lambda_: 5.
   plan_horizon: 8
   num_particles: 150
   num_iters: 10
