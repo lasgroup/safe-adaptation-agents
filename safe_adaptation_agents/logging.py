@@ -90,6 +90,8 @@ class StateWriter:
 
   def __init__(self, log_dir: str):
     self.log_dir = log_dir
+    if not os.path.exists(log_dir):
+      os.makedirs(log_dir, exist_ok=True)
     self.queue = Queue(maxsize=5)
     self._thread = Thread(name="state_writer", target=self._worker)
     self._thread.start()

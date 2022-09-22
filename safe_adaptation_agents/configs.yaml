@@ -23,15 +23,6 @@ defaults:
   task_batch_size: 10
   benchmark: no_adaptation
 
-no_adaptation:
-  task: go_to_goal
-  train_driver: {adaptation_steps: 30000, query_steps: 0}
-  test_driver: {adaptation_steps: 0, query_steps: 300000}
-  eval_trials: 1
-  eval_every: 66
-  task_batch_size: 1
-  epochs: 3330
-
 vanilla_policy_gradients:
   entropy_regularization: 0.
   vf_iters: 5
@@ -79,6 +70,18 @@ cpo:
   damping_coeff: 0.1
   margin_lr: 0.05
 
+no_adaptation:
+  task: go_to_goal
+  train_driver: {adaptation_steps: 30000, query_steps: 0}
+  test_driver: {adaptation_steps: 0, query_steps: 300000}
+  eval_trials: 1
+  eval_every: 66
+  task_batch_size: 1
+  epochs: 3330
+
+two_phase:
+  second_phase_epochs: 5
+
 task_adaptation:
   eval_trials: 3
   task_batch_size: 10
@@ -90,14 +93,10 @@ multitask:
 on_policy:
   eval_every: 20
   epochs: 500
-  train_driver: {adaptation_steps: 10000, query_steps: 10000}
-  test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 model_based:
   eval_every: 2
   epochs: 50
-  train_driver: {adaptation_steps: 10000, query_steps: 10000}
-  test_driver: {adaptation_steps: 10000, query_steps: 10000}
 
 maml_ppo_lagrangian:
   entropy_regularization: 0.

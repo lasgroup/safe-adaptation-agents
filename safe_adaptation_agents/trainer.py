@@ -121,7 +121,8 @@ class Trainer:
                agent: Optional[agents.Agent] = None,
                task_sampler: Optional[benchmark.Benchmark] = None,
                start_epoch: int = 0,
-               seeds: Optional[List[int]] = None):
+               seeds: Optional[List[int]] = None,
+               namespace: Optional[str] = None):
     self.config = config
     self.agent = agent
     self.make_env = make_env
@@ -131,9 +132,14 @@ class Trainer:
     self.logger = None
     self.state_writer = None
     self.env = None
+    self.namespace = namespace
 
   def __enter__(self):
-    self.state_writer = logging.StateWriter(self.config.log_dir)
+    if self.namespace is not None:
+      log_path = f"{self.config.log_dir}/{self.namespace}"
+    else:
+      log_path = self.config.log_dir
+    self.state_writer = logging.StateWriter(log_path)
     time_limit = self.config.time_limit // self.config.action_repeat
     self.env = episodic_async_env.EpisodicAsync(self.make_env,
                                                 self.config.parallel_envs,
@@ -189,14 +195,15 @@ class Trainer:
       adaptation_results, query_results = train_driver.run(
           agent, env, self.tasks(train=True), True)
       if query_results:
-        summary, *_ = evaluation_summary([(adaptation_results, query_results)],
-                                         'on_policy_evaluation')
+        summary, *_ = evaluation_summary(
+            [(adaptation_results, query_results)],
+            self._apply_namespace('on_policy_evaluation'))
         logger.log_summary(summary, epoch + 1)
       if config.eval_trials and (epoch + 1) % config.eval_every == 0:
         print('Evaluating...')
         results = self.evaluate(test_driver)
         summary, reward_returns, cost_returns, videos = evaluation_summary(
-            results)
+            results, self._apply_namespace('evaluation'))
         for (_, reward), (task_name, cost) in zip(reward_returns.items(),
                                                   cost_returns.items()):
           objective[task_name] = max(objective[task_name], reward)
@@ -240,11 +247,17 @@ class Trainer:
       return self.tasks_sampler.test_tasks
 
   @classmethod
-  def from_pickle(cls, config: SimpleNamespace):
-    with open(os.path.join(config.log_dir, 'state.pkl'), 'rb') as f:
+  def from_pickle(cls,
+                  config: SimpleNamespace,
+                  namespace: Optional[str] = None):
+    if namespace is not None:
+      log_path = f"{config.log_dir}/{namespace}"
+    else:
+      log_path = config.log_dir
+    with open(os.path.join(log_path, 'state.pkl'), 'rb') as f:
       make_env, env_rs, agent, epoch, task_sampler = cloudpickle.load(
           f).values()
-    print('Resuming experiment from: {}...'.format(config.log_dir))
+    print('Resuming experiment from: {}...'.format(log_path))
     assert agent.config == config, 'Loaded different hyperparameters.'
     return cls(
         config=agent.config,
@@ -252,7 +265,8 @@ class Trainer:
         task_sampler=task_sampler,
         start_epoch=epoch,
         seeds=env_rs,
-        agent=agent)
+        agent=agent,
+        namespace=namespace)
 
   @property
   def state(self):
@@ -263,3 +277,13 @@ class Trainer:
         'epoch': self.epoch,
         'task_sampler': self.tasks_sampler
     }
+
+  def _apply_namespace(self, name: str):
+    return _apply_namespace(name, self.namespace)
+
+
+def _apply_namespace(name: str, namespace: Optional[str] = None):
+  if namespace is not None:
+    return f"{namespace}/{name}"
+  else:
+    return name
