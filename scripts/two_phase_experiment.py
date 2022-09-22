@@ -49,7 +49,7 @@ def main():
                                make_env=lambda: make_env(config),
                                task_sampler=task_sampler,
                                namespace='first_phase') as trainer:
-    trainer.train()
+    trainer.train(config.epochs // 2)
   path = os.path.join(config.log_dir, 'second_phase', 'state.pkl')
   task_sampler = OneTaskDummySampler(
       next(iter(task_sampler.test_tasks)), config.task_batch_size)
