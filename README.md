@@ -1,4 +1,4 @@
-# safe-adaptation-agents
+# Safe Adaptation Agents
 Baseline algorithms for the `safe-adaptation-gym` benchmark.
 
 ## Install
